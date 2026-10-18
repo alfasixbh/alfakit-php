@@ -200,7 +200,8 @@ it('maps extensions the server cannot detect to MIME types', function (): void {
     fuActAs();
     // A real file, so its type is detected from the content (fakes report one from the name).
     $path = tempnam(sys_get_temp_dir(), 'skp');
-    file_put_contents($path, "\x00\x01\x02\x03\xfe\xff".random_bytes(64));
+    // Fixed bytes: random ones are sometimes detected as an image (e.g. image/x-tga).
+    file_put_contents($path, str_repeat("\x00\x01\x02\x03\xfe\xff\x80\x90", 9));
     $key = fuUpload(new UploadedFile($path, 'house.skp', null, null, true));
 
     $without = schema([FileUpload::make('design')->acceptedFileTypes(['application/vnd.sketchup.skp'])])->fill();

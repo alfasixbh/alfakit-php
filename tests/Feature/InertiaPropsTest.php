@@ -9,6 +9,8 @@ use AlfaSix\Alfakit\Tables\Table;
 use AlfaSix\Alfakit\Tests\Fixtures\AuthTenancy\Panels;
 use AlfaSix\Alfakit\Tests\Fixtures\Models\MfaUser;
 use AlfaSix\Alfakit\Tests\Fixtures\Models\Post;
+use AlfaSix\Alfakit\Tests\Fixtures\Models\Team;
+use AlfaSix\Alfakit\Tests\Fixtures\Models\TenantUser;
 use AlfaSix\Alfakit\Tests\Fixtures\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -160,6 +162,43 @@ it('defers navigation badges to a deferred prop that skips the rest of the page'
     expect($badges)->toHaveKey('alfakitNavigationBadges')
         ->and($badges)->not->toHaveKeys(['alfakit', 'page'])
         ->and($badges['alfakitNavigationBadges'][$id])->toBe(['badge' => 7, 'badgeColor' => 'danger']);
+});
+
+it('defers the navigation badges of a tenancy panel, whose tenant is identified after the shared props', function (): void {
+    Panels::register('ipt', fn (Panel $panel): Panel => $panel
+        ->login()
+        ->tenant(Team::class, slugAttribute: 'slug')
+        ->deferNavigationBadges()
+        ->pages([Dashboard::class, InertiaPropsBadgePage::class, InertiaPropsPlainPage::class]));
+
+    $user = TenantUser::query()->create(['name' => 'Tenant', 'email' => 'tenant'.uniqid().'@example.com', 'password' => 'secret']);
+    $user->teams()->attach(Team::query()->create(['name' => 'Alpha', 'slug' => 'alpha'])->id);
+    $this->actingAs($user);
+
+    $page = ipGet($this, '/ipt/alpha/inbox')->assertOk()->json();
+    $navigation = collect($page['props']['alfakit']['navigation']);
+    $id = $navigation->flatMap(fn (array $group, int $g): array => collect($group['items'])->map(fn (array $item, int $i): array => ['label' => $item['label'], 'id' => "{$g}.{$i}", 'deferred' => $item['deferredBadge'] ?? false])->all())->firstWhere('label', 'Inbox');
+
+    // Items marked `deferredBadge` must come with the deferred request that resolves them.
+    expect($id['deferred'])->toBeTrue()
+        ->and($page['deferredProps'] ?? [])->toHaveKey('alfakitNavigationBadges')
+        ->and($page['props'])->not->toHaveKey('alfakitNavigationBadges');
+
+    $badges = ipGet($this, '/ipt/alpha/inbox', [
+        'X-Inertia-Partial-Component' => $page['component'],
+        'X-Inertia-Partial-Data' => 'alfakitNavigationBadges',
+    ])->assertOk()->json('props.alfakitNavigationBadges');
+
+    expect($badges[$id['id']])->toBe(['badge' => 7, 'badgeColor' => 'danger']);
+});
+
+it('sends no deferred badge request on pages without navigation', function (): void {
+    inertiaPropsPanel(fn (Panel $panel): Panel => $panel->deferNavigationBadges());
+
+    $page = ipGet($this, '/ip/login')->assertOk()->json();
+
+    expect($page['deferredProps']['alfakitNavigationBadges'] ?? null)->toBeNull()
+        ->and($page['props'])->not->toHaveKey('alfakitNavigationBadges');
 });
 
 function ipPostsUser(): User

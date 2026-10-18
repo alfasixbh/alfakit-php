@@ -122,15 +122,25 @@ trait HasInertiaProps
     /**
      * The shared deferred props: the navigation badges when `deferNavigationBadges()`.
      *
+     * Shared props are collected before the route middleware runs, so the tenant (and
+     * anything the condition depends on) is not known yet. The prop is therefore a closure
+     * that Inertia resolves while building the response: it returns the deferred prop when
+     * the navigation is shown, and otherwise an optional prop that is never sent. Deciding
+     * here would leave tenancy panels with `deferredBadge` items and no deferred request,
+     * so their badge placeholders would never resolve.
+     *
      * @return array<string, mixed>
      */
     public function getDeferredSharedProps(): array
     {
-        if (! $this->hasDeferredNavigationBadges() || ! $this->showsNavigation($this->auth()->user(), $this->getTenant())) {
+        if ($this->isNavigationBadgesDeferred === false) {
             return [];
         }
 
-        return [self::NAVIGATION_BADGES_PROP => Inertia::defer(fn (): array => $this->getNavigationBadges(), self::NAVIGATION_BADGES_PROP)];
+        return [self::NAVIGATION_BADGES_PROP => fn (): mixed => $this->hasDeferredNavigationBadges() && $this->showsNavigation($this->auth()->user(), $this->getTenant())
+            ? Inertia::defer(fn (): array => $this->getNavigationBadges(), self::NAVIGATION_BADGES_PROP)
+            : Inertia::optional(static fn (): array => []),
+        ];
     }
 
     /**
