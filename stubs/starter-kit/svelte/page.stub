@@ -1,0 +1,17 @@
+<script module lang="ts">
+    import { createStarterKitLayout } from '@alfakit/svelte';
+    import AppLayout from '@/layouts/AppLayout.svelte';
+
+    /*
+     * AlfaKit pages (`Alfakit/Page`) render inside the app's own layout. Register custom
+     * field, column or page components here:
+     * createStarterKitLayout({ layout: AppLayout, components: {} }).
+     */
+    export const layout = createStarterKitLayout({ layout: AppLayout });
+</script>
+
+<script lang="ts">
+    import { AlfakitPage } from '@alfakit/svelte';
+</script>
+
+<AlfakitPage />

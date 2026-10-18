@@ -1,0 +1,40 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Providers\Alfakit;
+
+use AlfaSix\Alfakit\Pages\Dashboard;
+use AlfaSix\Alfakit\Panel;
+use AlfaSix\Alfakit\PanelProvider;
+use AlfaSix\Alfakit\Widgets\StatsOverviewWidget;
+
+class {{ class }} extends PanelProvider
+{
+    public function panel(Panel $panel): Panel
+    {
+        return $panel
+            ->default()
+            ->id('{{ id }}')
+            ->path('{{ path }}')
+            ->login()
+            ->passwordReset()
+            ->profile()
+            ->colors([
+                'primary' => '#2563eb',
+            ])
+            ->discoverResources(in: app_path('Alfakit{{ directorySuffix }}/Resources'), for: 'App\\Alfakit{{ namespaceSuffix }}\\Resources')
+            ->discoverPages(in: app_path('Alfakit{{ directorySuffix }}/Pages'), for: 'App\\Alfakit{{ namespaceSuffix }}\\Pages')
+            ->pages([
+                Dashboard::class,
+            ])
+            ->discoverWidgets(in: app_path('Alfakit{{ directorySuffix }}/Widgets'), for: 'App\\Alfakit{{ namespaceSuffix }}\\Widgets')
+            ->widgets([
+                //
+            ])
+            ->middleware([
+                'web',
+            ])
+            ->databaseNotifications();
+    }
+}

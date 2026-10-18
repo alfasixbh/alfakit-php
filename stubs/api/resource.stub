@@ -1,0 +1,73 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use {{ namespace }}\{{ resource }}\{{ dataSource }};
+use {{ namespace }}\{{ resource }}\Pages;
+use AlfaSix\Alfakit\Actions\DeleteAction;
+use AlfaSix\Alfakit\Actions\DeleteBulkAction;
+use AlfaSix\Alfakit\Actions\EditAction;
+use AlfaSix\Alfakit\Actions\ViewAction;
+use AlfaSix\Alfakit\Forms\Components\TextInput;
+use AlfaSix\Alfakit\Infolists\Components\TextEntry;
+use AlfaSix\Alfakit\Resources\ApiResource;
+use AlfaSix\Alfakit\Schemas\Schema;
+use AlfaSix\Alfakit\Tables\Columns\TextColumn;
+use AlfaSix\Alfakit\Tables\Table;
+
+class {{ resource }} extends ApiResource
+{
+    protected static ?string $dataSource = {{ dataSource }}::class;
+
+    protected static ?string $recordTitleAttribute = 'name';
+
+    protected static ?string $navigationIcon = 'cloud';
+
+    public static function form(Schema $schema): Schema
+    {
+        return $schema
+            ->components([
+                TextInput::make('name')
+                    ->required()
+                    ->maxLength(255),
+            ]);
+    }
+
+    public static function infolist(Schema $schema): Schema
+    {
+        return $schema
+            ->components([
+                TextEntry::make('name'),
+            ]);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->columns([
+                TextColumn::make('name')
+                    ->searchable()
+                    ->sortable(),
+            ])
+            ->recordActions([
+                ViewAction::make(),
+                EditAction::make(),
+                DeleteAction::make(),
+            ])
+            ->bulkActions([
+                DeleteBulkAction::make(),
+            ]);
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => Pages\List{{ plural }}::route('/'),
+            'create' => Pages\Create{{ model }}::route('/create'),
+            'view' => Pages\View{{ model }}::route('/{record}'),
+            'edit' => Pages\Edit{{ model }}::route('/{record}/edit'),
+        ];
+    }
+}

@@ -1,0 +1,26 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use AlfaSix\Alfakit\Theming\Theme;
+
+/**
+ * The `{{ name }}` theme, on top of `{{ extends }}`. Its CSS lives in
+ * resources/css/alfakit/themes/{{ name }}.css.
+ */
+class {{ class }}
+{
+    public const NAME = '{{ name }}';
+
+    public static function make(): Theme
+    {
+        return Theme::make(self::NAME)
+            ->label('{{ label }}')
+            ->extends('{{ extends }}');
+        // Change the design as well as the colours, for example:
+        // ->layout('topbar')->header('band')->buttons('square')->font('Sora')
+        // ->colors(['primary' => '#ea580c'])
+    }
+}

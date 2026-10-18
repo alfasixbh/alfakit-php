@@ -1,0 +1,23 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use {{ resourceNamespace }}\{{ resource }};
+use AlfaSix\Alfakit\Resources\Pages\EditRecord;
+use AlfaSix\Alfakit\Schemas\Schema;
+
+/**
+ * Another edit page for a record (for example one per form section):
+ * `'{{ slug }}' => {{ class }}::route('/{record}/{{ slug }}')` in `{{ resource }}::getPages()`.
+ */
+class {{ class }} extends EditRecord
+{
+    protected static string $resource = {{ resource }}::class;
+
+    public function form(Schema $schema): Schema
+    {
+        return {{ resource }}::form($schema);
+    }
+}

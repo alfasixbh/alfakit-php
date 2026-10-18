@@ -1,0 +1,49 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use AlfaSix\Alfakit\Notifications\Notification;
+use AlfaSix\Alfakit\Pages\Attributes\Expose;
+use AlfaSix\Alfakit\Pages\Page;
+
+/**
+ * An app page: AlfaKit provides the panel shell, auth, tenancy, notifications and modals;
+ * the screen itself is the `{{ component }}` component registered in createAlfakit({ pages }).
+ */
+class {{ class }} extends Page
+{
+    protected static ?string $navigationIcon = 'app-window';
+
+    protected static ?string $title = '{{ title }}';
+
+    protected static ?string $component = '{{ component }}';
+{{ layout }}
+    /**
+     * Props of the component. Reload them from the browser with useReloadProps(['items']),
+     * or from a method with $this->reloadProps('items').
+     *
+     * @return array<string, mixed>
+     */
+    protected function getViewData(): array
+    {
+        return [
+            'items' => [],
+        ];
+    }
+
+    /**
+     * Called from the component with usePageMethod('greet').call({ name }). Only methods
+     * marked #[Expose] can be called; scope every query to alfakit()->getTenant() yourself.
+     *
+     * @return array{message: string}
+     */
+    #[Expose(rules: ['name' => ['required', 'string', 'max:80']])]
+    public function greet(string $name): array
+    {
+        Notification::make()->success()->title("Hello, {$name}!")->send();
+
+        return ['message' => "Hello, {$name}!"];
+    }
+}

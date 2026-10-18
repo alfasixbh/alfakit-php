@@ -1,0 +1,12 @@
+{
+  "name": "{{ npmPackage }}",
+  "private": true,
+  "type": "module",
+  "main": "resources/js/index.ts",
+  "exports": {
+    ".": "./resources/js/index.ts"
+  },
+  "peerDependencies": {
+    "@alfakit/{{ adapter }}": "*"
+  }
+}

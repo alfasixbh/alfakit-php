@@ -1,0 +1,16 @@
+<script lang="ts">
+  import { EntryWrapper, type EntryProps } from '@alfakit/svelte'
+
+  /**
+   * Renders {{ phpClass }} (registry key `{{ key }}`): `component.state` is the value,
+   * options from the PHP class's `getSchemaProps()` arrive on `component`.
+   *
+   * Auto-registered from its path in resources/js/alfakit. Type the PHP class's
+   * `getSchemaProps()` with `php artisan alfakit:types` (or write `EntryProps<{ … }>`).
+   */
+  let { component }: EntryProps = $props()
+</script>
+
+<EntryWrapper entry={component}>
+  <span class="text-sm">{component.state == null ? '—' : String(component.state)}</span>
+</EntryWrapper>

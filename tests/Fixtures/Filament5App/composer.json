@@ -1,0 +1,44 @@
+{
+    "name": "acme/shop",
+    "type": "project",
+    "description": "Fixture: a Filament 5 shop back office (resources, relation managers, clusters, tenancy, MFA, plugins, Livewire components, render hooks and a theme).",
+    "require": {
+        "php": "^8.3",
+        "laravel/framework": "^13.0",
+        "filament/filament": "^5.10",
+        "filament/spatie-laravel-media-library-plugin": "^5.0",
+        "filament/spatie-laravel-tags-plugin": "^5.0",
+        "filament/spatie-laravel-settings-plugin": "^5.0",
+        "bezhansalleh/filament-shield": "^4.0",
+        "kirschbaum-development/commentions": "^0.6",
+        "mokhosh/filament-kanban": "^3.0",
+        "saade/filament-fullcalendar": "^4.0",
+        "rmsramos/activitylog": "^2.0",
+        "stechstudio/filament-impersonate": "^4.0",
+        "solution-forest/filament-tree": "^3.0",
+        "awcodes/filament-curator": "^4.0",
+        "spatie/laravel-medialibrary": "^11.0"
+    },
+    "require-dev": {
+        "pestphp/pest": "^4.0",
+        "pestphp/pest-plugin-livewire": "^4.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "app/",
+            "Database\\Factories\\": "database/factories/",
+            "Database\\Seeders\\": "database/seeders/"
+        }
+    },
+    "scripts": {
+        "post-autoload-dump": [
+            "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
+            "@php artisan package:discover --ansi",
+            "@php artisan filament:upgrade"
+        ],
+        "post-update-cmd": [
+            "@php artisan vendor:publish --tag=laravel-assets --ansi --force",
+            "@php artisan filament:assets"
+        ]
+    }
+}

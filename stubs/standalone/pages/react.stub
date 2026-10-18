@@ -1,0 +1,18 @@
+import { AlfakitComponent, type StandaloneComponentSchema } from '@alfakit/react';
+import { Head } from '@inertiajs/react';
+
+/**
+ * An Alfakit form outside the panel. The `form` prop is `ContactForm::make()` from the
+ * route; `<AlfakitComponent>` renders it with your app's shadcn tokens and no panel layout.
+ */
+export default function Contact({ form }: { form: StandaloneComponentSchema }) {
+    return (
+        <>
+            <Head title="Contact" />
+            <div className="mx-auto w-full max-w-xl p-6">
+                <h1 className="mb-6 text-2xl font-semibold">Contact us</h1>
+                <AlfakitComponent component={form} />
+            </div>
+        </>
+    );
+}

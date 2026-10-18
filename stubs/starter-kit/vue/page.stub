@@ -1,0 +1,10 @@
+<script lang="ts">
+import { createStarterKitPage } from '@alfakit/vue';
+import AppLayout from '@/layouts/AppLayout.vue';
+
+/*
+ * AlfaKit pages (`Alfakit/Page`) render inside the app's own layout. Register custom field,
+ * column or page components here: createStarterKitPage({ layout: AppLayout, components: {} }).
+ */
+export default createStarterKitPage({ layout: AppLayout });
+</script>

@@ -1,0 +1,25 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Providers;
+
+{{ imports }}use AlfaSix\Alfakit\AuthKit\AuthKit;
+use AlfaSix\Alfakit\AuthKit\AuthKitPanel;
+use Illuminate\Support\ServiceProvider;
+
+/**
+ * AlfaKit's sign-in, registration, password reset, email verification, two-step
+ * verification and account page for your app's users. The routes are registered in
+ * routes/web.php (`AuthKit::routes()`); the pages render `{{ guestPage }}` and `{{ accountPage }}`.
+ */
+class AuthKitServiceProvider extends ServiceProvider
+{
+    public function boot(): void
+    {
+        AuthKit::configure(fn (AuthKitPanel $auth) => $auth
+            ->inertiaPages(guest: '{{ guestPage }}', account: '{{ accountPage }}')
+            ->homeUrl(fn (): string => url('{{ home }}'))
+{{ options }}        );
+    }
+}

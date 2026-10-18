@@ -1,0 +1,22 @@
+<script setup lang="ts">
+import type { BaseColumnSchema, CellSchema, RecordKey } from '@alfakit/vue'
+
+/**
+ * Renders the cells of {{ phpClass }} (registry key `{{ key }}`). `column` holds the
+ * column's `getSchemaProps()`, `cell` the record's `state` and `getCellProps()`.
+ *
+ * Auto-registered from its path in resources/js/alfakit. Type the PHP class's
+ * `getSchemaProps()` with `php artisan alfakit:types` (or write `defineProps<{ component: … }>()`).
+ */
+const props = defineProps<{
+  column: BaseColumnSchema
+  cell: CellSchema
+  recordKey: RecordKey
+  token: string
+  component: string
+}>()
+</script>
+
+<template>
+  <span class="text-sm">{{ props.cell.state == null ? '—' : String(props.cell.state) }}</span>
+</template>

@@ -1,0 +1,21 @@
+<script lang="ts">
+    import { AlfakitComponent, type StandaloneComponentSchema } from '@alfakit/svelte';
+
+    /**
+     * AlfaKit's sign-in, registration, password reset, email verification and two-step
+     * verification pages (`AuthKit::routes()`): `component` is the page, `authKit.title` its title.
+     */
+    let {
+        component,
+        authKit,
+    }: {
+        component: StandaloneComponentSchema;
+        authKit: { page: string; title: string };
+    } = $props();
+</script>
+
+<svelte:head>
+    <title>{authKit.title}</title>
+</svelte:head>
+
+{{ guestBody }}

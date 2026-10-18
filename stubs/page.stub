@@ -1,0 +1,26 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use AlfaSix\Alfakit\Pages\Page;
+use AlfaSix\Alfakit\Schemas\Components\Section;
+use AlfaSix\Alfakit\Schemas\Components\Text;
+use AlfaSix\Alfakit\Schemas\Schema;
+
+class {{ class }} extends Page
+{
+    protected static ?string $navigationIcon = 'file';
+
+    protected static ?string $title = '{{ title }}';
+
+    public function content(Schema $schema): Schema
+    {
+        return $schema->components([
+            Section::make('{{ title }}')->schema([
+                Text::make('Build your page content with schema components, or set static::$component to render your own frontend component.'),
+            ]),
+        ]);
+    }
+}

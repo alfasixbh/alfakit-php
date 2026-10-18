@@ -1,0 +1,20 @@
+<script setup lang="ts">
+import { FieldWrapper, useField, type BaseField } from '@alfakit/vue'
+{{ imports }}
+
+/**
+ * Renders {{ phpClass }} (registry key `{{ key }}`) with the shadcn-vue `{{ shadcn }}`
+ * component installed in resources/js/components/ui. Auto-registered from its path: no
+ * createAlfakit() change needed. Type `getSchemaProps()` with `php artisan alfakit:types`.
+ */
+const props = defineProps<{ component: BaseField }>()
+const { value, setValue, blur, error, id, disabled, aria } = useField<{{ valueType }}>(
+  () => props.component,
+)
+</script>
+
+<template>
+  <FieldWrapper :field="props.component" :html-for="id" :error="error">
+    {{ control }}
+  </FieldWrapper>
+</template>

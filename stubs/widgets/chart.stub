@@ -1,0 +1,30 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use AlfaSix\Alfakit\Widgets\ChartWidget;
+
+class {{ class }} extends ChartWidget
+{
+    protected ?string $heading = '{{ heading }}';
+
+    protected function getChartType(): string
+    {
+        return 'line';
+    }
+
+    protected function getData(): array
+    {
+        return [
+            'datasets' => [
+                [
+                    'label' => 'Orders',
+                    'data' => [12, 19, 3, 5, 2, 3, 9],
+                ],
+            ],
+            'labels' => ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+        ];
+    }
+}

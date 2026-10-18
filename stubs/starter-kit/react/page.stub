@@ -1,0 +1,8 @@
+import { createStarterKitPage } from '@alfakit/react';
+import AppLayout from '@/layouts/app-layout';
+
+/*
+ * AlfaKit pages (`Alfakit/Page`) render inside the app's own layout. Register custom field,
+ * column or page components here: createStarterKitPage({ layout: AppLayout, components: {} }).
+ */
+export default createStarterKitPage({ layout: AppLayout });

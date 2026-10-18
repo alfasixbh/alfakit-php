@@ -1,0 +1,21 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use {{ resourceNamespace }}\{{ resource }};
+use AlfaSix\Alfakit\Actions\EditAction;
+use AlfaSix\Alfakit\Resources\Pages\ViewApiRecord;
+
+class View{{ model }} extends ViewApiRecord
+{
+    protected static string $resource = {{ resource }}::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            EditAction::make(),
+        ];
+    }
+}

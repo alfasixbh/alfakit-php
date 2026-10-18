@@ -1,0 +1,46 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+{{ imports }}
+use AlfaSix\Alfakit\Actions\DeleteBulkAction;
+use AlfaSix\Alfakit\Forms\Components\TextInput;
+use AlfaSix\Alfakit\Resources\RelationManagers\RelationManager;
+use AlfaSix\Alfakit\Schemas\Schema;
+use AlfaSix\Alfakit\Tables\Columns\TextColumn;
+use AlfaSix\Alfakit\Tables\Table;
+
+class {{ class }} extends RelationManager
+{
+    protected static string $relationship = '{{ relationship }}';
+
+    protected static ?string $recordTitleAttribute = '{{ recordTitleAttribute }}';
+
+    public function form(Schema $schema): Schema
+    {
+        return $schema->components([
+            TextInput::make('{{ recordTitleAttribute }}')
+                ->required()
+                ->maxLength(255),
+        ]);
+    }
+{{ infolist }}
+    public function table(Table $table): Table
+    {
+        return $table{{ tableExtras }}
+            ->columns([
+                TextColumn::make('{{ recordTitleAttribute }}')->searchable(),
+            ])
+            ->headerActions([
+                {{ headerActions }}
+            ])
+            ->recordActions([
+                {{ recordActions }}
+            ])
+            ->bulkActions([
+                DeleteBulkAction::make(),{{ bulkActions }}
+            ]);
+    }
+}

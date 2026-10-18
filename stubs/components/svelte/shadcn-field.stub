@@ -1,0 +1,17 @@
+<script lang="ts">
+  import { FieldWrapper, useField, type FieldProps } from '@alfakit/svelte'
+{{ imports }}
+
+  /**
+   * Renders {{ phpClass }} (registry key `{{ key }}`) with the shadcn-svelte `{{ shadcn }}`
+   * component installed in resources/js/components/ui. Auto-registered from its path: no
+   * createAlfakit() change needed. Type `getSchemaProps()` with `php artisan alfakit:types`.
+   */
+  let { component }: FieldProps = $props()
+
+  const field = useField<{{ valueType }}>(() => component)
+</script>
+
+<FieldWrapper field={component} htmlFor={field.id} error={field.error}>
+  {{ control }}
+</FieldWrapper>

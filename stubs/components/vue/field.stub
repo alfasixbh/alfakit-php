@@ -1,0 +1,34 @@
+<script setup lang="ts">
+import { FieldWrapper, useField, type BaseField } from '@alfakit/vue'
+
+/**
+ * Renders {{ phpClass }} (registry key `{{ key }}`). Options from the PHP class's
+ * `getSchemaProps()` arrive on `component`. Translate visible text with `useT()`.
+ *
+ * Auto-registered from its path in resources/js/alfakit. Type the PHP class's
+ * `getSchemaProps()` with `php artisan alfakit:types` (or write `defineProps<{ component: … }>()`).
+ */
+const props = defineProps<{ component: BaseField }>()
+const { value, setValue, blur, error, id, disabled, aria } = useField<string | null>(
+  () => props.component,
+)
+</script>
+
+<template>
+  <FieldWrapper :field="props.component" :html-for="id" :error="error">
+    <input
+      :id="id"
+      :name="props.component.name"
+      dir="auto"
+      :value="value ?? ''"
+      :placeholder="props.component.placeholder"
+      :disabled="disabled"
+      :readonly="props.component.readOnly"
+      :required="props.component.required"
+      v-bind="aria"
+      class="border-input focus-visible:border-ring focus-visible:ring-ring/50 h-9 w-full rounded-md border bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:ring-[3px]"
+      @input="setValue(($event.target as HTMLInputElement).value)"
+      @blur="blur"
+    />
+  </FieldWrapper>
+</template>

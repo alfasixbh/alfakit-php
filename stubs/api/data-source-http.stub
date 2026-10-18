@@ -1,0 +1,44 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use AlfaSix\Alfakit\Resources\Api\HttpDataSource;
+use Illuminate\Http\Client\PendingRequest;
+
+/**
+ * {{ plural }} from a REST API: GET/POST {endpoint}, GET/PATCH/DELETE {endpoint}/{id}.
+ * Rows are read from `data`, the total from `total`; a 422 response with
+ * `{"errors": {"field": ["…"]}}` puts the messages on the form fields.
+ */
+class {{ dataSource }} extends HttpDataSource
+{
+    protected string $baseUrl = '{{ url }}';
+
+    protected string $endpoint = '/{{ endpoint }}';
+
+    protected function request(): PendingRequest
+    {
+        // Authenticate, and scope the request to `$this->getTenant()` when the panel has tenancy.
+        return parent::request();
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     * @return array<string, mixed>
+     */
+    protected function mapRecord(array $row): array
+    {
+        return $row;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    protected function mapPayload(array $data): array
+    {
+        return $data;
+    }
+}

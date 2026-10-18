@@ -1,0 +1,34 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use AlfaSix\Alfakit\Tables\Columns\Column;
+
+class {{ class }} extends Column
+{
+    /** Rendered by resources/js/alfakit/columns/{{ type }}.* (registry key `column:{{ type }}`). */
+    protected ?string $type = '{{ type }}';
+
+    /**
+     * Options for every cell of the column (the component's `column` prop).
+     * `php artisan alfakit:types` turns the array shape into types.
+     *
+     * @return array{}
+     */
+    protected function getSchemaProps(): array
+    {
+        return [];
+    }
+
+    /**
+     * Per-record data next to `state` (the component's `cell` prop).
+     *
+     * @return array{}
+     */
+    protected function getCellProps(): array
+    {
+        return [];
+    }
+}

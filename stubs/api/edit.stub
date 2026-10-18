@@ -1,0 +1,23 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use {{ resourceNamespace }}\{{ resource }};
+use AlfaSix\Alfakit\Actions\DeleteAction;
+use AlfaSix\Alfakit\Actions\ViewAction;
+use AlfaSix\Alfakit\Resources\Pages\EditApiRecord;
+
+class Edit{{ model }} extends EditApiRecord
+{
+    protected static string $resource = {{ resource }}::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            ViewAction::make(),
+            DeleteAction::make(),
+        ];
+    }
+}

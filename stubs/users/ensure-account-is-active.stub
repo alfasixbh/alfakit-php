@@ -1,0 +1,52 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }}\Users\Middleware;
+
+use {{ namespace }}\Users\UserAccounts;
+use AlfaSix\Alfakit\Notifications\Notification;
+use Closure;
+use Illuminate\Contracts\Auth\StatefulGuard;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\Response;
+
+/**
+ * Signs suspended and banned users out of the panel (also sessions that started before
+ * the suspension). Registered with `$panel->authMiddleware([...])` by `alfakit:users`.
+ */
+class EnsureAccountIsActive
+{
+    public function handle(Request $request, Closure $next): Response
+    {
+        $panel = alfakit()->getCurrentOrDefaultPanel();
+        $guard = $panel->auth();
+        $user = $guard->user();
+
+        if (! $user instanceof Model || ! UserAccounts::isBlocked($user) || $panel->isImpersonating()) {
+            return $next($request);
+        }
+
+        $status = UserAccounts::status($user);
+
+        if ($guard instanceof StatefulGuard) {
+            $guard->logout();
+        }
+
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
+        Notification::make()
+            ->danger()
+            ->persistent()
+            ->title(__($status === UserAccounts::BANNED ? 'alfakit::users.blocked.banned' : 'alfakit::users.blocked.suspended'))
+            ->send();
+
+        $login = $panel->getLoginUrl();
+
+        abort_if($login === null, 403, __('alfakit::users.blocked.suspended'));
+
+        return redirect()->to($login);
+    }
+}

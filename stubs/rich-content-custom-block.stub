@@ -1,0 +1,54 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use AlfaSix\Alfakit\Actions\Action;
+use AlfaSix\Alfakit\Forms\Components\RichEditor\RichContentCustomBlock;
+use AlfaSix\Alfakit\Forms\Components\TextInput;
+
+/**
+ * Add it to an editor with `RichEditor::make('content')->customBlocks([{{ class }}::class])`
+ * and to `RichContentRenderer::make($content)->customBlocks([...])` where you render it.
+ */
+class {{ class }} extends RichContentCustomBlock
+{
+    public static function getId(): string
+    {
+        return '{{ id }}';
+    }
+
+    public static function getLabel(): string
+    {
+        return '{{ label }}';
+    }
+
+    public static function configureEditorAction(Action $action): Action
+    {
+        return $action
+            ->modalDescription('Configure the {{ label }} block')
+            ->schema([
+                TextInput::make('heading')->required(),
+            ]);
+    }
+
+    /**
+     * Shown inside the editor. The configuration comes from the browser: escape it.
+     *
+     * @param  array<string, mixed>  $config
+     */
+    public static function toPreviewHtml(array $config): string
+    {
+        return '<div><strong>'.e((string) ($config['heading'] ?? static::getLabel())).'</strong></div>';
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     * @param  array<string, mixed>  $data  Extra data from `RichContentRenderer::customBlocks()`
+     */
+    public static function toHtml(array $config, array $data): string
+    {
+        return '<section class="{{ id }}"><h2>'.e((string) ($config['heading'] ?? '')).'</h2></section>';
+    }
+}

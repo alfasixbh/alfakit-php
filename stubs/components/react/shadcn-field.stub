@@ -1,0 +1,17 @@
+import { FieldWrapper, useField, type FieldProps } from '@alfakit/react'
+{{ imports }}
+
+/**
+ * Renders {{ phpClass }} (registry key `{{ key }}`) with the shadcn `{{ shadcn }}` component
+ * installed in resources/js/components/ui. Auto-registered from its path: no createAlfakit()
+ * change needed. Type `getSchemaProps()` with `php artisan alfakit:types`.
+ */
+export default function {{ component }}({ component }: FieldProps) {
+  const { value, setValue, blur, error, id, disabled, aria } = useField<{{ valueType }}>(component)
+
+  return (
+    <FieldWrapper field={component} htmlFor={id} error={error}>
+      {{ control }}
+    </FieldWrapper>
+  )
+}

@@ -1,0 +1,28 @@
+{
+    "name": "{{ package }}",
+    "description": "{{ title }} plugin for Alfakit.",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.3",
+        "alfasix/alfakit": "{{ alfakitConstraint }}"
+    },
+    "autoload": {
+        "psr-4": {
+            "{{ composerNamespace }}\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "{{ composerNamespace }}\\{{ provider }}"
+            ]
+        },
+        "alfakit": {
+            "version": "{{ alfakitConstraint }}",
+            "frontend": {{ frontendPackage }}
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

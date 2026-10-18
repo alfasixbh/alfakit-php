@@ -1,0 +1,50 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use AlfaSix\Alfakit\Contracts\Plugin;
+use AlfaSix\Alfakit\Panel;
+
+/**
+ * Add it to a panel: `$panel->plugin({{ class }}::make())`.
+ */
+class {{ class }} implements Plugin
+{
+    public static function make(): static
+    {
+        return new static;
+    }
+
+    /**
+     * The plugin registered on the current panel, for its options.
+     */
+    public static function get(): static
+    {
+        /** @var static */
+        return alfakit()->getPanel()->getPlugin('{{ id }}');
+    }
+
+    public function getId(): string
+    {
+        return '{{ id }}';
+    }
+
+    /**
+     * Called when the panel is configured: register resources, pages, widgets,
+     * navigation groups or middleware.
+     */
+    public function register(Panel $panel): void
+    {
+        // $panel->resources([...])->pages([...])->widgets([...]);
+    }
+
+    /**
+     * Called on every request to the panel, after it booted.
+     */
+    public function boot(Panel $panel): void
+    {
+        //
+    }
+}

@@ -1,0 +1,28 @@
+<script lang="ts">
+  import { useSchemaComponentContext, type BaseComponent } from '@alfakit/svelte'
+
+  /**
+   * Renders {{ phpClass }} (registry key `{{ type }}`), scaffolded by
+   * `alfakit:migrate-from-filament` from the Livewire component `{{ livewireClass }}`.
+   *
+   * {{ todo }}: port the markup of `{{ viewPath }}` here.
+   * Livewire bindings found in the view: {{ bindings }}
+   * - `wire:model` → $state() or a form field in the PHP schema.
+   * - `wire:click="method"` → an AlfaKit action on the PHP side, or client-side code here.
+   * Every visible string goes through `useT()` and uses logical (RTL-safe) classes.
+   */
+  let {
+    component,
+  }: {
+    component: BaseComponent & {
+{{ propTypes }}
+    }
+  } = $props()
+
+  const context = useSchemaComponentContext(() => component)
+</script>
+
+<div data-slot="{{ type }}" data-operation={context.current.operation ?? undefined} class="rounded-xl border p-4">
+  <!-- {{ todo }}: replace with the ported markup -->
+  <pre class="text-xs text-muted-foreground">{JSON.stringify(component, null, 2)}</pre>
+</div>

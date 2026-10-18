@@ -1,0 +1,28 @@
+<?php
+
+namespace {{ namespace }};
+
+use AlfaSix\Alfakit\Actions\Imports\ImportColumn;
+use AlfaSix\Alfakit\Actions\Imports\Importer;
+use {{ modelClass }};
+use Illuminate\Database\Eloquent\Model;
+
+class {{ class }} extends Importer
+{
+    protected static ?string $model = {{ model }}::class;
+
+    public static function getColumns(): array
+    {
+        return [
+{{ columns }}
+        ];
+    }
+
+    public function resolveRecord(): ?Model
+    {
+        // Update existing records instead of creating new ones, e.g.:
+        // return $this->newQuery()->firstOrNew(['email' => $this->data['email']]);
+
+        return new {{ model }};
+    }
+}

@@ -1,0 +1,18 @@
+<script setup lang="ts">
+import { Card, CardContent, CardHeader, CardTitle, type BaseWidgetSchema } from '@alfakit/vue'
+
+/**
+ * Renders {{ phpClass }} (registry key `{{ key }}`): its `getViewData()` arrive as props,
+ * the widget schema as `widget`. Auto-registered from its path. Translate text with `useT()`.
+ */
+const props = defineProps<{ message: string; widget: BaseWidgetSchema }>()
+</script>
+
+<template>
+  <Card>
+    <CardHeader>
+      <CardTitle>{{ heading }}</CardTitle>
+    </CardHeader>
+    <CardContent class="text-muted-foreground text-sm">{{ props.message }}</CardContent>
+  </Card>
+</template>

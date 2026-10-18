@@ -1,0 +1,46 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use {{ resourceNamespace }}\{{ resource }};
+use AlfaSix\Alfakit\Notifications\Notification;
+use AlfaSix\Alfakit\Pages\Attributes\Expose;
+use AlfaSix\Alfakit\Resources\Pages\Page;
+
+/**
+ * An app page of {{ resource }}, rendered by the `{{ component }}` component registered in
+ * createAlfakit({ pages }).
+ */
+class {{ class }} extends Page
+{
+    protected static string $resource = {{ resource }}::class;
+
+    protected static ?string $slug = '{{ slug }}';
+
+    protected static ?string $component = '{{ component }}';
+{{ layout }}
+    /**
+     * @return array<string, mixed>
+     */
+    protected function getViewData(): array
+    {
+        return [
+            'items' => [],
+        ];
+    }
+
+    /**
+     * Called from the component with usePageMethod('greet').call({ name }).
+     *
+     * @return array{message: string}
+     */
+    #[Expose(rules: ['name' => ['required', 'string', 'max:80']])]
+    public function greet(string $name): array
+    {
+        Notification::make()->success()->title("Hello, {$name}!")->send();
+
+        return ['message' => "Hello, {$name}!"];
+    }
+}

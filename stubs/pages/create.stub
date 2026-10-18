@@ -1,0 +1,13 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use {{ resourceNamespace }}\{{ resource }};
+use AlfaSix\Alfakit\Resources\Pages\CreateRecord;
+
+class Create{{ model }} extends CreateRecord
+{
+    protected static string $resource = {{ resource }}::class;
+}

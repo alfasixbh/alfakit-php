@@ -1,0 +1,70 @@
+{
+  "name": "alfasix/alfakit",
+  "description": "The frontend-agnostic admin panel builder for Laravel. Define panels, resources, forms, tables and actions in PHP; render them with React, Vue or Svelte via Inertia and shadcn.",
+  "keywords": [
+    "laravel",
+    "admin",
+    "panel",
+    "inertia",
+    "shadcn",
+    "react",
+    "vue",
+    "svelte",
+    "alfakit",
+    "alfa six"
+  ],
+  "homepage": "https://alfakit.dev",
+  "license": "MIT",
+  "type": "library",
+  "authors": [
+    {
+      "name": "Alfa Six",
+      "homepage": "https://alfasixbh.com",
+      "role": "Developer"
+    }
+  ],
+  "support": {
+    "issues": "https://github.com/alfasixbh/alfakit/issues",
+    "source": "https://github.com/alfasixbh/alfakit",
+    "docs": "https://alfakit.dev/docs"
+  },
+  "require": {
+    "php": "^8.3",
+    "ext-intl": "*",
+    "bacon/bacon-qr-code": "^3.1",
+    "illuminate/contracts": "^13.0",
+    "illuminate/support": "^13.0",
+    "inertiajs/inertia-laravel": "^3.5",
+    "symfony/html-sanitizer": "^7.3|^8.0"
+  },
+  "suggest": {
+    "laravel/fortify": "Reuse Fortify's authentication actions inside Alfakit panels.",
+    "spatie/laravel-permission": "Role-based authorization for panel navigation and resources.",
+    "league/flysystem-aws-s3-v3": "Store FileUpload fields on S3-compatible disks.",
+    "alfasix/alfakit-translations": "Translations of the panel UI into many languages."
+  },
+  "autoload": {
+    "psr-4": {
+      "AlfaSix\\Alfakit\\": "src/",
+      "AlfaSix\\Alfakit\\Database\\Factories\\": "database/factories/"
+    },
+    "files": [
+      "src/helpers.php"
+    ]
+  },
+  "extra": {
+    "laravel": {
+      "providers": [
+        "AlfaSix\\Alfakit\\AlfakitServiceProvider"
+      ],
+      "aliases": {
+        "Alfakit": "AlfaSix\\Alfakit\\Facades\\Alfakit"
+      }
+    }
+  },
+  "config": {
+    "sort-packages": true
+  },
+  "minimum-stability": "stable",
+  "prefer-stable": true
+}

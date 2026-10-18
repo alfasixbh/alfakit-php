@@ -1,0 +1,23 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use AlfaSix\Alfakit\Support\Assets\Assets;
+use AlfaSix\Alfakit\Support\Assets\Css;
+use Illuminate\Support\ServiceProvider;
+
+class {{ class }} extends ServiceProvider
+{
+    public function boot(): void
+    {
+        $this->loadTranslationsFrom(__DIR__.'/../resources/lang', '{{ id }}');
+
+        // Copied to public/vendor/alfakit/{{ package }}/ by `php artisan alfakit:assets`
+        // and added to the <head> of every panel page.
+        Assets::register([
+            Css::make('{{ id }}', __DIR__.'/../resources/dist/{{ id }}.css'),
+        ], package: '{{ package }}');
+    }
+}

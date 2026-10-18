@@ -1,0 +1,53 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use {{ resourceNamespace }}\{{ resource }};
+{{ imports }}
+use AlfaSix\Alfakit\Actions\DeleteBulkAction;
+use AlfaSix\Alfakit\Forms\Components\TextInput;
+use AlfaSix\Alfakit\Resources\Pages\ManageRelatedRecords;
+use AlfaSix\Alfakit\Schemas\Schema;
+use AlfaSix\Alfakit\Tables\Columns\TextColumn;
+use AlfaSix\Alfakit\Tables\Table;
+
+/**
+ * A full page for the `{{ relationship }}` of a record: `'{{ slug }}' => {{ class }}::route('/{record}/{{ slug }}')`
+ * in `{{ resource }}::getPages()`.
+ */
+class {{ class }} extends ManageRelatedRecords
+{
+    protected static string $resource = {{ resource }}::class;
+
+    protected static string $relationship = '{{ relationship }}';
+
+    protected static ?string $relatedRecordTitleAttribute = '{{ recordTitleAttribute }}';
+
+    public function form(Schema $schema): Schema
+    {
+        return $schema->components([
+            TextInput::make('{{ recordTitleAttribute }}')
+                ->required()
+                ->maxLength(255),
+        ]);
+    }
+
+    public function table(Table $table): Table
+    {
+        return $table
+            ->columns([
+                TextColumn::make('{{ recordTitleAttribute }}')->searchable(),
+            ])
+            ->headerActions([
+                {{ headerActions }}
+            ])
+            ->recordActions([
+                {{ recordActions }}
+            ])
+            ->bulkActions([
+                DeleteBulkAction::make(),
+            ]);
+    }
+}

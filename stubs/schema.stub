@@ -1,0 +1,27 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use AlfaSix\Alfakit\Forms\Components\TextInput;
+use AlfaSix\Alfakit\Schemas\Components\Component;
+use AlfaSix\Alfakit\Schemas\Fragment;
+
+/**
+ * Reusable schema: `{{ class }}::make()` inside any `components([...])`. Prefix the state
+ * with `->statePath('billing')`, edit a related record with `->relationship('address')`,
+ * or hide it with `->hidden()` / `->visible()` like any component.
+ */
+class {{ class }} extends Fragment
+{
+    /**
+     * @return array<Component>
+     */
+    public function define(): array
+    {
+        return [
+{{ components }}
+        ];
+    }
+}

@@ -1,0 +1,20 @@
+@import '../../../../vendor/filament/filament/resources/css/theme.css';
+
+@source '../../../../app/Filament/**/*';
+@source '../../../../resources/views/filament/**/*';
+
+@theme {
+    --font-sans: 'Inter', sans-serif;
+}
+
+.fi-sidebar {
+    @apply bg-gray-50 dark:bg-gray-950;
+}
+
+.fi-topbar nav {
+    @apply shadow-none ring-1 ring-gray-950/5;
+}
+
+.fi-ta-row:hover {
+    @apply bg-primary-50/50;
+}

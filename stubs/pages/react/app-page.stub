@@ -1,0 +1,35 @@
+import { AppPage, Button, Card, CardContent, Input, usePageMethod } from '@alfakit/react'
+import { useState } from 'react'
+
+/**
+ * The `{{ key }}` component of {{ phpClass }}. Props are its getViewData(); call its
+ * #[Expose] methods with usePageMethod(). Translate visible text with useT().
+ */
+export default function {{ component }}({ items }: { items: unknown[] }) {
+  const [name, setName] = useState('')
+  const greet = usePageMethod<{ message: string }, { name: string }>('greet')
+
+  return (
+    <AppPage>
+      <Card>
+        <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-start">
+          <div className="flex flex-1 flex-col gap-1">
+            <Input
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              aria-invalid={greet.errors.name ? true : undefined}
+              aria-label="Name"
+              dir="auto"
+            />
+            {greet.errors.name && <p className="text-destructive text-sm">{greet.errors.name}</p>}
+          </div>
+          <Button disabled={greet.loading} onClick={() => void greet.call({ name })}>
+            Greet
+          </Button>
+        </CardContent>
+      </Card>
+      {greet.result && <p className="text-muted-foreground text-sm">{greet.result.message}</p>}
+      <p className="text-muted-foreground text-sm">{items.length} items</p>
+    </AppPage>
+  )
+}

@@ -1,0 +1,19 @@
+<?php
+
+namespace {{ namespace }};
+
+use AlfaSix\Alfakit\Actions\Exports\ExportColumn;
+use AlfaSix\Alfakit\Actions\Exports\Exporter;
+use {{ modelClass }};
+
+class {{ class }} extends Exporter
+{
+    protected static ?string $model = {{ model }}::class;
+
+    public static function getColumns(): array
+    {
+        return [
+{{ columns }}
+        ];
+    }
+}

@@ -1,0 +1,19 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use AlfaSix\Alfakit\Clusters\Cluster;
+
+/**
+ * Add pages and resources to this cluster with:
+ *
+ *     protected static ?string $cluster = {{ class }}::class;
+ */
+class {{ class }} extends Cluster
+{
+    protected static ?string $navigationIcon = 'folder';
+
+    protected static ?string $navigationLabel = '{{ label }}';
+}

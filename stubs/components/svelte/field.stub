@@ -1,0 +1,31 @@
+<script lang="ts">
+  import { FieldWrapper, useField, type FieldProps } from '@alfakit/svelte'
+
+  /**
+   * Renders {{ phpClass }} (registry key `{{ key }}`). Options from the PHP class's
+   * `getSchemaProps()` arrive on `component`. Translate visible text with `useT()`.
+   *
+   * Auto-registered from its path in resources/js/alfakit. Type the PHP class's
+   * `getSchemaProps()` with `php artisan alfakit:types` (or write `FieldProps<{ … }>`).
+   */
+  let { component }: FieldProps = $props()
+
+  const field = useField<string | null>(() => component)
+</script>
+
+<FieldWrapper field={component} htmlFor={field.id} error={field.error}>
+  <input
+    id={field.id}
+    name={component.name}
+    dir="auto"
+    value={field.value ?? ''}
+    placeholder={component.placeholder}
+    disabled={field.disabled}
+    readonly={component.readOnly}
+    required={component.required}
+    oninput={(event) => field.setValue(event.currentTarget.value)}
+    onblur={field.blur}
+    class="border-input focus-visible:border-ring focus-visible:ring-ring/50 h-9 w-full rounded-md border bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:ring-[3px]"
+    {...field.aria}
+  />
+</FieldWrapper>

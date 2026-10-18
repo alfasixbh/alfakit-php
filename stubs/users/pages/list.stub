@@ -1,0 +1,22 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }}\Resources\UserResource\Pages;
+
+use {{ namespace }}\Resources\UserResource;
+use AlfaSix\Alfakit\Actions\CreateAction;
+use AlfaSix\Alfakit\Resources\Pages\ListRecords;
+
+class ListUsers extends ListRecords
+{
+    protected static string $resource = UserResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            UserResource::inviteAction(),
+            CreateAction::make(),
+        ];
+    }
+}

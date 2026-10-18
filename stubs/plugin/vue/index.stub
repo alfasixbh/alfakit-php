@@ -1,0 +1,7 @@
+import type { AnyComponent } from '@alfakit/vue'
+import Example from './components/Example.vue'
+
+/** Spread into `createAlfakit({ components })`. Keys are prefixed with the plugin id. */
+export const components: Record<string, AnyComponent> = {
+  '{{ id }}:example': Example,
+}

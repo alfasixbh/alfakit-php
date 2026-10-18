@@ -1,0 +1,34 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Providers\Alfakit;
+
+use AlfaSix\Alfakit\Panel;
+use AlfaSix\Alfakit\PanelProvider;
+
+/**
+ * An AlfaKit panel inside this starter kit app: it uses the app's authentication (Fortify),
+ * renders in the app's layout and lists its navigation in the app sidebar.
+ */
+class {{ class }} extends PanelProvider
+{
+    public function panel(Panel $panel): Panel
+    {
+        return $panel
+            ->default()
+            ->id('{{ id }}')
+            ->path('{{ path }}')
+            ->starterKit()
+            ->discoverResources(in: app_path('Alfakit{{ directorySuffix }}/Resources'), for: 'App\\Alfakit{{ namespaceSuffix }}\\Resources')
+            ->discoverPages(in: app_path('Alfakit{{ directorySuffix }}/Pages'), for: 'App\\Alfakit{{ namespaceSuffix }}\\Pages')
+            ->discoverWidgets(in: app_path('Alfakit{{ directorySuffix }}/Widgets'), for: 'App\\Alfakit{{ namespaceSuffix }}\\Widgets')
+            ->middleware([
+                'web',
+            ])
+            // Like the starter kit's dashboard: signed in with a verified email address.
+            ->authMiddleware([
+                'verified',
+            ]);
+    }
+}

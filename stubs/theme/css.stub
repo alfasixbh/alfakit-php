@@ -1,0 +1,28 @@
+/*
+ * {{ label }} — an Alfakit theme on top of `{{ extends }}`.
+ *
+ * The page carries data-alfakit-theme="… {{ name }}", so only override what changes.
+ * Colour tokens follow the shadcn convention (--background, --foreground, --card,
+ * --primary, --muted, --accent, --border, --input, --ring, --sidebar-*, --chart-1…5)
+ * plus --success, --warning and --info. Keep the `var(--alfakit-primary, …)` form so
+ * `->colors()` on the panel still overrides the primary colour.
+ *
+ * Check contrast: text tokens need 4.5:1 against their background, --input 3:1.
+ */
+
+:root[data-alfakit-theme~='{{ name }}'] {
+    --primary: var(--alfakit-primary, oklch(0.55 0.19 255));
+    /* --background: oklch(0.985 0.004 250); */
+    /* --sidebar: oklch(0.97 0.006 250); */
+}
+
+:root.dark[data-alfakit-theme~='{{ name }}'] {
+    --primary: var(--alfakit-primary, oklch(0.7 0.15 255));
+    /* --background: oklch(0.16 0.01 250); */
+}
+
+/* Anything else, scoped to the theme. Stable hooks: [data-slot='topbar'],
+   [data-slot='content'], [data-slot='page-header'], [data-surface], [data-input]. */
+:root[data-alfakit-theme~='{{ name }}'] [data-slot='page-header'] h1 {
+    letter-spacing: -0.01em;
+}

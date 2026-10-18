@@ -1,0 +1,17 @@
+<script lang="ts">
+    import { AlfakitComponent, type StandaloneComponentSchema } from '@alfakit/svelte';
+
+    /**
+     * An Inertia page of your app with an AlfaKit component: `{{ class }}` (PHP) arrives as
+     * the `{{ prop }}` prop and renders in your layout with your app's shadcn tokens.
+     */
+    let { {{ prop }} }: { {{ prop }}: StandaloneComponentSchema } = $props();
+</script>
+
+<svelte:head>
+    <title>{{ title }}</title>
+</svelte:head>
+
+<div class="mx-auto w-full max-w-5xl p-4 md:p-6">
+    <AlfakitComponent component={{{ prop }}} />
+</div>

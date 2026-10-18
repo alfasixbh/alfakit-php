@@ -1,0 +1,41 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use {{ resourceNamespace }}\{{ resource }};
+use AlfaSix\Alfakit\Actions\CreateAction;
+use AlfaSix\Alfakit\Actions\EditAction;
+use AlfaSix\Alfakit\Actions\ViewAction;
+use AlfaSix\Alfakit\Resources\Pages\ListRecords;
+use AlfaSix\Alfakit\Schemas\Schema;
+use AlfaSix\Alfakit\Tables\Table;
+
+/**
+ * Create, edit and delete records in modals on a single page.
+ */
+class Manage{{ plural }} extends ListRecords
+{
+    protected static string $resource = {{ resource }}::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            CreateAction::make()->form(fn () => static::getResource()::form(Schema::make())->getComponents(withHidden: true)),
+        ];
+    }
+
+    public function table(Table $table): Table
+    {
+        $table = parent::table($table);
+
+        foreach ($table->getRecordActions() as $action) {
+            if ($action instanceof EditAction || $action instanceof ViewAction) {
+                $action->form(fn () => static::getResource()::form(Schema::make())->getComponents(withHidden: true));
+            }
+        }
+
+        return $table->recordUrl(null);
+    }
+}

@@ -1,0 +1,117 @@
+<?php
+
+declare(strict_types=1);
+
+use AlfaSix\Alfakit\Panel;
+use AlfaSix\Alfakit\Support\StarterKitNavigation;
+use AlfaSix\Alfakit\Tests\Fixtures\AuthTenancy\Panels;
+use AlfaSix\Alfakit\Tests\Fixtures\Models\User;
+use AlfaSix\Alfakit\Tests\Fixtures\Panel\Resources\PostResource;
+use Illuminate\Support\Facades\Route;
+use Inertia\Inertia;
+
+/*
+ * Starter kit mode (`Panel::starterKit()`): the panel runs inside a Laravel starter kit app,
+ * with the host's authentication, root view, layout and theme.
+ */
+
+function starterKitPanel(?Closure $configure = null): Panel
+{
+    $panel = Panels::register('kit', fn (Panel $panel): Panel => ($configure ?? fn (Panel $panel): Panel => $panel)(
+        $panel->starterKit()->resources([PostResource::class]),
+    ));
+
+    StarterKitNavigation::register(alfakit());
+
+    return $panel;
+}
+
+function starterKitUser(): User
+{
+    return User::query()->create(['name' => 'Ann', 'email' => 'ann'.uniqid().'@example.com', 'password' => 'secret']);
+}
+
+beforeEach(function (): void {
+    // The host application's own pages and Fortify's login route.
+    Route::middleware('web')->get('/login', fn () => 'login')->name('login');
+    Route::middleware(['web', 'auth'])->get('/dashboard', fn () => Inertia::render('dashboard'))->name('dashboard');
+    app('router')->getRoutes()->refreshNameLookups();
+});
+
+it('turns off Alfakit authentication pages and sends guests to the host login route', function (): void {
+    $panel = starterKitPanel(fn (Panel $panel): Panel => $panel->login()->registration()->passwordReset()->profile()->starterKit());
+
+    expect($panel->isStarterKit())->toBeTrue()
+        ->and($panel->hasLogin())->toBeFalse()
+        ->and($panel->hasRegistration())->toBeFalse()
+        ->and($panel->hasPasswordReset())->toBeFalse()
+        ->and($panel->hasProfile())->toBeFalse()
+        ->and(Route::has('alfakit.kit.auth.login'))->toBeFalse()
+        ->and(Route::has('alfakit.kit.auth.register'))->toBeFalse()
+        ->and(Route::has('alfakit.kit.auth.profile'))->toBeFalse();
+
+    $this->get('/kit/posts')->assertRedirect('http://localhost/login');
+});
+
+it('renders panel pages through the host root view without the panel navigation', function (): void {
+    starterKitPanel();
+
+    $this->actingAs(starterKitUser());
+
+    $response = inertiaGet($this, '/kit/posts');
+    $props = inertiaProps($response);
+
+    expect($props['alfakit']['starterKit'])->toBeTrue()
+        ->and($props['alfakit']['navigation'])->toBe([])
+        ->and($props['alfakit']['auth']['login'])->toBe('http://localhost/login')
+        ->and($props['alfakitNavigation'])->toHaveCount(1)
+        ->and($props['alfakitNavigation'][0]['id'])->toBe('kit')
+        ->and($props['alfakitNavigation'][0]['url'])->toBe('http://localhost/kit/posts');
+
+    $items = collect($props['alfakitNavigation'][0]['groups'])->flatMap(fn (array $group): array => $group['items']);
+
+    expect($items->pluck('url')->all())->toContain('http://localhost/kit/posts')
+        ->and($items->firstWhere('url', 'http://localhost/kit/posts')['active'] ?? false)->toBeTrue();
+
+    // A full page visit renders the host's root view (`app`), not `alfakit::app`.
+    $this->app['view']->addLocation(__DIR__.'/views');
+    $this->get('/kit/posts')->assertOk()->assertSee('host-root-view', false);
+});
+
+it('shares the panel navigation with the host application pages', function (): void {
+    starterKitPanel();
+
+    // Guests get none.
+    expect(StarterKitNavigation::resolve(alfakit()))->toBeNull();
+
+    $this->actingAs(starterKitUser());
+
+    $props = inertiaProps(inertiaGet($this, '/dashboard'));
+    $items = collect($props['alfakitNavigation'][0]['groups'])->flatMap(fn (array $group): array => $group['items']);
+
+    expect($items->pluck('url')->all())->toContain('http://localhost/kit/posts')
+        ->and($items->every(fn (array $item): bool => ! ($item['active'] ?? false)))->toBeTrue()
+        // Building the navigation does not leave the panel set for the rest of the request.
+        ->and(alfakit()->getCurrentPanel())->toBeNull();
+});
+
+it('does not share starter kit navigation on pages of other panels', function (): void {
+    starterKitPanel();
+
+    $this->actingAs(starterKitUser());
+
+    $props = inertiaProps(inertiaGet($this, '/admin/posts'));
+
+    expect($props['alfakitNavigation'] ?? null)->toBeNull()
+        ->and($props['alfakit'])->not->toHaveKey('starterKit')
+        ->and($props['alfakit']['navigation'])->not->toBe([]);
+});
+
+it('offers embedded() as an alias', function (): void {
+    $panel = Panel::make('x')->embedded(rootView: 'host', loginRoute: 'sign-in');
+
+    expect($panel->isStarterKit())->toBeTrue()
+        ->and($panel->getStarterKitRootView())->toBe('host')
+        ->and($panel->getStarterKitLoginRoute())->toBe('sign-in')
+        ->and(Panel::make('y')->isStarterKit())->toBeFalse();
+});

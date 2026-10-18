@@ -1,0 +1,19 @@
+import { createAlfakit } from '@alfakit/svelte';
+
+/**
+ * Alfakit panel entry point.
+ *
+ * Components in ./fields, ./columns, ./entries, ./widgets, ./pages, ./components and
+ * ./blocks register themselves under their file name (fields/ColorWheel.svelte renders the
+ * `ColorWheel` field type, pages/Reports.svelte the page `Pages/Reports`) and load only when
+ * a page uses them. Register anything else, or override a file, under `components`/`pages`.
+ */
+void createAlfakit({
+    discover: import.meta.glob('./{fields,columns,entries,widgets,pages,components,blocks}/**/*.svelte'),
+    components: {
+        // 'map-picker': MapPicker,
+    },
+    pages: {
+        // 'Custom/Reports': ReportsPage,
+    },
+});

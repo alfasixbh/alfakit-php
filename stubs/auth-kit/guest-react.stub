@@ -1,0 +1,21 @@
+import { AlfakitComponent, type StandaloneComponentSchema } from '@alfakit/react';
+import { Head } from '@inertiajs/react';
+
+/**
+ * AlfaKit's sign-in, registration, password reset, email verification and two-step
+ * verification pages (`AuthKit::routes()`): `component` is the page, `authKit.title` its title.
+ */
+export default function AlfakitAuth({
+    component,
+    authKit,
+}: {
+    component: StandaloneComponentSchema;
+    authKit: { page: string; title: string };
+}) {
+    return (
+        <>
+            <Head title={authKit.title} />
+{{ guestBody }}
+        </>
+    );
+}

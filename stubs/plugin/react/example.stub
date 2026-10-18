@@ -1,0 +1,10 @@
+import type { BaseComponent } from '@alfakit/react'
+
+/** `View::make('{{ id }}:example')->props(['message' => '…'])` */
+export default function Example({
+  component,
+}: {
+  component: BaseComponent & { props?: { message?: string } | null }
+}) {
+  return <p className="text-muted-foreground text-sm">{component.props?.message}</p>
+}

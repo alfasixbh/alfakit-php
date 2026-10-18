@@ -1,0 +1,21 @@
+{
+  "prefix": "demo",
+  "info": { "name": "Demo Icons", "total": 4 },
+  "icons": {
+    "home": { "body": "<path fill=\"currentColor\" d=\"M10 20v-6h4v6h5v-8h3L12 3L2 12h3v8z\"/>" },
+    "arrow": {
+      "body": "<path fill=\"currentColor\" d=\"M4 11h12l-5-5l1.4-1.4L20 12l-7.6 7.4L11 18l5-5H4z\"/>",
+      "width": 32,
+      "height": 16
+    },
+    "evil": { "body": "<script>alert(1)</script><path onclick=\"alert(1)\" d=\"M0 0h24v24H0z\"/>" },
+    "secret": { "body": "<path d=\"M1 1h2\"/>", "hidden": true }
+  },
+  "aliases": {
+    "house": { "parent": "home" },
+    "arrow-left": { "parent": "arrow", "hFlip": true },
+    "arrow-down": { "parent": "arrow", "rotate": 1 }
+  },
+  "width": 24,
+  "height": 24
+}

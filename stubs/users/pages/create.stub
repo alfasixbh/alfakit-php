@@ -1,0 +1,13 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }}\Resources\UserResource\Pages;
+
+use {{ namespace }}\Resources\UserResource;
+use AlfaSix\Alfakit\Resources\Pages\CreateRecord;
+
+class CreateUser extends CreateRecord
+{
+    protected static string $resource = UserResource::class;
+}

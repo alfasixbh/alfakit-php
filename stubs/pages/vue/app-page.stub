@@ -1,0 +1,34 @@
+<script setup lang="ts">
+import { AppPage, Button, Card, CardContent, Input, usePageMethod } from '@alfakit/vue'
+import { ref } from 'vue'
+
+/**
+ * The `{{ key }}` component of {{ phpClass }}. Props are its getViewData(); call its
+ * #[Expose] methods with usePageMethod(). Translate visible text with useT().
+ */
+const props = defineProps<{ items: unknown[] }>()
+const name = ref('')
+const greet = usePageMethod<{ message: string }, { name: string }>('greet')
+const { loading, errors, result } = greet
+</script>
+
+<template>
+  <AppPage>
+    <Card>
+      <CardContent class="flex flex-col gap-3 sm:flex-row sm:items-start">
+        <div class="flex flex-1 flex-col gap-1">
+          <Input
+            v-model="name"
+            :aria-invalid="errors.name ? true : undefined"
+            aria-label="Name"
+            dir="auto"
+          />
+          <p v-if="errors.name" class="text-destructive text-sm">{{ errors.name }}</p>
+        </div>
+        <Button :disabled="loading" @click="greet.call({ name })">Greet</Button>
+      </CardContent>
+    </Card>
+    <p v-if="result" class="text-muted-foreground text-sm">{{ result.message }}</p>
+    <p class="text-muted-foreground text-sm">{{ props.items.length }} items</p>
+  </AppPage>
+</template>

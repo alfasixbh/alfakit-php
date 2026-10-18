@@ -1,0 +1,70 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use AlfaSix\Alfakit\Schemas\Components\Component;
+
+/**
+ * A custom schema (layout) component. Children go in with `->schema([...])`; the frontend
+ * component renders them with `<SchemaChildren>`.
+ *
+ * ```php
+ * {{ class }}::make()->heading('Shipping')->schema([...])
+ * ```
+ */
+class {{ class }} extends Component
+{
+    /** The registry key of its frontend component: resources/js/alfakit/components/{{ type }}.* registers under it. */
+    protected ?string $type = '{{ type }}';
+
+    /**
+     * Sends the operation and record key to the frontend component; list record
+     * attributes (`exposeContext(record: ['name'])`) only when it needs them.
+     */
+    protected \Closure|bool $exposesContext = true;
+
+    protected ?string $heading = null;
+
+    /**
+     * @param  array<Component>|\Closure  $schema
+     */
+    final public function __construct(array|\Closure $schema = [])
+    {
+        $this->schema($schema);
+    }
+
+    public static function make(mixed ...$arguments): static
+    {
+        return parent::make(...$arguments);
+    }
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->hiddenLabel();
+        $this->columnSpanFull();
+    }
+
+    public function heading(?string $heading): static
+    {
+        $this->heading = $heading;
+
+        return $this;
+    }
+
+    /**
+     * Options for the frontend component; it reads them from its `component` prop. Keep the
+     * array shape in sync: `php artisan alfakit:types` turns it into the component's types.
+     *
+     * @return array{heading: string|null}
+     */
+    protected function getSchemaProps(): array
+    {
+        return [
+            'heading' => $this->heading,
+        ];
+    }
+}

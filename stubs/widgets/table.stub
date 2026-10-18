@@ -1,0 +1,27 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use AlfaSix\Alfakit\Tables\Columns\TextColumn;
+use AlfaSix\Alfakit\Tables\Table;
+use AlfaSix\Alfakit\Widgets\TableWidget;
+use App\Models\User;
+
+class {{ class }} extends TableWidget
+{
+    protected ?string $heading = '{{ heading }}';
+
+    public function table(Table $table): Table
+    {
+        return $table
+            ->query(User::query()->latest())
+            ->columns([
+                TextColumn::make('name')->searchable(),
+                TextColumn::make('email'),
+                TextColumn::make('created_at')->since(),
+            ])
+            ->paginated(false);
+    }
+}

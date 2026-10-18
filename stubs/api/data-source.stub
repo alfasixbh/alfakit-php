@@ -1,0 +1,50 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use AlfaSix\Alfakit\Resources\Api\DataSource;
+use AlfaSix\Alfakit\Resources\Api\RecordsQuery;
+
+/**
+ * Where {{ plural }} are read and written. Return every row from `records()` and the
+ * table searches, sorts and pages them, or page in the source and return a
+ * `LengthAwarePaginator`. Throw a `ValidationException` for field errors and a
+ * `DataSourceException` for a failure the user should see.
+ */
+class {{ dataSource }} extends DataSource
+{
+    public function records(RecordsQuery $query): iterable
+    {
+        return [
+            // ['id' => '1', 'name' => '…'],
+        ];
+    }
+
+    public function find(string $key): ?array
+    {
+        return null;
+    }
+
+    public function create(array $data): array
+    {
+        return ['id' => (string) str()->uuid(), ...$data];
+    }
+
+    public function update(string $key, array $data): array
+    {
+        return ['id' => $key, ...$data];
+    }
+
+    public function delete(string $key): void
+    {
+        //
+    }
+
+    // Uncomment to offer {{ plural }} in the global search.
+    // public function search(string $search, int $limit): iterable
+    // {
+    //     return $this->records(new RecordsQuery(search: $search, perPage: $limit));
+    // }
+}

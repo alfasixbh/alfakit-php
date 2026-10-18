@@ -1,0 +1,19 @@
+# {{ title }}
+
+An [Alfakit](https://alfakit.dev) plugin.
+
+## Installation
+
+```bash
+composer require {{ package }}
+php artisan alfakit:assets
+```
+
+Add it to a panel:
+
+```php
+use {{ namespace }}\{{ pluginClass }};
+
+$panel->plugin({{ pluginClass }}::make());
+```
+{{ frontendReadme }}

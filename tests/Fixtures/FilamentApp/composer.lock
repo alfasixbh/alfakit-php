@@ -1,0 +1,11 @@
+{
+    "_readme": ["Fixture lock file for the migration tests."],
+    "packages": [
+        {"name": "filament/filament", "version": "v4.1.0"},
+        {"name": "filament/support", "version": "v4.1.0"},
+        {"name": "bezhansalleh/filament-shield", "version": "v4.0.2"}
+    ],
+    "packages-dev": [
+        {"name": "pxlrbt/filament-excel", "version": "v3.0.0"}
+    ]
+}

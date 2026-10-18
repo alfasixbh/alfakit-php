@@ -1,0 +1,25 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use AlfaSix\Alfakit\Standalone\Table;
+{{ imports }}use AlfaSix\Alfakit\Tables\Table as TableBuilder;
+{{ modelImport }}
+/**
+ * Render it from a controller: `'table' => {{ class }}::make({{ modelParameter }})`, then
+ * `<AlfakitComponent component={table} />` in the page (`:component` in Vue).
+ */
+class {{ class }} extends Table
+{
+{{ modelProperty }}    public function table(TableBuilder $table): TableBuilder
+    {
+        return $table
+            ->query({{ query }})
+            ->columns([
+{{ columns }}
+            ])
+            ->defaultSort('created_at', 'desc');
+    }
+}

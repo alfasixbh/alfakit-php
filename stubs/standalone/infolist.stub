@@ -1,0 +1,27 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use AlfaSix\Alfakit\Infolists\Components\TextEntry;
+use AlfaSix\Alfakit\Schemas\Components\Section;
+use AlfaSix\Alfakit\Schemas\Schema;
+use AlfaSix\Alfakit\Standalone\Infolist;
+{{ modelImport }}
+/**
+ * Render it from a controller: `'details' => {{ class }}::make({{ recordParameter }})`, then
+ * `<AlfakitComponent component={details} />` in the page (`:component` in Vue).
+ */
+class {{ class }} extends Infolist
+{
+    public function infolist(Schema $schema): Schema
+    {
+        return $schema->components([
+            Section::make('{{ heading }}')->schema([
+                TextEntry::make('id'),
+                TextEntry::make('created_at')->dateTime(),
+            ])->columns(2),
+        ]);
+    }
+}

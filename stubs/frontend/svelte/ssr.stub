@@ -1,0 +1,22 @@
+import createServer from '@inertiajs/svelte/server';
+import { createAlfakitServer } from '@alfakit/svelte/server';
+
+/**
+ * Alfakit server-side rendering entry. Build it with `vite build --ssr` and run it with
+ * `php artisan inertia:start-ssr`.
+ *
+ * Discover and register the same components and pages as resources/js/alfakit/app.ts so the server
+ * renders the tree the browser hydrates. Pages without the `alfakit` prop (the rest of
+ * your app) render in the browser, or pass `fallback` to render them here too.
+ */
+createServer(
+    createAlfakitServer({
+        discover: import.meta.glob('./{fields,columns,entries,widgets,pages,components,blocks}/**/*.svelte'),
+        components: {
+            // 'map-picker': MapPicker,
+        },
+        pages: {
+            // 'Custom/Reports': ReportsPage,
+        },
+    }),
+);

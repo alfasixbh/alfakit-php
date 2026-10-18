@@ -1,0 +1,21 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use {{ resourceNamespace }}\{{ resource }};
+use AlfaSix\Alfakit\Actions\DeleteAction;
+{{ viewActionImport }}use AlfaSix\Alfakit\Resources\Pages\EditRecord;
+
+class Edit{{ model }} extends EditRecord
+{
+    protected static string $resource = {{ resource }}::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [{{ viewAction }}
+            DeleteAction::make(),
+        ];
+    }
+}

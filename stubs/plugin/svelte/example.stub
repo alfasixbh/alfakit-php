@@ -1,0 +1,9 @@
+<script lang="ts">
+  import type { BaseComponent } from '@alfakit/svelte'
+
+  /** `View::make('{{ id }}:example')->props(['message' => '…'])` */
+  let { component }: { component: BaseComponent & { props?: { message?: string } | null } } =
+    $props()
+</script>
+
+<p class="text-muted-foreground text-sm">{component.props?.message}</p>

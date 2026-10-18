@@ -1,0 +1,34 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use AlfaSix\Alfakit\Forms\Components\Field;
+
+class {{ class }} extends Field
+{
+    /** The registry key of its frontend component: resources/js/alfakit/fields/{{ type }}.* registers under it. */
+    protected ?string $type = '{{ type }}';
+
+    /**
+     * Options for the frontend component; it reads them from its `component` prop. Keep the
+     * array shape in sync: `php artisan alfakit:types` turns it into the component's types.
+     *
+     * @return array{}
+     */
+    protected function getSchemaProps(): array
+    {
+        return [];
+    }
+
+    /**
+     * Rules every value of this field must pass, on top of `required()`, `rules()`…
+     *
+     * @return array<mixed>
+     */
+    protected function getTypeValidationRules(): array
+    {
+        return ['{{ rule }}'];
+    }
+}

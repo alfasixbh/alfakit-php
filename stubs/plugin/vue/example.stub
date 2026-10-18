@@ -1,0 +1,10 @@
+<script setup lang="ts">
+import type { BaseComponent } from '@alfakit/vue'
+
+/** `View::make('{{ id }}:example')->props(['message' => '…'])` */
+const props = defineProps<{ component: BaseComponent & { props?: { message?: string } | null } }>()
+</script>
+
+<template>
+  <p class="text-muted-foreground text-sm">{{ props.component.props?.message }}</p>
+</template>

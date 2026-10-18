@@ -1,0 +1,30 @@
+<script lang="ts">
+  import { AppPage, Button, Card, CardContent, Input, usePageMethod } from '@alfakit/svelte'
+
+  /**
+   * The `{{ key }}` component of {{ phpClass }}. Props are its getViewData(); call its
+   * #[Expose] methods with usePageMethod(). Translate visible text with useT().
+   */
+  let { items }: { items: unknown[] } = $props()
+  let name = $state('')
+  const greet = usePageMethod<{ message: string }, { name: string }>('greet')
+</script>
+
+<AppPage>
+  <Card>
+    <CardContent class="flex flex-col gap-3 sm:flex-row sm:items-start">
+      <div class="flex flex-1 flex-col gap-1">
+        <Input
+          bind:value={name}
+          aria-invalid={greet.errors.name ? true : undefined}
+          aria-label="Name"
+          dir="auto"
+        />
+        {#if greet.errors.name}<p class="text-destructive text-sm">{greet.errors.name}</p>{/if}
+      </div>
+      <Button disabled={greet.loading} onclick={() => greet.call({ name })}>Greet</Button>
+    </CardContent>
+  </Card>
+  {#if greet.result}<p class="text-muted-foreground text-sm">{greet.result.message}</p>{/if}
+  <p class="text-muted-foreground text-sm">{items.length} items</p>
+</AppPage>

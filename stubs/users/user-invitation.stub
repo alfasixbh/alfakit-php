@@ -1,0 +1,67 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }}\Users;
+
+use AlfaSix\Alfakit\Mail\Concerns\UsesEditableTemplate;
+use AlfaSix\Alfakit\Mail\EditableTemplates;
+use AlfaSix\Alfakit\Mail\MailMessage;
+use AlfaSix\Alfakit\Support\Credit;
+use Illuminate\Bus\Queueable;
+use Illuminate\Notifications\Messages\MailMessage as BaseMailMessage;
+use Illuminate\Notifications\Notification;
+
+/**
+ * The e-mail with the link where an invited user chooses their password, in the AlfaKit
+ * mail theme. Admins can edit it with the mail templates plugin (`alfakit.users-invitation`).
+ */
+class UserInvitation extends Notification
+{
+    use Queueable;
+    use UsesEditableTemplate;
+
+    /** The invited user's name, for the `name` merge tag. */
+    protected string $name = '';
+
+    public function __construct(public string $url, public string $appName) {}
+
+    /**
+     * @return array<int, string>
+     */
+    public function via(object $notifiable): array
+    {
+        return ['mail'];
+    }
+
+    public function toMail(object $notifiable): BaseMailMessage
+    {
+        $this->name = is_string($name = $notifiable->name ?? null) ? $name : '';
+
+        return $this->templateMailMessage(Credit::addToMail((new MailMessage)
+            ->subject(__('alfakit::users.invitation.mail.subject', ['app' => $this->appName]))
+            ->greeting(__('alfakit::users.invitation.mail.greeting'))
+            ->line(__('alfakit::users.invitation.mail.intro', ['app' => $this->appName]))
+            ->action(__('alfakit::users.invitation.mail.action'), $this->url)
+            ->line(__('alfakit::users.invitation.mail.expiry', ['days' => UserAccounts::INVITATION_DAYS]))), Credit::emailLine());
+    }
+
+    public function templateKey(): string
+    {
+        return 'alfakit.users-invitation';
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function templateData(): array
+    {
+        return [
+            'name' => $this->name,
+            'url' => $this->url,
+            'button' => EditableTemplates::button($this->url, (string) __('alfakit::users.invitation.mail.action')),
+            'days' => (string) UserAccounts::INVITATION_DAYS,
+            'app' => $this->appName,
+        ];
+    }
+}

@@ -1,0 +1,27 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use {{ resourceNamespace }}\{{ resource }};
+use AlfaSix\Alfakit\Resources\Pages\Page;
+use AlfaSix\Alfakit\Schemas\Components\Section;
+use AlfaSix\Alfakit\Schemas\Components\Text;
+use AlfaSix\Alfakit\Schemas\Schema;
+
+class {{ class }} extends Page
+{
+    protected static string $resource = {{ resource }}::class;
+
+    protected static ?string $slug = '{{ slug }}';
+
+    public function content(Schema $schema): Schema
+    {
+        return $schema->components([
+            Section::make('{{ class }}')->schema([
+                Text::make('Build your page content with schema components, or set static::$component to render your own frontend component.'),
+            ]),
+        ]);
+    }
+}

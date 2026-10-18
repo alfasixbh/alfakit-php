@@ -1,0 +1,18 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import '@alfakit/{{ adapter }}/styles.css';
+
+/*
+ * Scan Alfakit's compiled components, your custom frontend components, the shadcn
+ * components they import and your PHP (classes passed to
+ * `extraAttributes(['class' => '…'])`, `recordClasses()`, …).
+ */
+@source '../../node_modules/@alfakit/{{ adapter }}/dist';
+@source '../js/alfakit';
+@source '../js/components/ui';
+@source '../../app/**/*.php';
+
+/*
+ * Theme tokens follow the shadcn convention. Override any variable here (or set
+ * `->colors([...])` on your panel) to restyle the whole panel.
+ */

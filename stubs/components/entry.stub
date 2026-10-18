@@ -1,0 +1,24 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use AlfaSix\Alfakit\Infolists\Components\Entry;
+
+class {{ class }} extends Entry
+{
+    /** The registry key of its frontend component: resources/js/alfakit/entries/{{ type }}.* registers under it. */
+    protected ?string $type = '{{ type }}';
+
+    /**
+     * Options for the frontend component; it reads them, and `state`, from its
+     * `component` prop. `php artisan alfakit:types` turns the array shape into types.
+     *
+     * @return array{}
+     */
+    protected function getSchemaProps(): array
+    {
+        return [];
+    }
+}

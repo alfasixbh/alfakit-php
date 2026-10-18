@@ -1,0 +1,16 @@
+<script lang="ts">
+  import { Card, CardContent, CardHeader, CardTitle, type WidgetProps } from '@alfakit/svelte'
+
+  /**
+   * Renders {{ phpClass }} (registry key `{{ key }}`): its `getViewData()` arrive as props,
+   * the widget schema as `widget`. Auto-registered from its path. Translate text with `useT()`.
+   */
+  let { message }: WidgetProps<{ message: string }> = $props()
+</script>
+
+<Card>
+  <CardHeader>
+    <CardTitle>{{ heading }}</CardTitle>
+  </CardHeader>
+  <CardContent class="text-muted-foreground text-sm">{message}</CardContent>
+</Card>

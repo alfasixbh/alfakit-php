@@ -1,0 +1,16 @@
+import { Card, CardContent, CardHeader, CardTitle, type WidgetProps } from '@alfakit/react'
+
+/**
+ * Renders {{ phpClass }} (registry key `{{ key }}`): its `getViewData()` arrive as props,
+ * the widget schema as `widget`. Auto-registered from its path. Translate text with `useT()`.
+ */
+export default function {{ component }}({ message }: WidgetProps<{ message: string }>) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{{ heading }}</CardTitle>
+      </CardHeader>
+      <CardContent className="text-muted-foreground text-sm">{message}</CardContent>
+    </Card>
+  )
+}

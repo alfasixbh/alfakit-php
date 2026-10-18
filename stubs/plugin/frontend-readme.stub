@@ -1,0 +1,12 @@
+
+## Frontend components
+
+Register the plugin's components in your panel's entry (`resources/js/alfakit/app.*`):
+
+```ts
+import { components as {{ jsName }}Components } from '{{ npmPackage }}'
+
+createAlfakit({ components: { ...{{ jsName }}Components } })
+```
+
+Then render them from PHP, for example `View::make('{{ id }}:example')->props(['message' => 'Hello'])`.

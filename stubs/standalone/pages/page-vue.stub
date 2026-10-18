@@ -1,0 +1,17 @@
+<script setup lang="ts">
+import { AlfakitComponent, type StandaloneComponentSchema } from '@alfakit/vue';
+import { Head } from '@inertiajs/vue3';
+
+/**
+ * An Inertia page of your app with an AlfaKit component: `{{ class }}` (PHP) arrives as the
+ * `{{ prop }}` prop and renders in your layout with your app's shadcn tokens.
+ */
+defineProps<{ {{ prop }}: StandaloneComponentSchema }>();
+</script>
+
+<template>
+    <Head title="{{ title }}" />
+    <div class="mx-auto w-full max-w-5xl p-4 md:p-6">
+        <AlfakitComponent :component="{{ prop }}" />
+    </div>
+</template>

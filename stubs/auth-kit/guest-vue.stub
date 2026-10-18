@@ -1,0 +1,18 @@
+<script setup lang="ts">
+import { AlfakitComponent, type StandaloneComponentSchema } from '@alfakit/vue';
+import { Head } from '@inertiajs/vue3';
+
+/**
+ * AlfaKit's sign-in, registration, password reset, email verification and two-step
+ * verification pages (`AuthKit::routes()`): `component` is the page, `authKit.title` its title.
+ */
+defineProps<{
+    component: StandaloneComponentSchema;
+    authKit: { page: string; title: string };
+}>();
+</script>
+
+<template>
+    <Head :title="authKit.title" />
+{{ guestBody }}
+</template>

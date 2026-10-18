@@ -1,0 +1,147 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }}\Users\Pages;
+
+use {{ modelClass }};
+use {{ namespace }}\Users\UserAccounts;
+use AlfaSix\Alfakit\Actions\Action;
+use AlfaSix\Alfakit\Forms\Components\TextInput;
+use AlfaSix\Alfakit\Notifications\Notification;
+use AlfaSix\Alfakit\Pages\Page;
+use AlfaSix\Alfakit\Panel;
+use AlfaSix\Alfakit\Schemas\Schema;
+use AlfaSix\Alfakit\Support\Enums\Color;
+use Illuminate\Contracts\Auth\StatefulGuard;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Routing\Router;
+use Illuminate\Validation\Rules\Password;
+
+/**
+ * Where an invited user chooses their password. Opened from the signed link in
+ * `UserInvitation`; registered with `$panel->routes(...)` by `alfakit:users`.
+ */
+class AcceptInvitation extends Page
+{
+    protected static string $layout = 'auth';
+
+    protected static bool $shouldRegisterNavigation = false;
+
+    protected static bool $isDiscovered = false;
+
+    protected ?{{ model }} $invitedUser = null;
+
+    public static function registerRoute(Router $router, Panel $panel): void
+    {
+        $router->get('/invitations/{user}/{hash}', static::class)
+            ->middleware('signed')
+            ->name(static::getRelativeRouteName());
+    }
+
+    public static function requiresAuthentication(): bool
+    {
+        return false;
+    }
+
+    public static function getRelativeRouteName(): string
+    {
+        return 'auth.invitation.accept';
+    }
+
+    public function mount(mixed ...$parameters): void
+    {
+        [$key, $hash] = [$parameters[0] ?? null, $parameters[1] ?? null];
+
+        $user = is_scalar($key) ? {{ model }}::query()->find($key) : null;
+
+        abort_unless(
+            $user instanceof {{ model }} && is_string($hash) && UserAccounts::isInvitationPending($user) && hash_equals(UserAccounts::invitationHash($user), $hash),
+            403,
+            __('alfakit::users.invitation.invalid'),
+        );
+
+        $this->invitedUser = $user;
+    }
+
+    protected function flushCaches(): void
+    {
+        parent::flushCaches();
+
+        $this->invitedUser = null;
+    }
+
+    public function getTitle(): string
+    {
+        return __('alfakit::users.invitation.title');
+    }
+
+    public function getHeading(): ?string
+    {
+        return __('alfakit::users.invitation.heading', ['app' => (string) config('app.name')]);
+    }
+
+    public function form(Schema $schema): Schema
+    {
+        $revealable = $this->getPanel()->arePasswordsRevealable();
+
+        return $schema->components([
+            TextInput::make('email')
+                ->label(__('alfakit::users.fields.email'))
+                ->default(fn (): ?string => $this->invitedUser?->getAttribute('email'))
+                ->disabled()
+                ->dehydrated(false),
+            TextInput::make('password')
+                ->label(__('alfakit::users.fields.password'))
+                ->password()
+                ->revealable($revealable)
+                ->required()
+                ->rule(Password::default())
+                ->confirmed()
+                ->autofocus(),
+            TextInput::make('password_confirmation')
+                ->label(__('alfakit::users.fields.password_confirmation'))
+                ->password()
+                ->revealable($revealable)
+                ->required()
+                ->dehydrated(false),
+        ])->columns(1);
+    }
+
+    protected function getFormActions(): array
+    {
+        return [
+            Action::make('accept')
+                ->label(__('alfakit::users.invitation.submit'))
+                ->color(Color::Primary)
+                ->button()
+                ->extraAttributes(['class' => 'w-full'])
+                ->form(fn (): array => $this->getForm()?->getComponents(withHidden: true) ?? [])
+                ->action(fn (array $data): RedirectResponse => $this->accept($data)),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    public function accept(array $data): RedirectResponse
+    {
+        $user = $this->invitedUser;
+
+        abort_if($user === null, 403);
+
+        UserAccounts::acceptInvitation($user, (string) $data['password']);
+
+        $panel = $this->getPanel();
+        $guard = $panel->auth();
+
+        if ($guard instanceof StatefulGuard) {
+            $guard->login($user);
+            session()->regenerate();
+        }
+
+        Notification::make()->success()->title(__('alfakit::users.invitation.accepted'))->send();
+
+        return redirect()->to($panel->getUrl());
+    }
+}

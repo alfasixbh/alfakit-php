@@ -1,0 +1,35 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+{{ imports }}use AlfaSix\Alfakit\Notifications\Notification;
+use AlfaSix\Alfakit\Schemas\Schema;
+use AlfaSix\Alfakit\Standalone\Form;
+{{ modelImport }}
+/**
+ * Render it from a controller: `'form' => {{ class }}::make({{ recordParameter }})`, then
+ * `<AlfakitComponent component={form} />` in the page (`:component` in Vue).
+ */
+class {{ class }} extends Form
+{
+    public function form(Schema $schema): Schema
+    {
+        return $schema->components([
+{{ components }}
+        ])->columns(2);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    public function submit(array $data): mixed
+    {
+        // Handle the validated data here.
+
+        Notification::make()->success()->title(__('Thank you, we will be in touch.'))->send();
+
+        return back();
+    }
+}

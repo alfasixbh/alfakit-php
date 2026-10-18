@@ -1,0 +1,31 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }}\Resources\UserResource\Pages;
+
+use {{ modelClass }};
+use {{ namespace }}\Resources\UserResource;
+use {{ namespace }}\Users\UserAccounts;
+use AlfaSix\Alfakit\Actions\ActionGroup;
+use AlfaSix\Alfakit\Actions\EditAction;
+use AlfaSix\Alfakit\Actions\ImpersonateAction;
+use AlfaSix\Alfakit\Resources\Pages\ViewRecord;
+
+class ViewUser extends ViewRecord
+{
+    protected static string $resource = UserResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            ImpersonateAction::make()
+                ->visible(fn ({{ model }} $record): bool => ! UserAccounts::isBlocked($record)),
+            EditAction::make(),
+            ActionGroup::make([
+                ...UserResource::accountActions(),
+                ...UserResource::sessionActions(),
+            ]),
+        ];
+    }
+}

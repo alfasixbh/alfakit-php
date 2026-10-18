@@ -1,0 +1,20 @@
+<script setup lang="ts">
+import { EntryWrapper, type BaseEntry } from '@alfakit/vue'
+
+/**
+ * Renders {{ phpClass }} (registry key `{{ key }}`): `component.state` is the value,
+ * options from the PHP class's `getSchemaProps()` arrive on `component`.
+ *
+ * Auto-registered from its path in resources/js/alfakit. Type the PHP class's
+ * `getSchemaProps()` with `php artisan alfakit:types` (or write `defineProps<{ component: … }>()`).
+ */
+const props = defineProps<{ component: BaseEntry }>()
+</script>
+
+<template>
+  <EntryWrapper :entry="props.component">
+    <span class="text-sm">{{
+      props.component.state == null ? '—' : String(props.component.state)
+    }}</span>
+  </EntryWrapper>
+</template>

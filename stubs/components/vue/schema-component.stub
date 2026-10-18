@@ -1,0 +1,29 @@
+<script setup lang="ts">
+import { SchemaChildren, useSchemaComponentContext, type BaseComponent } from '@alfakit/vue'
+
+/**
+ * Renders {{ phpClass }} (registry key `{{ key }}`). Options from the PHP class's
+ * `getSchemaProps()` arrive on `component`; `<SchemaChildren>` renders its `->schema()`.
+ *
+ * Auto-registered from its path in resources/js/alfakit. Type the PHP class's
+ * `getSchemaProps()` with `php artisan alfakit:types` (or write `defineProps<{ component: … }>()`).
+ */
+const props = defineProps<{ component: BaseComponent & { heading?: string | null } }>()
+
+// `context.value.get('field')` reads another field's state; `operation` / `recordKey`
+// come from `exposeContext()` on the PHP class.
+const context = useSchemaComponentContext(() => props.component)
+</script>
+
+<template>
+  <section
+    data-slot="{{ key }}"
+    :data-operation="context.operation ?? undefined"
+    class="rounded-xl border p-4"
+  >
+    <h3 v-if="props.component.heading" class="mb-4 text-base font-semibold">
+      {{ props.component.heading }}
+    </h3>
+    <SchemaChildren :component="props.component" />
+  </section>
+</template>

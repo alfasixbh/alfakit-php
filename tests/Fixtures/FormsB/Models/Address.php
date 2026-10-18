@@ -1,0 +1,14 @@
+<?php
+
+declare(strict_types=1);
+
+namespace AlfaSix\Alfakit\Tests\Fixtures\FormsB\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class Address extends Model
+{
+    protected $table = 'formsb_addresses';
+
+    protected $guarded = [];
+}

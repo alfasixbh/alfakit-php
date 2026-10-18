@@ -1,0 +1,56 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use AlfaSix\Alfakit\Schemas\Components\Component;
+
+/**
+ * Scaffolded by `alfakit:migrate-from-filament` from the Livewire component
+ * `{{ livewireClass }}` (view `{{ view }}`). Its frontend half is
+ * resources/js/alfakit/components/{{ class }}.{{ extension }}, auto-registered under `{{ type }}`.
+ *
+ * Use it in any schema (a page's `form()`/`content()`, a section, a modal):
+ *
+ * ```php
+ * {{ class }}::make()
+ * ```
+ *
+ * {{ todo }}: port the component.
+ * - State: the Livewire public properties are sent to the frontend by `getSchemaProps()`;
+ *   keep values the browser changes in a form field (`TextInput`, `Hidden`) or in the
+ *   frontend component's own state.
+ * - Methods: server work goes into AlfaKit actions (`Action::make()->action(...)`) placed
+ *   with `->schema([...])` or `Actions::make([...])`; client-only behaviour goes into the
+ *   frontend component.
+ * - Then delete `{{ livewireClass }}` and its Blade view.
+ *
+ * Livewire public properties: {{ properties }}
+ * Livewire methods: {{ methods }}
+ */
+class {{ class }} extends Component
+{
+    /** The registry key of its frontend component (resources/js/alfakit/components/{{ class }}.*). */
+    protected ?string $type = '{{ type }}';
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->hiddenLabel();
+        $this->columnSpanFull();
+    }
+
+    /**
+     * The initial state, from the Livewire component's property defaults.
+     *
+     * @return array<string, mixed>
+     */
+    protected function getSchemaProps(): array
+    {
+        return [
+{{ props }}
+        ];
+    }
+}

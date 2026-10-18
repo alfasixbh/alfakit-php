@@ -1,0 +1,28 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use AlfaSix\Alfakit\Widgets\Widget;
+
+/**
+ * Rendered by resources/js/alfakit/widgets/{{ component }}.* (auto-registered under
+ * '{{ component }}'), which receives getViewData() as props.
+ */
+class {{ class }} extends Widget
+{
+    protected static ?string $component = '{{ component }}';
+
+    /**
+     * `php artisan alfakit:types` turns the array shape into the component's props type.
+     *
+     * @return array{message: string}
+     */
+    protected function getViewData(): array
+    {
+        return [
+            'message' => 'Hello from {{ class }}',
+        ];
+    }
+}

@@ -1,0 +1,5 @@
+/*
+ * {{ title }}: styles added to every panel page by Assets::register(). Scope them to
+ * your plugin's markup, and use logical properties (margin-inline-start…) so they work
+ * right to left.
+ */

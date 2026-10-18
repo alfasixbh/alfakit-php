@@ -1,0 +1,23 @@
+import { SchemaChildren, useSchemaComponentContext, type BaseComponent } from '@alfakit/react'
+
+type {{ component }}Schema = BaseComponent & { heading?: string | null }
+
+/**
+ * Renders {{ phpClass }} (registry key `{{ key }}`). Options from the PHP class's
+ * `getSchemaProps()` arrive on `component`; `<SchemaChildren>` renders its `->schema()`.
+ *
+ * Auto-registered from its path in resources/js/alfakit. Type the PHP class's
+ * `getSchemaProps()` with `php artisan alfakit:types` (or write `SchemaComponentProps<{ … }>`).
+ */
+export default function {{ component }}({ component }: { component: {{ component }}Schema }) {
+  // `context.get('field')` reads another field's state; `context.operation` / `recordKey`
+  // come from `exposeContext()` on the PHP class.
+  const context = useSchemaComponentContext(component)
+
+  return (
+    <section data-slot="{{ key }}" data-operation={context.operation ?? undefined} className="rounded-xl border p-4">
+      {component.heading && <h3 className="mb-4 text-base font-semibold">{component.heading}</h3>}
+      <SchemaChildren component={component} />
+    </section>
+  )
+}

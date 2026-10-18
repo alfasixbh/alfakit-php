@@ -1,0 +1,38 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use AlfaSix\Alfakit\Actions\Action;
+use AlfaSix\Alfakit\Notifications\Notification;
+use AlfaSix\Alfakit\Schemas\Components\Section;
+use AlfaSix\Alfakit\Schemas\Components\Text;
+use AlfaSix\Alfakit\Schemas\Schema;
+use AlfaSix\Alfakit\Standalone\Component;
+{{ modelImport }}
+/**
+ * A headless page: combine `form()`, `table()`, `infolist()`, `content()`, `actions()` and
+ * `widgets()` as needed. Render it from a controller:
+ * `'overview' => {{ class }}::make({{ modelParameter }})`, then `<AlfakitComponent component={overview} />`.
+ */
+class {{ class }} extends Component
+{
+{{ modelProperty }}    public function actions(): array
+    {
+        return [
+            Action::make('refresh')
+                ->icon('refresh-cw')
+                ->action(fn () => Notification::make()->success()->title(__('Refreshed'))->send()),
+        ];
+    }
+
+    public function content(Schema $schema): Schema
+    {
+        return $schema->components([
+            Section::make('{{ heading }}')->schema([
+                Text::make('Build this component with schema components, a form(), a table() or widgets().'),
+            ]),
+        ]);
+    }
+}
