@@ -34,6 +34,24 @@ final class ModelInspector
     public const TITLE_ATTRIBUTES = ['name', 'title', 'label', 'full_name', 'email', 'subject', 'slug', 'code'];
 
     /**
+     * The given attributes the model refuses to mass assign (not in `$fillable`, or guarded).
+     * A resource saves its form with `create()` / `update()`, so these would fail on save.
+     *
+     * @param  list<string>  $attributes
+     * @return list<string>
+     */
+    public static function guardedAttributes(string $modelClass, array $attributes): array
+    {
+        if (! class_exists($modelClass) || ! is_subclass_of($modelClass, Model::class)) {
+            return [];
+        }
+
+        $model = new $modelClass;
+
+        return array_values(array_filter($attributes, static fn (string $attribute): bool => ! $model->isFillable($attribute)));
+    }
+
+    /**
      * Whether the model class uses Laravel's SoftDeletes trait; null when the class does not
      * exist (yet).
      */

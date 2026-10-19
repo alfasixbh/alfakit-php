@@ -188,6 +188,8 @@ class MakeResourceCommand extends Command
             return [$this->defaultForm(), $this->defaultTable(), []];
         }
 
+        $this->warnGuardedAttributes($modelClass, $builder->defaultFormColumns());
+
         $fields = $builder->formFields($builder->defaultFormColumns());
         $columns = $builder->tableColumns($builder->defaultTableColumns());
 
@@ -211,5 +213,20 @@ class MakeResourceCommand extends Command
         }
 
         return true;
+    }
+
+    /**
+     * Resources save their form with `create()` / `update()`: warn when the model would refuse
+     * the generated fields (Laravel's MassAssignmentException on the first save).
+     *
+     * @param  list<string>  $attributes
+     */
+    protected function warnGuardedAttributes(string $modelClass, array $attributes): void
+    {
+        $guarded = ModelInspector::guardedAttributes($modelClass, $attributes);
+
+        if ($guarded !== []) {
+            $this->components->warn("{$modelClass} does not allow mass assignment of ".implode(', ', $guarded).', so saving the form would fail. Add them to the model\'s $fillable array (or use protected $guarded = [];).');
+        }
     }
 }

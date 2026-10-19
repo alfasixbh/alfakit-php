@@ -6,6 +6,7 @@ use AlfaSix\Alfakit\Commands\Generators\ClassGenerator;
 use AlfaSix\Alfakit\Commands\InstallCommand;
 use AlfaSix\Alfakit\Commands\MakeIssueCommand;
 use AlfaSix\Alfakit\Commands\MakeThemeCommand;
+use AlfaSix\Alfakit\Commands\Support\ModelInspector;
 use AlfaSix\Alfakit\Infolists\Components\ColorEntry;
 use AlfaSix\Alfakit\Panel;
 use AlfaSix\Alfakit\Tables\Columns\ColorColumn;
@@ -13,6 +14,7 @@ use AlfaSix\Alfakit\Tests\Fixtures\AuthTenancy\Panels;
 use AlfaSix\Alfakit\Tests\Fixtures\Models\Category;
 use AlfaSix\Alfakit\Tests\Fixtures\Models\Comment;
 use AlfaSix\Alfakit\Tests\Fixtures\Models\Post;
+use AlfaSix\Alfakit\Tests\Fixtures\Models\StrictCategory;
 use AlfaSix\Alfakit\Tests\Fixtures\Models\Team;
 use AlfaSix\Alfakit\Tests\Fixtures\Panel\Resources\PostResource;
 use Illuminate\Filesystem\Filesystem;
@@ -348,4 +350,17 @@ it('leaves soft-delete support out of a resource whose model does not soft delet
         ->assertSuccessful();
 
     expect(generatedFile('PostResource.php'))->toContain('TrashedFilter::make()');
+});
+
+it('warns when the model would refuse the generated form fields on save', function (): void {
+    $this->artisan('make:alfakit-resource', ['model' => StrictCategory::class, '--generate' => true])
+        ->expectsOutputToContain('does not allow mass assignment of')
+        ->assertSuccessful();
+
+    $this->artisan('make:alfakit-resource', ['model' => Category::class, '--generate' => true, '--force' => true])
+        ->doesntExpectOutputToContain('does not allow mass assignment')
+        ->assertSuccessful();
+
+    expect(ModelInspector::guardedAttributes(StrictCategory::class, ['name', 'slug']))->toBe(['slug'])
+        ->and(ModelInspector::guardedAttributes(Category::class, ['name', 'slug']))->toBe([]);
 });

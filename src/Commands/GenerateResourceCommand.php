@@ -84,6 +84,7 @@ class GenerateResourceCommand extends Command
         $options = $builder->options();
 
         $form = $this->choose('form', 'Form fields', $options, $builder->defaultFormColumns(), $interactive);
+        $this->warnGuardedAttributes($modelClass, array_values(array_filter($form, 'is_string')));
         $tableColumns = $this->choose('table', 'Table columns', $options, $builder->defaultTableColumns(), $interactive);
         $filters = $this->choose('filters', 'Table filters', $builder->options(filtersOnly: true), $builder->defaultFilterColumns(), $interactive);
 
@@ -293,5 +294,20 @@ class GenerateResourceCommand extends Command
         $this->components->warn(str_replace('{class}', $modelClass, 'The model {class} does not use SoftDeletes, so the resource is generated without the trashed filter and restore actions. Add `use SoftDeletes;` to the model and `$table->softDeletes();` to its table, then generate the resource again with --soft-deletes.'));
 
         return false;
+    }
+
+    /**
+     * Resources save their form with `create()` / `update()`: warn when the model would refuse
+     * the generated fields (Laravel's MassAssignmentException on the first save).
+     *
+     * @param  list<string>  $attributes
+     */
+    protected function warnGuardedAttributes(string $modelClass, array $attributes): void
+    {
+        $guarded = ModelInspector::guardedAttributes($modelClass, $attributes);
+
+        if ($guarded !== []) {
+            $this->components->warn("{$modelClass} does not allow mass assignment of ".implode(', ', $guarded).', so saving the form would fail. Add them to the model\'s $fillable array (or use protected $guarded = [];).');
+        }
     }
 }
