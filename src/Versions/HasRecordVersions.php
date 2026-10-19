@@ -201,13 +201,16 @@ trait HasRecordVersions
 
     /**
      * Restore the tracked attributes of a version (other attributes are left alone) and
-     * save: the save writes a new version that names the restored one.
+     * save: the save writes a new version that names the restored one. Attributes in
+     * `$except` keep their current values (the owner columns of a `scopeToUser()` panel).
+     *
+     * @param  array<int, string>  $except
      */
-    public function restoreRecordVersion(RecordVersion $version): void
+    public function restoreRecordVersion(RecordVersion $version, array $except = []): void
     {
         abort_unless($version->versionable_type === $this->getMorphClass() && $version->versionable_id === (string) $this->getKey(), 404);
 
-        $tracked = $this->getVersionedAttributeNames();
+        $tracked = array_diff($this->getVersionedAttributeNames(), $except);
         $values = array_intersect_key($version->getSnapshot(), array_flip($tracked));
 
         static::withoutVersions(function () use ($values): void {

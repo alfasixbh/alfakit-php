@@ -9,7 +9,9 @@ import { createAlfakit } from '@alfakit/react';
  * a page uses them. Register anything else, or override a file, under `components`/`pages`.
  */
 void createAlfakit({
-    discover: import.meta.glob('./{fields,columns,entries,widgets,pages,components,blocks}/**/*.tsx'),
+    discover: import.meta.glob(
+        './{fields,columns,entries,widgets,pages,components,blocks}/**/*.tsx',
+    ),
     components: {
         // 'map-picker': MapPicker,
     },

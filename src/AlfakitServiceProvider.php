@@ -106,6 +106,9 @@ class AlfakitServiceProvider extends ServiceProvider
         // The core mails for the mail preview page and editable templates.
         Mail\CoreMails::register();
 
+        // Verification mails sent from a panel link back to that panel.
+        Auth\EmailVerificationUrls::register();
+
         // Iconify sets listed in `alfakit.icons.iconify` (`alfakit:icons mdi`); nothing is read until an icon is used.
         if (is_array($iconify = config('alfakit.icons.iconify')) && $iconify !== []) {
             Support\Icons::iconify($iconify);

@@ -82,3 +82,13 @@ it('keeps the apply button for live fields when filters live in the URL', functi
 it('ignores malformed filters in the URL', function (): void {
     expect(urlFiltersStats(inertiaProps(inertiaGet($this, '/urlboards?filters=oops'))))->toBe(['Posts' => 2, 'Filter' => 'all']);
 });
+
+it('lets an own dashboard subclass replace the registered dashboard on the same route', function (): void {
+    // The generated provider registers AlfaSix's Dashboard; the app adds its own (discovered).
+    Panels::register('ownboard', fn (Panel $panel): Panel => $panel->pages([AlfaSix\Alfakit\Pages\Dashboard::class, FilteredDashboard::class]));
+    $panel = alfakit()->getPanel('ownboard');
+
+    expect($panel->getPages())->toBe([FilteredDashboard::class]);
+
+    inertiaGet($this, '/ownboard')->assertOk();
+});

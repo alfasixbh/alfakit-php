@@ -6,6 +6,8 @@ namespace AlfaSix\Alfakit\Tables\Grouping;
 
 use AlfaSix\Alfakit\Support\Concerns\Configurable;
 use AlfaSix\Alfakit\Support\Concerns\EvaluatesClosures;
+use AlfaSix\Alfakit\Support\Concerns\HasEnumState;
+use AlfaSix\Alfakit\Support\EnumState;
 use AlfaSix\Alfakit\Support\Labels;
 use AlfaSix\Alfakit\Support\RecordState;
 use AlfaSix\Alfakit\Tables\Columns\TextColumn;
@@ -32,12 +34,16 @@ use UnitEnum;
  * ])->defaultGroup('status')
  * ```
  *
+ * An enum state (an attribute cast to an enum, or a raw value with `->enum(Status::class)`)
+ * is titled with the enum's label, and its colour and icon are shown next to the title.
+ *
  * Rows are ordered by the group first, so each group's rows are contiguous on every page.
  */
 class Group
 {
     use Configurable;
     use EvaluatesClosures;
+    use HasEnumState;
 
     protected string $id;
 
@@ -328,11 +334,56 @@ class Group
             return __($state ? 'alfakit::tables.filters.ternary.true' : 'alfakit::tables.filters.ternary.false');
         }
 
-        if ($state instanceof UnitEnum && method_exists($state, 'getLabel')) {
-            return (string) $state->getLabel();
+        if (($case = $this->resolveEnumCase($state)) !== null) {
+            return EnumState::label($case);
         }
 
         return (string) $this->stringify($state);
+    }
+
+    /**
+     * The enum case of a record's group state: the cast attribute, or the raw value
+     * turned back into a case of `->enum()`. Null with a custom title or key.
+     *
+     * @param  Model|array<mixed>  $record  a model, or a row of custom `records()`
+     */
+    protected function getEnumCase(Model|array $record): ?UnitEnum
+    {
+        if ($this->getTitleFromRecordUsing !== null || $this->getKeyFromRecordUsing !== null || $this->isDate()) {
+            return null;
+        }
+
+        $state = RecordState::get($record, $this->getColumn());
+
+        if (is_array($state)) {
+            $state = $state[0] ?? null;
+        }
+
+        return $state === null || $state === '' ? null : $this->resolveEnumCase($state);
+    }
+
+    /**
+     * The enum colour (`HasColor`) of a record's group, shown on the title's icon.
+     *
+     * @param  Model|array<mixed>  $record  a model, or a row of custom `records()`
+     */
+    public function getColor(Model|array $record): ?string
+    {
+        $case = $this->getEnumCase($record);
+
+        return $case === null ? null : EnumState::color($case);
+    }
+
+    /**
+     * The enum icon (`HasIcon`) of a record's group, shown before the title.
+     *
+     * @param  Model|array<mixed>  $record  a model, or a row of custom `records()`
+     */
+    public function getIcon(Model|array $record): ?string
+    {
+        $case = $this->getEnumCase($record);
+
+        return $case === null ? null : EnumState::icon($case);
     }
 
     /**

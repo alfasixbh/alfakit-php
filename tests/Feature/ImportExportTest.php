@@ -409,10 +409,14 @@ it('generates importers and exporters from the model table', function (): void {
     expect($importer)->toContain('namespace App\\Alfakit\\Admin\\Imports;')
         ->toContain('use AlfaSix\\Alfakit\\Tests\\Fixtures\\Models\\Post;')
         ->toContain("ImportColumn::make('title')\n                ->requiredMapping()\n                ->rules(['required', 'max:255']),")
-        ->toContain("ImportColumn::make('author')\n                ->relationship(),")
+        // Resolved by the title the exporter writes (author.name) or the key, so exports import again.
+        ->toContain("ImportColumn::make('author')\n                ->relationship(resolveUsing: ['name', 'id']),")
         ->toContain("ImportColumn::make('is_published')\n                ->boolean()\n                ->rules(['boolean']),")
         ->toContain("ImportColumn::make('rating')\n                ->integer()\n                ->rules(['integer']),")
         ->not->toContain("make('created_at')")
+        // Array casts round-trip as JSON (SQLite reports the json column as text).
+        ->toContain("ImportColumn::make('meta')\n                ->castStateUsing(fn (mixed \$state): mixed => is_string(\$state) && json_validate(\$state) ? json_decode(\$state, true) : \$state),")
+        ->and($exporter)->toContain("ExportColumn::make('meta')\n                ->listAsJson(),")
         ->and($exporter)->toContain("ExportColumn::make('id')\n                ->label('ID'),")
         ->toContain("ExportColumn::make('author.name'),")
         ->toContain("ExportColumn::make('category.name'),")

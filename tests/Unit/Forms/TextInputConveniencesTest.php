@@ -118,3 +118,14 @@ it('takes copyMessage() and copyMessageDuration() as Filament-style setters', fu
     expect($props['copyable'] ?? null)->not->toBeNull()
         ->and(json_encode($props))->toContain('Copied!')->toContain('1500');
 });
+
+it('validates a number held by a text input as its text', function (): void {
+    $schema = schema([
+        TextInput::make('zip')->maxLength(5),
+        TextInput::make('total'),
+        TextInput::make('code')->maxLength(3),
+    ])->fill(['zip' => 12345, 'total' => 40.5, 'code' => 12345]);
+
+    expect($schema->getValidator()->errors()->toArray())->toBe(['code' => ['The code field must not be greater than 3 characters.']])
+        ->and($schema->getRawState()['zip'])->toBe(12345);
+});

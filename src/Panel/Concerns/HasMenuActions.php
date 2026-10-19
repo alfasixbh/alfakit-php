@@ -232,16 +232,22 @@ trait HasMenuActions
         $profileUrl = $this->getTenantProfileUrl();
         $registrationUrl = $this->getTenantRegistrationUrl();
         $billingUrl = $this->getTenantBillingUrl();
-        $schema = ['profileUrl' => $profileUrl, 'registrationUrl' => $registrationUrl];
+        $schema = [
+            'profileUrl' => $profileUrl,
+            'registrationUrl' => $registrationUrl,
+            // The pages' own labels; the renderers fall back to the generic "Settings" / "New".
+            'profileLabel' => $profileUrl === null ? null : $this->getTenantProfileLabel(),
+            'registrationLabel' => $registrationUrl === null ? null : $this->getTenantRegistrationLabel(),
+        ];
 
         if (array_key_exists('profile', $overrides) && $profileUrl !== null) {
-            $profile = $this->applyMenuOverride(Action::make('profile')->label(__('alfakit::panel.tenancy.profile'))->icon('settings')->url($profileUrl), $overrides['profile']);
+            $profile = $this->applyMenuOverride(Action::make('profile')->label($this->getTenantProfileLabel() ?? __('alfakit::panel.tenancy.profile'))->icon('settings')->url($profileUrl), $overrides['profile']);
             $schema['profile'] = $profile === null ? null : $this->serializeMenuEntry($profile, fallbackUrl: $profileUrl);
             $schema['profileUrl'] = $profile === null ? null : $profileUrl;
         }
 
         if (array_key_exists('register', $overrides) && $registrationUrl !== null) {
-            $registration = $this->applyMenuOverride(Action::make('register')->label(__('alfakit::panel.tenancy.register'))->icon('plus')->url($registrationUrl), $overrides['register']);
+            $registration = $this->applyMenuOverride(Action::make('register')->label($this->getTenantRegistrationLabel() ?? __('alfakit::panel.tenancy.register'))->icon('plus')->url($registrationUrl), $overrides['register']);
             $schema['registration'] = $registration === null ? null : $this->serializeMenuEntry($registration, fallbackUrl: $registrationUrl);
             $schema['registrationUrl'] = $registration === null ? null : $registrationUrl;
         }

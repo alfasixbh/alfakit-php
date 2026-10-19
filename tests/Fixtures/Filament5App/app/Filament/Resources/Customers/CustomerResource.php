@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\Resources\Customers;
 
 use App\Filament\Resources\Customers\Pages\ManageCustomers;

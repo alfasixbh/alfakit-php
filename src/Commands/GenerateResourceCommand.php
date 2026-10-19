@@ -67,6 +67,7 @@ class GenerateResourceCommand extends Command
 
         try {
             $info = ModelInspector::inspect($modelClass);
+            $info['columns'] = $this->withoutTenantOwnerColumn($this->withoutUserOwnerColumn($info['columns'], is_string($this->option('panel')) ? $this->option('panel') : null), is_string($this->option('panel')) ? $this->option('panel') : null);
         } catch (Throwable $exception) {
             $this->components->error("Could not read the table of {$modelClass}: {$exception->getMessage()}. Run the migrations first.");
 

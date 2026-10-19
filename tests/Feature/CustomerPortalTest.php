@@ -87,6 +87,20 @@ it('makes the signed-in user the owner of new records', function (): void {
     expect(Post::query()->where('slug', 'fresh')->value('author_id'))->toBe($cora->id);
 });
 
+it('keeps the signed-in user the owner when a customer edits the owner column', function (): void {
+    portalPanel();
+    $cora = portalUser();
+    $dan = portalUser('Dan');
+    $mine = portalPost($cora, 'Mine');
+
+    $props = inertiaProps(inertiaGet($this->actingAs($cora), "/portal/my-posts/{$mine->id}/edit"));
+
+    inertiaPost($this, '/portal/_alfakit/actions', ['token' => $props['page']['token'], 'action' => 'save', 'data' => ['title' => 'Moved?', 'slug' => $mine->slug, 'author_id' => $dan->id]])
+        ->assertRedirect();
+
+    expect($mine->refresh())->title->toBe('Moved?')->author_id->toBe($cora->id);
+});
+
 it('scopes by a relationship, with an owner key resolver, per resource or per registration', function (): void {
     $cora = portalUser();
     $dan = portalUser('Dan');

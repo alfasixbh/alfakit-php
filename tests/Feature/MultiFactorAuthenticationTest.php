@@ -340,6 +340,13 @@ it('sets up email codes after confirming a code sent by email', function (): voi
         ->assertRedirect();
 
     expect($user->fresh()->hasEmailAuthentication())->toBeTrue();
+
+    // Signing in right away (within the minute the resend throttle holds) still emails a code.
+    $this->post('/secure/logout');
+    submitLogin($this, $user->fresh())->assertRedirect('http://localhost/secure/multi-factor-challenge');
+    challengeToken($this);
+
+    NotificationFacade::assertSentToTimes($user, VerifyEmailAuthentication::class, 2);
 });
 
 it('sends users without a second factor to their profile when it is required', function (): void {

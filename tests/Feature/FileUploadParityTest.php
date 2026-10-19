@@ -247,3 +247,18 @@ it('treats a local disk without a public url as private and signs its file links
         expect($url === null || ! str_contains($url, '/storage/posts'))->toBeTrue();
     }
 });
+
+it('shows images on a private local disk through signed urls in columns and entries', function (): void {
+    config()->set('filesystems.disks.privatelocal', ['driver' => 'local', 'root' => storage_path('app/private-test'), 'serve' => true]);
+    config()->set('filesystems.disks.publiclocal', ['driver' => 'local', 'root' => storage_path('app/public-test'), 'url' => 'http://localhost/storage']);
+    Storage::disk('privatelocal')->buildTemporaryUrlsUsing(fn (string $path): string => "http://localhost/signed/{$path}?signature=x");
+
+    // The same disk FileUpload stored the file on: never the plain /storage path.
+    $column = AlfaSix\Alfakit\Tables\Columns\ImageColumn::make('image')->disk('privatelocal');
+    $entry = AlfaSix\Alfakit\Infolists\Components\ImageEntry::make('image')->disk('privatelocal');
+
+    expect((string) $column->getImageUrl('posts/x.png'))->toContain('signature=')
+        ->and((string) $entry->getImageUrl('posts/x.png'))->toContain('signature=')
+        ->and($column->disk('publiclocal')->getImageUrl('posts/x.png'))->toBe('http://localhost/storage/posts/x.png')
+        ->and($column->disk('privatelocal')->visibility('public')->getImageUrl('posts/x.png'))->not->toContain('signature=');
+});

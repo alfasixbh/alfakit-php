@@ -18,6 +18,9 @@ abstract class RegisterTenant extends Page
 
     protected static bool $shouldRegisterNavigation = false;
 
+    // Registered by `tenantRegistration()` / `tenantProfile()` only, never discovered as a page.
+    protected static bool $isDiscovered = false;
+
     public static function getRelativeRouteName(): string
     {
         return 'tenant.registration';
@@ -33,6 +36,17 @@ abstract class RegisterTenant extends Page
     public function getTitle(): string
     {
         return static::getLabel();
+    }
+
+    /**
+     * The tenant model: the form's model, so `unique()` / `exists()` without a table use
+     * its table.
+     *
+     * @return class-string<Model>|null
+     */
+    public function getModel(): ?string
+    {
+        return $this->getPanel()->getTenantModel();
     }
 
     protected function getFormActions(): array

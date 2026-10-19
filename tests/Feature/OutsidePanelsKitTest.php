@@ -123,3 +123,12 @@ it('uses the starter kit layouts and Fortify\'s backend when asked', function (s
     'vue' => ['vue', 'auth/Alfakit.vue', 'settings/Alfakit.vue'],
     'svelte' => ['svelte', 'auth/Alfakit.svelte', 'settings/Alfakit.svelte'],
 ]);
+
+it('turns Fortify\'s views off without its backend too, so route names are not registered twice', function (): void {
+    file_put_contents($this->sandbox.'/config/fortify.php', "<?php\n\nreturn [\n    'guard' => 'web',\n    'views' => true,\n];\n");
+
+    $this->artisan('alfakit:auth', ['--adapter' => 'vue', '--no-interaction' => true])->assertSuccessful();
+
+    expect((string) file_get_contents($this->sandbox.'/app/Providers/AuthKitServiceProvider.php'))->not->toContain('->fortify()')
+        ->and((string) file_get_contents($this->sandbox.'/config/fortify.php'))->toContain("'views' => false");
+});

@@ -2,11 +2,14 @@
 
 declare(strict_types=1);
 
+use AlfaSix\Alfakit\Commands\SetupCommand;
+use AlfaSix\Alfakit\Commands\Support\AppEnvironment;
 use AlfaSix\Alfakit\Commands\Support\PanelProviderEditor;
 use AlfaSix\Alfakit\Commands\Support\PluginCatalog;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Process\PendingProcess;
 use Illuminate\Support\Facades\Process;
+use Illuminate\Support\ServiceProvider;
 
 /*
  * `alfakit:add` / `alfakit:remove` / `alfakit:add --list`: first-party plugins on demand.
@@ -60,7 +63,22 @@ it('reads the catalog from the plugins\' composer.json files', function (): void
         ->and($plugins['feature-flags']['commands'])->toBe([
             ['vendor:publish', '--tag=pennant-migrations'],
             ['vendor:publish', '--tag=alfakit-feature-flags-migrations'],
-        ]);
+        ])
+        // spatie/laravel-health's default (Eloquent) result store needs its table.
+        ->and($plugins['health']['commands'])->toContain(['vendor:publish', '--tag=health-migrations'])
+        ->and($plugins['health']['migrate'])->toBeTrue()
+        // Plugins that export with AlfaKit's exporter publish its tables too.
+        ->and($plugins['forms']['commands'])->toBe([
+            ['vendor:publish', '--tag=alfakit-import-export-migrations'],
+            ['vendor:publish', '--tag=alfakit-forms-migrations'],
+        ])
+        ->and($plugins['analytics']['commands'])->toContain(['vendor:publish', '--tag=alfakit-import-export-migrations'])
+        // Plugins that deny access by default say how to allow it.
+        ->and(implode(' ', $plugins['ops']['notes']))->toContain('authorize(')
+        ->and(implode(' ', $plugins['translation-manager']['notes']))->toContain('manageTranslations')
+        ->and(implode(' ', $plugins['mail-templates']['notes']))->toContain('manageAlfakitMailTemplates')
+        // Its history needs the record versions table.
+        ->and($plugins['mail-templates']['commands'])->toContain(['vendor:publish', '--tag=alfakit-record-versions-migrations']);
 
     foreach ($plugins as $plugin) {
         expect(mb_strlen($plugin['description']))->toBeLessThanOrEqual(93);
@@ -93,6 +111,37 @@ it('registers an installed plugin, publishes its migrations and is idempotent', 
     $this->artisan('alfakit:add', ['plugin' => ['comments'], '--no-interaction' => true])->expectsOutputToContain('already set up')->assertSuccessful();
 
     expect(substr_count(file_get_contents(PanelProviderEditor::path('admin')), 'CommentsPlugin::make()'))->toBe(1);
+});
+
+it('explains instead of publishing Spatie\'s tags migration when the app has its own tags table', function (): void {
+    pluginSandbox($this, ['alfasix/alfakit-tags']);
+    $schema = Illuminate\Support\Facades\Schema::getFacadeRoot();
+    $created = ! $schema->hasTable('tags');
+
+    // The app's own `tags` table (the test fixtures have one), without Spatie's `taggables`.
+    if ($created) {
+        $schema->create('tags', fn (Illuminate\Database\Schema\Blueprint $table) => $table->id());
+    }
+
+    try {
+        $this->artisan('alfakit:add', ['plugin' => ['tags'], '--migrate' => true, '--no-interaction' => true])
+            ->expectsOutputToContain('already has a `tags` table')
+            ->assertSuccessful();
+
+        Process::assertDidntRun(fn (PendingProcess $process): bool => is_array($process->command) && in_array('--tag=tags-migrations', $process->command, true));
+        Process::assertDidntRun(fn (PendingProcess $process): bool => is_array($process->command) && array_slice($process->command, 1, 2) === ['artisan', 'migrate']);
+        expect(file_get_contents(PanelProviderEditor::path('admin')))->toContain('TagsPlugin::make()');
+
+        // Spatie's own tables: no conflict.
+        $schema->create('taggables', fn (Illuminate\Database\Schema\Blueprint $table) => $table->id());
+        expect(PluginCatalog::tableConflict('tags'))->toBeNull();
+    } finally {
+        $schema->dropIfExists('taggables');
+
+        if ($created) {
+            $schema->drop('tags');
+        }
+    }
 });
 
 it('requires missing packages after confirmation, or prints the command with --no-install', function (): void {
@@ -135,6 +184,35 @@ it('unregisters and removes a plugin, keeping its tables', function (): void {
         ->and(shell_exec('php -l '.escapeshellarg(PanelProviderEditor::path('admin'))))->toContain('No syntax errors');
     Process::assertRan(fn (PendingProcess $process): bool => $process->command === ['composer', 'remove', 'alfasix/alfakit-comments', '--no-interaction']);
     Process::assertDidntRun(fn (PendingProcess $process): bool => is_array($process->command) && in_array('migrate:rollback', $process->command, true));
+});
+
+it('takes HasRoles off the user model when removing Shield takes spatie/laravel-permission away', function (): void {
+    $sandbox = pluginSandbox($this, ['alfasix/alfakit-shield']);
+    $this->artisan('alfakit:add', ['plugin' => ['shield'], '--no-interaction' => true])->assertSuccessful();
+    config(['auth.providers.users.model' => 'App\\Models\\User']);
+    (new Filesystem)->ensureDirectoryExists("{$sandbox}/app/Models");
+    file_put_contents("{$sandbox}/app/Models/User.php", "<?php\n\nnamespace App\\Models;\n\nuse Illuminate\\Notifications\\Notifiable;\nuse Spatie\\Permission\\Traits\\HasRoles;\n\nclass User\n{\n    use Notifiable, HasRoles;\n}\n");
+
+    $this->artisan('alfakit:remove', ['plugin' => ['shield'], '--no-interaction' => true])
+        ->expectsOutputToContain('Removed Spatie\\Permission\\Traits\\HasRoles from App\\Models\\User')
+        ->assertSuccessful();
+
+    $model = (string) file_get_contents("{$sandbox}/app/Models/User.php");
+
+    expect($model)->not->toContain('HasRoles')
+        ->toContain("    use Notifiable;\n")
+        ->and(shell_exec('php -l '.escapeshellarg("{$sandbox}/app/Models/User.php")))->toContain('No syntax errors');
+});
+
+it('removes a trait from its own statement or a list, keeping other uses', function (): void {
+    $own = "<?php\n\nuse Spatie\\Permission\\Traits\\HasRoles;\n\nclass User\n{\n    use Notifiable;\n    use HasRoles;\n}\n";
+
+    expect(SetupCommand::removeTrait($own, 'Spatie\\Permission\\Traits\\HasRoles'))
+        ->toBe("<?php\n\n\nclass User\n{\n    use Notifiable;\n}\n")
+        ->and(SetupCommand::removeTrait("<?php\nclass User\n{\n    use A, HasRoles, B;\n}\n", 'Spatie\\Permission\\Traits\\HasRoles'))
+        ->toBe("<?php\nclass User\n{\n    use A, B;\n}\n")
+        ->and(SetupCommand::removeTrait("<?php\nclass User\n{\n    use A;\n}\n", 'Spatie\\Permission\\Traits\\HasRoles'))
+        ->toBe("<?php\nclass User\n{\n    use A;\n}\n");
 });
 
 it('keeps the package while another panel still uses the plugin', function (): void {
@@ -274,4 +352,90 @@ it('shows a plugin\'s highlights, demo tour and related plugins with --list <slu
         ->assertSuccessful();
 
     Process::assertNothingRan();
+});
+
+it('publishes the migrations of a plugin that was not on disk before composer require', function (): void {
+    $sandbox = pluginSandbox($this);
+    $source = dirname(__DIR__, 3).'/plugins/comments';
+    // An app installed from Packagist: no packages/plugins next to AlfaKit.
+    PluginCatalog::$pluginsDirectory = $sandbox.'/no-plugins';
+
+    Process::fake(function (PendingProcess $process) use ($sandbox, $source) {
+        if (($process->command[0] ?? null) === 'composer') {
+            $target = $sandbox.'/vendor/alfasix/alfakit-comments';
+            (new Filesystem)->ensureDirectoryExists($target.'/src');
+            copy($source.'/composer.json', $target.'/composer.json');
+            copy($source.'/src/AlfakitCommentsServiceProvider.php', $target.'/src/AlfakitCommentsServiceProvider.php');
+            copy($source.'/src/CommentsPlugin.php', $target.'/src/CommentsPlugin.php');
+        }
+
+        return Process::result();
+    });
+
+    try {
+        expect(PluginCatalog::get('comments')['commands'])->toBe([]);
+
+        $this->artisan('alfakit:add', ['plugin' => ['comments'], '--no-interaction' => true])->assertSuccessful();
+    } finally {
+        PluginCatalog::$pluginsDirectory = null;
+    }
+
+    Process::assertRan(fn (PendingProcess $process): bool => $process->command === [PHP_BINARY, 'artisan', 'vendor:publish', '--tag=alfakit-comments-migrations']);
+});
+
+it('adds plugins to a panel whose chain has comments with apostrophes (the starter-kit provider)', function (): void {
+    $provider = <<<'PHP'
+        <?php
+
+        namespace App\Providers\Alfakit;
+
+        use AlfaSix\Alfakit\Panel;
+
+        class AdminPanelProvider
+        {
+            public function panel(Panel $panel): Panel
+            {
+                return $panel
+                    ->id('admin')
+                    ->starterKit()
+                    /* the app's own layout */
+                    // Like the starter kit's dashboard: signed in with a verified email address.
+                    ->authMiddleware([
+                        'verified', // the kit's "verified" middleware
+                    ]);
+            }
+        }
+        PHP;
+
+    $updated = PanelProviderEditor::addPlugin($provider, 'AlfaSix\\AlfakitComments\\CommentsPlugin');
+
+    expect($updated)->toContain("                'verified', // the kit's \"verified\" middleware\n            ])\n            ->plugins([\n                CommentsPlugin::make(),\n            ]);")
+        ->and(PanelProviderEditor::removePlugin((string) $updated, 'AlfaSix\\AlfakitComments\\CommentsPlugin'))
+        ->not->toContain('CommentsPlugin');
+});
+
+it('does not publish the migrations of an already installed plugin a second time', function (): void {
+    $sandbox = pluginSandbox($this);
+    $source = $sandbox.'/vendor/acme/migrations';
+    (new Filesystem)->ensureDirectoryExists($source);
+    (new Filesystem)->ensureDirectoryExists($sandbox.'/database/migrations');
+    file_put_contents($source.'/2026_01_01_000000_create_acme_tables.php', '<?php');
+
+    (new class(app()) extends ServiceProvider
+    {
+        public function publish(string $from): void
+        {
+            $this->publishesMigrations([$from => database_path('migrations')], 'acme-migrations');
+        }
+    })->publish($source);
+
+    $command = ['vendor:publish', '--tag=acme-migrations'];
+
+    expect(AppEnvironment::migrationsAlreadyPublished($command))->toBeFalse();
+
+    file_put_contents($sandbox.'/database/migrations/2026_10_19_083011_create_acme_tables.php', '<?php');
+
+    expect(AppEnvironment::migrationsAlreadyPublished($command))->toBeTrue()
+        ->and(AppEnvironment::migrationsAlreadyPublished(['vendor:publish', '--tag=unknown-tag']))->toBeFalse()
+        ->and(AppEnvironment::migrationsAlreadyPublished(['alfakit-shield:install']))->toBeFalse();
 });

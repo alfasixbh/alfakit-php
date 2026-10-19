@@ -11,6 +11,7 @@ use Closure;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Support\Str;
 use RuntimeException;
 
 /**
@@ -147,7 +148,7 @@ class AssociateAction extends Action
         $searchColumns = is_array($columns) && $columns !== [] ? array_values(array_map('strval', $columns)) : [$titleAttribute];
 
         $select = Select::make('recordId')
-            ->label($this->relationManager->getModelLabel())
+            ->label(Str::ucfirst($this->relationManager->getModelLabel()))
             ->required()
             ->multiple($this->isMultiple)
             ->searchable()

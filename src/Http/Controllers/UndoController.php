@@ -11,6 +11,8 @@ use AlfaSix\Alfakit\Actions\Undo\UndoStrategy;
 use AlfaSix\Alfakit\Actions\Undo\UndoToken;
 use AlfaSix\Alfakit\Notifications\Notification;
 use AlfaSix\Alfakit\Pages\Page;
+use AlfaSix\Alfakit\Resources\Pages\EditRecord;
+use AlfaSix\Alfakit\Resources\Pages\ViewRecord;
 use AlfaSix\Alfakit\Resources\Resource;
 use AlfaSix\Alfakit\Support\Authorization;
 use AlfaSix\Alfakit\Support\SchemaContext;
@@ -64,7 +66,7 @@ class UndoController extends ActionController
         try {
             match ($strategy) {
                 UndoStrategy::Restore => $this->restore($payload),
-                UndoStrategy::Snapshot => $this->restoreSnapshot($payload),
+                UndoStrategy::Snapshot => $this->restoreSnapshot($payload, $context),
                 UndoStrategy::Custom => $this->runCustom($request, $context, $payload),
                 default => abort(400),
             };
@@ -100,7 +102,7 @@ class UndoController extends ActionController
     /**
      * @param  array<string, mixed>  $payload
      */
-    protected function restoreSnapshot(array $payload): void
+    protected function restoreSnapshot(array $payload, SchemaContext $context): void
     {
         $records = $this->records($payload);
         $record = $records->first();
@@ -118,6 +120,27 @@ class UndoController extends ActionController
         }
 
         UndoSnapshot::restore($record, $before);
+
+        $this->refreshPageForm($context, $record, array_keys($before));
+    }
+
+    /**
+     * The undo ran on the record's own Edit / View page (the edit page's save): its form
+     * shows the restored values instead of the undone ones (`refreshFormData()`).
+     *
+     * @param  array<int|string, mixed>  $attributes
+     */
+    protected function refreshPageForm(SchemaContext $context, Model $record, array $attributes): void
+    {
+        if (! is_string($context->page) || ! (is_a($context->page, EditRecord::class, true) || is_a($context->page, ViewRecord::class, true))) {
+            return;
+        }
+
+        $page = $this->rebuildPage($context);
+
+        if (($page instanceof EditRecord || $page instanceof ViewRecord) && $page->getRecord()?->is($record) === true) {
+            $page->refreshFormData(array_values(array_filter($attributes, is_string(...))));
+        }
     }
 
     /**
@@ -192,7 +215,7 @@ class UndoController extends ActionController
 
         foreach ($records as $record) {
             $allowed = is_string($resource) && is_a($resource, Resource::class, true)
-                ? $resource::can($ability, $record)
+                ? $resource::authorizes($ability, $record)
                 : Authorization::allows($ability, $record);
 
             abort_unless($allowed, 403);

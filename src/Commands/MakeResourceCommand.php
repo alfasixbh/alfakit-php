@@ -7,11 +7,12 @@ namespace AlfaSix\Alfakit\Commands;
 use AlfaSix\Alfakit\Commands\Concerns\CanGenerateFiles;
 use AlfaSix\Alfakit\Commands\Concerns\WritesResources;
 use AlfaSix\Alfakit\Commands\Support\ModelInspector;
+use AlfaSix\Alfakit\Commands\Support\ResourceCodeBuilder;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Schema as DbSchema;
 use Illuminate\Support\Str;
 use Symfony\Component\Console\Attribute\AsCommand;
+use Throwable;
 
 use function Laravel\Prompts\text;
 
@@ -58,6 +59,10 @@ class MakeResourceCommand extends Command
         };
 
         $this->createModelFiles($modelClass);
+
+        if (! class_exists($modelClass)) {
+            $this->components->warn("Model {$modelClass} not found. Create it first (php artisan make:model {$model} --migration), or pass --model --migration to create it with the resource; the resource's pages fail until the model and its table exist.");
+        }
 
         [$formFields, $tableColumns, $imports] = $this->option('generate') ? $this->generateFromSchema($modelClass) : [$this->defaultForm(), $this->defaultTable(), []];
 
@@ -155,119 +160,38 @@ class MakeResourceCommand extends Command
     }
 
     /**
+     * `--generate`: the form fields and table columns `alfakit:generate` picks by default,
+     * from the table, the model's casts (enums, booleans, arrays) and its relationships.
+     *
      * @return array{0: string, 1: string, 2: array<string>}
      */
     protected function generateFromSchema(string $modelClass): array
     {
         if (! class_exists($modelClass) || ! is_subclass_of($modelClass, Model::class)) {
-            $this->components->warn("Model {$modelClass} not found; generating a default form and table instead.");
+            $this->components->warn(class_exists($modelClass) ? "{$modelClass} is not an Eloquent model; generating a default form and table instead." : 'Generating a default form and table instead.');
 
             return [$this->defaultForm(), $this->defaultTable(), []];
         }
 
-        $model = new $modelClass;
-        $table = $model->getTable();
-        $columns = DbSchema::getColumns($table);
-        $fields = [];
-        $tableColumns = [];
-        $imports = [];
+        try {
+            $columns = $this->withoutTenantOwnerColumn($this->withoutUserOwnerColumn(ModelInspector::inspect($modelClass)['columns'], $this->option('panel')), $this->option('panel'));
 
-        $skip = [$model->getKeyName(), 'created_at', 'updated_at', 'deleted_at', 'remember_token', 'email_verified_at', 'password'];
-
-        foreach ($columns as $column) {
-            $name = $column['name'];
-            $type = Str::lower((string) $column['type_name']);
-            $nullable = (bool) $column['nullable'];
-            $required = $nullable ? '' : "\n                    ->required()";
-
-            if (in_array($name, $skip, true)) {
-                continue;
+            if (filled($this->option('nested'))) {
+                $panelId = $this->option('panel') ?? alfakit()->getDefaultPanel()?->getId();
+                $columns = $this->withoutParentColumn($columns, (string) $this->option('nested'), is_string($panelId) ? $panelId : null);
             }
 
-            if (Str::endsWith($name, '_id')) {
-                $relationship = Str::camel(Str::beforeLast($name, '_id'));
-                $fields[] = "                Select::make('{$name}')\n                    ->relationship('{$relationship}', 'name')\n                    ->searchable()\n                    ->preload(){$required},";
-                $tableColumns[] = "                TextColumn::make('{$relationship}.name')\n                    ->sortable(),";
-                $imports[] = 'AlfaSix\\Alfakit\\Forms\\Components\\Select';
+            $builder = new ResourceCodeBuilder($columns);
+        } catch (Throwable $exception) {
+            $this->components->warn("Could not read the table of {$modelClass} ({$exception->getMessage()}); generating a default form and table instead. Run the migrations first.");
 
-                continue;
-            }
-
-            [$field, $tableColumn, $fieldImports] = match (true) {
-                in_array($type, ['boolean', 'bool', 'tinyint'], true) && (str_starts_with($name, 'is_') || str_starts_with($name, 'has_') || $type !== 'tinyint') => [
-                    "                Toggle::make('{$name}'),",
-                    "                IconColumn::make('{$name}')\n                    ->boolean(),",
-                    ['AlfaSix\\Alfakit\\Forms\\Components\\Toggle', 'AlfaSix\\Alfakit\\Tables\\Columns\\IconColumn'],
-                ],
-                in_array($type, ['text', 'longtext', 'mediumtext'], true) => [
-                    "                Textarea::make('{$name}')\n                    ->columnSpanFull(){$required},",
-                    null,
-                    ['AlfaSix\\Alfakit\\Forms\\Components\\Textarea'],
-                ],
-                in_array($type, ['json', 'jsonb'], true) => [
-                    "                KeyValue::make('{$name}')\n                    ->columnSpanFull(){$required},",
-                    null,
-                    ['AlfaSix\\Alfakit\\Forms\\Components\\KeyValue'],
-                ],
-                in_array($type, ['date'], true) => [
-                    "                DatePicker::make('{$name}'){$required},",
-                    "                TextColumn::make('{$name}')\n                    ->date()\n                    ->sortable(),",
-                    ['AlfaSix\\Alfakit\\Forms\\Components\\DatePicker'],
-                ],
-                in_array($type, ['datetime', 'timestamp', 'timestamptz', 'datetimetz'], true) => [
-                    "                DateTimePicker::make('{$name}'){$required},",
-                    "                TextColumn::make('{$name}')\n                    ->dateTime()\n                    ->sortable(),",
-                    ['AlfaSix\\Alfakit\\Forms\\Components\\DateTimePicker'],
-                ],
-                in_array($type, ['time'], true) => [
-                    "                TimePicker::make('{$name}'){$required},",
-                    "                TextColumn::make('{$name}'),",
-                    ['AlfaSix\\Alfakit\\Forms\\Components\\TimePicker'],
-                ],
-                in_array($type, ['integer', 'int', 'bigint', 'smallint', 'int4', 'int8', 'int2', 'mediumint'], true) => [
-                    "                TextInput::make('{$name}')\n                    ->integer(){$required},",
-                    "                TextColumn::make('{$name}')\n                    ->numeric()\n                    ->sortable(),",
-                    [],
-                ],
-                in_array($type, ['decimal', 'numeric', 'float', 'double', 'real', 'float8', 'float4'], true) => [
-                    "                TextInput::make('{$name}')\n                    ->numeric(){$required},",
-                    "                TextColumn::make('{$name}')\n                    ->numeric()\n                    ->sortable(),",
-                    [],
-                ],
-                str_contains($name, 'email') => [
-                    "                TextInput::make('{$name}')\n                    ->email()\n                    ->maxLength(255){$required},",
-                    "                TextColumn::make('{$name}')\n                    ->searchable(),",
-                    [],
-                ],
-                str_contains($name, 'image') || str_contains($name, 'avatar') || str_contains($name, 'photo') => [
-                    "                FileUpload::make('{$name}')\n                    ->image(){$required},",
-                    "                ImageColumn::make('{$name}'),",
-                    ['AlfaSix\\Alfakit\\Forms\\Components\\FileUpload', 'AlfaSix\\Alfakit\\Tables\\Columns\\ImageColumn'],
-                ],
-                str_contains($name, 'color') => [
-                    "                ColorPicker::make('{$name}'){$required},",
-                    "                ColorColumn::make('{$name}'),",
-                    ['AlfaSix\\Alfakit\\Forms\\Components\\ColorPicker', 'AlfaSix\\Alfakit\\Tables\\Columns\\ColorColumn'],
-                ],
-                default => [
-                    "                TextInput::make('{$name}')\n                    ->maxLength(255){$required},",
-                    "                TextColumn::make('{$name}')\n                    ->searchable(),",
-                    [],
-                ],
-            };
-
-            $fields[] = $field;
-
-            if ($tableColumn !== null) {
-                $tableColumns[] = $tableColumn;
-            }
-
-            array_push($imports, ...$fieldImports);
+            return [$this->defaultForm(), $this->defaultTable(), []];
         }
 
-        $tableColumns[] = "                TextColumn::make('created_at')\n                    ->dateTime()\n                    ->sortable()\n                    ->toggleable(isToggledHiddenByDefault: true),";
+        $fields = $builder->formFields($builder->defaultFormColumns());
+        $columns = $builder->tableColumns($builder->defaultTableColumns());
 
-        return [implode("\n", $fields), implode("\n", $tableColumns), $imports];
+        return [$fields === '' ? '                //' : $fields, $columns === '' ? '                //' : $columns, $builder->imports()];
     }
 
     /**

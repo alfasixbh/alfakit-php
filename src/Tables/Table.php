@@ -716,7 +716,7 @@ class Table implements HasResource
         $resource = $this->getResourceClass();
 
         if ($resource !== null) {
-            return $resource::can($ability, $record);
+            return $resource::authorizes($ability, $record);
         }
 
         $model = $record ?? $this->getQuery()?->getModel();
@@ -1236,16 +1236,14 @@ class Table implements HasResource
             $action->context($this->context ?? $this);
 
             // Bulk actions enforce the selection limits; record actions that
-            // `accessSelectedRecords()` resolve the selection through the table.
+            // `accessSelectedRecords()` resolve the selection through the table. Actions in
+            // groups get the model and record title like ungrouped ones.
             foreach ($action instanceof ActionGroup ? $action->getFlatActions() : [$action] as $nested) {
                 $nested->selectionTable($this);
-            }
-
-            if ($action instanceof Action) {
-                $action->model($this->getModel());
+                $nested->model($this->getModel());
 
                 if ($resource !== null) {
-                    $action->recordTitle(fn (Model|array|null $record): ?string => $record instanceof Model ? $resource::getRecordTitle($record) : null);
+                    $nested->recordTitle(fn (Model|array|null $record): ?string => $record instanceof Model ? $resource::getRecordTitle($record) : null);
                 }
             }
         }

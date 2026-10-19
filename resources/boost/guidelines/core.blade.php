@@ -37,7 +37,7 @@ class PostResource extends Resource
     protected static ?string $model = Post::class;
     protected static ?string $navigationIcon = 'file-text'; // Lucide icon name
     protected static ?string $navigationGroup = 'Blog';
-    protected static ?string $recordTitleAttribute = 'title';
+    protected static ?string $recordTitleAttribute = 'title'; // without it records are titled by the model label ("Edit Post")
 
     public static function form(Schema $schema): Schema
     {

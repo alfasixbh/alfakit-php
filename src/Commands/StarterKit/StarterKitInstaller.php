@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AlfaSix\Alfakit\Commands\StarterKit;
 
 use AlfaSix\Alfakit\Commands\InstallCommand;
+use AlfaSix\Alfakit\Commands\Support\PanelProviderEditor;
 use Illuminate\Support\Str;
 
 /**
@@ -289,9 +290,7 @@ final class StarterKitInstaller
                 return $contents;
             }
 
-            $updated = preg_replace('/\];\s*$/', "    {$provider}::class,\n];\n", $contents, 1, $count);
-
-            return $updated === null || $count !== 1 ? null : $updated;
+            return PanelProviderEditor::addBootstrapProvider($contents, $provider);
         }, "registered {$provider}");
     }
 

@@ -11,7 +11,9 @@ import { createAlfakitServer } from '@alfakit/vue/server';
  */
 createServer(
     createAlfakitServer({
-        discover: import.meta.glob('./{fields,columns,entries,widgets,pages,components,blocks}/**/*.vue'),
+        discover: import.meta.glob(
+            './{fields,columns,entries,widgets,pages,components,blocks}/**/*.vue',
+        ),
         components: {
             // 'map-picker': MapPicker,
         },

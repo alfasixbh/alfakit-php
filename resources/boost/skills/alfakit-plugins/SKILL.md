@@ -365,6 +365,8 @@ class CategoryTree extends TreePage
 }
 
 // CategoryResource::getPages(): 'index' => CategoryTree::route('/'),
+// Create/edit: getFormSchema() modal, else the resource's create/edit pages, else a modal with the
+// resource's form() (simple resources). Node buttons are labelled "Edit {title}" / "Delete {title}".
 
 class MenuTree extends TreeWidget
 {
@@ -469,6 +471,7 @@ class TaskBoard extends KanbanPage   // resource page: 'board' => TaskBoard::rou
 ```
 
 - `KanbanWidget` (`Widgets\KanbanWidget`, `$model` or `$resource`, `getKanbanQuery()`) puts a board on a dashboard. Registry key `kanban`.
+- The board page is titled "Tasks board" (`alfakit-kanban::kanban.page.title` with the resource's plural label; `KanbanPage::getBoardTitle()`); set `protected static ?string $title` to rename it.
 - Columns: `Column::make('doing')->label()->color()->icon()->wipLimit(3, strict: true)->collapsible()->creatable(false)`. Cards: `$titleAttribute`, `$descriptionAttribute`, `$dueDateAttribute`, `$progressAttribute`, `$coverImageAttribute`, `$with`, or `getCard()` / `getCardSchema()`.
 - `getFormSchema()` adds create / per-column quick create and view / edit modals; `getCardActions()` the card menu; `getKanbanFilters()` takes table filters; `$pollingInterval`, `$cardsPerColumn`; swimlanes with `$swimlaneAttribute` / `$swimlaneRelationship` and `$canMoveBetweenSwimlanes`.
 - Hooks: `canMoveCard()` (default the `update` ability), `canMoveTo()`, `beforeCardMoved()` (throw `ValidationException` to refuse), `saveCardMove()`, `afterCardMoved()`; event `Events\CardMoved`.
@@ -929,7 +932,7 @@ Plugins never trust the browser: every page, widget and action authorises on the
 - Namespaces are `AlfaSix\AlfakitShield\...`, `AlfaSix\AlfakitBilling\...` etc., not `AlfaSix\Alfakit\Shield\...`, and never `Filament\...`.
 - Install the underlying Spatie / Cashier / Pennant package's migrations and model traits; the AlfaKit plugin doesn't do it for you (`alfakit:add` publishes the Spatie migrations it knows about).
 - Plugins that run work later need a queue worker or the scheduler: webhooks, forms / helpdesk / invoices / teams mail, `alfakit-workflows:process`, `alfakit-helpdesk:sla`, `alfakit-webhooks:prune`.
-- Forms and Helpdesk render outside the panel: generate their Inertia page (`alfakit-forms:page`, `alfakit-helpdesk:pages`) and load the standalone styles.
+- Forms and Helpdesk render outside the panel: generate their Inertia page (`alfakit-forms:page`, `alfakit-helpdesk:pages`) and load the standalone styles. The generated pages opt out of the app's default Inertia layout (no starter-kit `AppLayout` sidebar): React `Page.layout = (page: ReactNode) => <>{page}</>`, Vue `defineOptions({ layout: (_h: unknown, page: unknown) => page as VNode })`, Svelte `<script module>` `export const layout = (_h: unknown, page: unknown) => page`; delete it to use the app layout.
 - Customer-facing pages and emails (CMS site, public forms, helpdesk portal and chat, shared analytics dashboards, invoice links/documents/emails) show no AlfaKit branding by default. `CmsPlugin` / `FormsPlugin` / `HelpdeskPlugin` / `AnalyticsPlugin` / `InvoicesPlugin` `::make()->poweredBy()` (bool|Closure|null) adds a "Powered by AlfaKit · Alfa Six" line; unset, they follow `config('alfakit.credit.public_pages')` / `config('alfakit.credit.emails')`. Custom form/portal pages render `meta.poweredBy` (HTML or null).
 - Media, tags and comments fields are not attributes: don't add them to `$fillable` or cast them.
 - Backups need a queue worker; health results need the scheduled `health:check`; Stripe subscriptions need the Cashier webhook.

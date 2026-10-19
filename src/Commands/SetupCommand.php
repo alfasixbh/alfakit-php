@@ -107,8 +107,14 @@ class SetupCommand extends Command
         }
 
         if ($hasPanel && $this->wants('users', 'Generate a users resource (invitations, impersonation, suspend/ban, sessions)?', 'Writes a UserResource and a few helper classes into app/Alfakit, plus one migration; no packages.')) {
-            $this->runStep('Users resource', 'alfakit:users', ['--panel' => $panelId, '--roles' => $roles, '--force' => (bool) $this->option('force')]);
-            $this->needsMigrations = true;
+            $suffix = $this->panelNamespaceSuffix($panelId);
+
+            if (! $this->option('force') && is_file($this->getGenerationPath().str_replace('\\', '/', $suffix).'/Resources/UserResource.php')) {
+                $this->record('Users resource', 'already');
+            } else {
+                $this->runStep('Users resource', 'alfakit:users', ['--panel' => $panelId, '--roles' => $roles, '--force' => (bool) $this->option('force')]);
+                $this->needsMigrations = true;
+            }
         } else {
             $this->record('Users resource', 'skipped');
         }
@@ -433,6 +439,8 @@ class SetupCommand extends Command
         $contents = $files->get($path);
 
         if (str_contains($contents, 'HasRoles')) {
+            $this->forgetHasRolesNote();
+
             return;
         }
 
@@ -451,11 +459,20 @@ class SetupCommand extends Command
         }
 
         $files->put($path, $updated);
+        $this->forgetHasRolesNote();
         $this->record('HasRoles on '.class_basename($model), 'done');
     }
 
     /**
-     * Add `use Trait;` inside a class (and its import), after the class's trait statements.
+     * The Shield plugin's install notes ask for the trait; drop that once the model has it.
+     */
+    protected function forgetHasRolesNote(): void
+    {
+        $this->nextSteps = array_values(array_filter($this->nextSteps, static fn (string $step): bool => ! str_starts_with($step, 'Add Spatie\\Permission\\Traits\\HasRoles to your User model')));
+    }
+
+    /**
+     * Add a trait inside a class (and its import), joined to the class's last trait statement.
      */
     public static function addTrait(string $contents, string $trait): ?string
     {
@@ -471,12 +488,52 @@ class SetupCommand extends Command
 
         // The trait statements at the top of the class body (docblocks between them allowed).
         if (preg_match('/\A(?:[ \t]*(?:\/\*\*.*?\*\/|use [A-Z][^;]*;)[ \t]*\n)+/s', $body, $traits) === 1 && preg_match('/^[ \t]*use [A-Z]/m', $traits[0]) === 1) {
-            $body = $traits[0]."    use {$basename};\n".substr($body, strlen($traits[0]));
+            // Join the last trait statement (`use HasFactory, Notifiable, HasRoles;`), the way
+            // Laravel's own models list them, which also keeps Pint's laravel preset happy.
+            $block = (string) preg_replace('/^([ \t]*use [A-Z][^;]*);(?![\s\S]*^[ \t]*use [A-Z])/m', '$1, '.$basename.';', $traits[0], 1);
+            $body = $block.substr($body, strlen($traits[0]));
         } else {
             $body = "    use {$basename};\n\n".$body;
         }
 
         return PanelProviderEditor::addImport($head.$body, $trait);
+    }
+
+    /**
+     * Remove a trait the wizard added (`use HasRoles;`, or `HasRoles` in a comma-separated
+     * trait statement) and its import when nothing else uses it. Unchanged when absent.
+     */
+    public static function removeTrait(string $contents, string $trait): string
+    {
+        $basename = preg_quote(class_basename($trait), '/');
+
+        // `use HasRoles;` on its own line.
+        $updated = (string) preg_replace('/^[ \t]*use '.$basename.';[ \t]*\n/m', '', $contents);
+
+        if ($updated === $contents) {
+            // `use A, HasRoles, B;` inside the class body.
+            $updated = (string) preg_replace_callback(
+                '/^([ \t]*use )([A-Z][^;]*);/m',
+                static function (array $match) use ($basename): string {
+                    $names = array_map('trim', explode(',', $match[2]));
+
+                    if (count($names) < 2 || preg_grep('/^'.$basename.'$/', $names) === []) {
+                        return $match[0];
+                    }
+
+                    return $match[1].implode(', ', preg_grep('/^'.$basename.'$/', $names, PREG_GREP_INVERT) ?: []).';';
+                },
+                $contents,
+            );
+        }
+
+        $withoutImports = (string) preg_replace('/^use [^;]+;$/m', '', $updated);
+
+        if (preg_match('/\b'.$basename.'\b/', $withoutImports) !== 1) {
+            $updated = (string) preg_replace('/^use '.preg_quote(ltrim($trait, '\\'), '/').';\n/m', '', $updated);
+        }
+
+        return $updated;
     }
 
     protected function brand(Filesystem $files, string $panelId): void
@@ -515,7 +572,14 @@ class SetupCommand extends Command
 
         if (filled($logo)) {
             $logo = str_replace("'", '', (string) $logo);
-            $value = preg_match('#^(https?:)?//#', $logo) === 1 ? "'{$logo}'" : "asset('".ltrim(Str::after($logo, 'public/'), '/')."')";
+            $isUrl = preg_match('#^(https?:)?//#', $logo) === 1;
+            $value = $isUrl ? "'{$logo}'" : "asset('".ltrim(Str::after($logo, 'public/'), '/')."')";
+
+            // Written anyway (the file may come later), but a missing file is a broken image.
+            if (! $isUrl && ! $files->exists(public_path(ltrim(Str::after($logo, 'public/'), '/')))) {
+                $this->nextSteps[] = 'Add the logo file public/'.ltrim(Str::after($logo, 'public/'), '/').': until it exists the panel shows a broken image';
+            }
+
             $contents = PanelProviderEditor::setCall($contents, 'brandLogo', $value) ?? $contents;
         }
 
@@ -611,7 +675,7 @@ class SetupCommand extends Command
 
         $steps = array_values(array_unique([
             ...$this->nextSteps,
-            'Start your dev server (npm run dev) and open /'.Str::slug((string) ($this->option('panel') ?: 'admin')),
+            'Build the frontend (npm run build, or keep npm run dev running) and open /'.Str::slug((string) ($this->option('panel') ?: 'admin')),
             'Create a resource: php artisan make:alfakit-resource Post --generate',
             'Run php artisan alfakit:setup again any time: finished steps are skipped',
         ]));

@@ -184,7 +184,13 @@ it('explains missing renderer packages, version mismatches and missing builds', 
         ->and($checks['Frontend › Assets']->message)->toContain('manifest.json not found');
 
     doctorApp($this->env, ['public/build/manifest.json' => ['resources/css/other.css' => []]]);
-    expect(doctorChecks()['Frontend › Assets']->message)->toContain('resources/js/alfakit/app.tsx');
+    expect(doctorChecks()['Frontend › Assets']->message)->toContain('resources/js/alfakit/app.tsx')
+        ->and(doctorChecks()['Frontend › Assets']->fix)->toContain('to laravel({ input');
+
+    // The entries are configured but the build predates them (a starter kit's own build).
+    doctorApp($this->env, ['vite.config.ts' => "laravel({ input: ['resources/css/alfakit.css', 'resources/js/alfakit/app.tsx'] })"]);
+    expect(doctorChecks()['Frontend › Assets']->message)->toContain('the build is older than the panel entries')
+        ->and(doctorChecks()['Frontend › Assets']->fix)->toBe('npm run build (or npm run dev while developing)');
 
     doctorApp($this->env, ['public/hot' => 'http://localhost:5173']);
     expect(doctorChecks()['Frontend › Assets']->message)->toContain('dev server');

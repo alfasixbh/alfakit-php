@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace AlfaSix\Alfakit\Auth\Pages;
 
 use AlfaSix\Alfakit\Actions\Action;
+use AlfaSix\Alfakit\Http\Middleware\Authenticate;
 use AlfaSix\Alfakit\Notifications\Notification;
 use AlfaSix\Alfakit\Pages\Page;
+use AlfaSix\Alfakit\Panel;
 use AlfaSix\Alfakit\Support\Enums\Color;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Support\Facades\RateLimiter;
@@ -20,6 +22,17 @@ class EmailVerificationPrompt extends Page
     public static function getRelativeRouteName(): string
     {
         return 'auth.email-verification.prompt';
+    }
+
+    /**
+     * Its route only signs the user in: an unverified user must reach the "resend" action
+     * (the panel's other auth middleware, e.g. `EnsureEmailIsVerified`, would refuse it).
+     *
+     * @return array<int, mixed>
+     */
+    public static function getPanelAuthMiddleware(Panel $panel): array
+    {
+        return [Authenticate::class.':'.$panel->getId()];
     }
 
     public function render(): \Inertia\Response

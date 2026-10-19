@@ -53,7 +53,7 @@ class EditRecord extends Page
 
     public function getTitle(): string
     {
-        return static::$title ?? __('alfakit::panel.resources.edit.title', ['label' => $this->getRecordTitle() ?? static::getResource()::getModelLabel()]);
+        return static::$title ?? __('alfakit::panel.resources.edit.title', ['label' => (string) $this->getRecordTitle()]);
     }
 
     public function getBreadcrumb(): string
@@ -354,7 +354,12 @@ class EditRecord extends Page
      */
     protected function handleRecordUpdate(Model $record, array $data): Model
     {
-        $record->fill($data)->save();
+        $record->fill($data);
+
+        // `scopeToUser()`: the record stays the signed-in user's, whatever the form sent.
+        static::getResource()::associateRecordWithUser($record);
+
+        $record->save();
 
         return $record;
     }

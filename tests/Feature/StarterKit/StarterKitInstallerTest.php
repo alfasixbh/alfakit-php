@@ -93,7 +93,8 @@ it('wires Alfakit into the starter kit, idempotently', function (string $kit, st
     expect($provider)->toContain('->starterKit()')
         ->toContain("->path('admin')")
         ->not->toContain('->login()')
-        ->and(file_get_contents($app.'/bootstrap/providers.php'))->toContain('App\\Providers\\Alfakit\\AdminPanelProvider::class');
+        // The kits import their providers: so does the panel's, for Pint.
+        ->and(file_get_contents($app.'/bootstrap/providers.php'))->toContain('use App\\Providers\\Alfakit\\AdminPanelProvider;')->toContain('    AdminPanelProvider::class,');
 
     // A second run changes nothing.
     $snapshot = collect([$page, $nav, $sidebar, StarterKitInstaller::files($kit)['sidebarHeader'], StarterKitInstaller::files($kit)['header'], 'resources/css/app.css', 'bootstrap/providers.php'])

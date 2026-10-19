@@ -227,7 +227,7 @@ it('boots the migrated app with its own providers and renders every panel page',
         '/admin/acme', '/admin/acme/products', '/admin/acme/products/create', '/admin/acme/products/1', '/admin/acme/products/1/edit',
         '/admin/acme/orders', '/admin/acme/orders/create', '/admin/acme/orders/1/edit', '/admin/acme/customers',
         '/admin/acme/users', '/admin/acme/users/create', '/admin/acme/users/1/edit', '/admin/acme/reports', '/admin/acme/orders-board',
-        '/admin/acme/settings/manage-brands', '/admin/acme/settings/shipping-settings', '/admin/acme/edit-shop-profile', '/admin/new',
+        '/admin/acme/settings/manage-brands', '/admin/acme/settings/shipping-settings', '/admin/acme/profile', '/admin/new',
     ];
 
     foreach ($expected as $uri) {

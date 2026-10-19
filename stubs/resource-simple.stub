@@ -20,7 +20,7 @@ class {{ resource }} extends Resource
 {
     protected static ?string $model = {{ model }}::class;
 
-    protected static ?string $navigationIcon = 'file-text';
+    protected static ?string $navigationIcon = 'file-text';{{ recordTitleAttribute }}
 
     public static function form(Schema $schema): Schema
     {

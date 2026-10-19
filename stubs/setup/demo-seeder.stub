@@ -7,6 +7,7 @@ namespace Database\Seeders;
 use {{ modelClass }};
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 /**
@@ -18,18 +19,28 @@ class AlfakitDemoSeeder extends Seeder
 {
     public function run(): void
     {
-        {{ model }}::query()->firstOrCreate(
-            ['email' => 'admin@example.com'],
-            ['name' => 'Admin', 'password' => Hash::make('password')],
-        );
+        // Verified, so the demo sign-in works with ->emailVerification() too.
+        $verified = Schema::hasColumn((new {{ model }})->getTable(), 'email_verified_at') ? ['email_verified_at' => now()] : [];
+
+        $this->user('admin@example.com', ['name' => 'Admin', 'password' => Hash::make('password'), ...$verified]);
 
         if ({{ model }}::query()->count() < 10) {
             foreach (range(1, 12) as $index) {
-                {{ model }}::query()->firstOrCreate(
-                    ['email' => "demo{$index}@example.com"],
-                    ['name' => "Demo User {$index}", 'password' => Hash::make(Str::random(32))],
-                );
+                $this->user("demo{$index}@example.com", ['name' => "Demo User {$index}", 'password' => Hash::make(Str::random(32)), ...$verified]);
             }
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $attributes
+     */
+    protected function user(string $email, array $attributes): void
+    {
+        if ({{ model }}::query()->where('email', $email)->exists()) {
+            return;
+        }
+
+        // forceFill: the model's $fillable may not list every column the demo sets.
+        (new {{ model }})->forceFill(['email' => $email, ...$attributes])->save();
     }
 }

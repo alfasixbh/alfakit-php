@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AlfaSix\Alfakit\Support;
 
 use Illuminate\Support\Number;
+use MessageFormatter;
 use NumberFormatter;
 use Throwable;
 
@@ -16,8 +17,14 @@ use Throwable;
  */
 final class NumberFormat
 {
+    /** ICU units of `fileSize()`, by power of 1024. */
+    private const SIZE_UNITS = ['digital-byte', 'digital-kilobyte', 'digital-megabyte', 'digital-gigabyte', 'digital-terabyte'];
+
     /** @var array<string, NumberFormatter|false> */
     private static array $formatters = [];
+
+    /** @var array<string, MessageFormatter> */
+    private static array $messages = [];
 
     public static function format(int|float $number, ?int $precision = null, ?int $maxPrecision = null, ?string $locale = null): string|false
     {
@@ -47,10 +54,43 @@ final class NumberFormat
         );
     }
 
+    /**
+     * A file size in the locale, like the renderers' `fileManagerSize()`: 1024-based units,
+     * bytes spelled out and pluralised ("11 bytes", "11 octets"), larger units short
+     * ("1.5 kB", "1,5 ko") with at most `$precision` decimals.
+     */
+    public static function fileSize(int|float $bytes, int $precision = 1, ?string $locale = null): string
+    {
+        $locale ??= Number::defaultLocale();
+        $value = is_finite((float) $bytes) && $bytes > 0 ? (float) $bytes : 0.0;
+        $unit = 0;
+
+        while ($value >= 1024 && $unit < count(self::SIZE_UNITS) - 1) {
+            $value /= 1024;
+            $unit++;
+        }
+
+        $skeleton = $unit === 0
+            ? '::measure-unit/'.self::SIZE_UNITS[0].' unit-width-full-name precision-integer'
+            : '::measure-unit/'.self::SIZE_UNITS[$unit].' unit-width-short '.($precision > 0 ? '.'.str_repeat('#', $precision) : 'precision-integer');
+
+        $key = 'size|'.$locale.'|'.$skeleton;
+
+        try {
+            $formatter = self::$messages[$key] ??= new MessageFormatter($locale, '{0, number, '.$skeleton.'}');
+            $formatted = $formatter->format([$unit === 0 ? (int) round($value) : $value]);
+        } catch (Throwable) {
+            $formatted = false;
+        }
+
+        return is_string($formatted) && $formatted !== '' ? $formatted : Number::fileSize($bytes, $precision);
+    }
+
     /** Drop cached formatters (tests, long-running workers changing ICU data). */
     public static function flush(): void
     {
         self::$formatters = [];
+        self::$messages = [];
     }
 
     private static function formatter(string $locale, int $style, ?int $precision, ?int $maxPrecision): NumberFormatter|false

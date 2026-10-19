@@ -22,6 +22,9 @@ use AlfaSix\Alfakit\Theming\Theme;
 use AlfaSix\Alfakit\Theming\Themes;
 use BackedEnum;
 use Closure;
+use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Foundation\Vite;
+use Illuminate\Foundation\ViteException;
 use Illuminate\Support\Str;
 
 /**
@@ -429,7 +432,7 @@ trait HasTheme
     /**
      * `<link rel="preload" as="font">` tags for {@see getFontPreload()}.
      */
-    public function getFontPreloadHtml(): \Illuminate\Contracts\Support\Htmlable
+    public function getFontPreloadHtml(): Htmlable
     {
         $tags = array_map(static function (string $url): string {
             $extension = strtolower(pathinfo((string) parse_url($url, PHP_URL_PATH), PATHINFO_EXTENSION));
@@ -580,6 +583,20 @@ trait HasTheme
         }
 
         return [...$entries, $script];
+    }
+
+    /**
+     * The panel's `@vite` tags. A build without the panel entries (a starter kit's build
+     * from before AlfaKit was installed) fails with a hint to rebuild, not Vite's bare
+     * "Unable to locate file in Vite manifest".
+     */
+    public function renderViteTags(): Htmlable
+    {
+        try {
+            return app(Vite::class)($this->getViteEntries());
+        } catch (ViteException $exception) {
+            throw new ViteException($exception->getMessage().' Build the frontend with `npm run build` (or keep `npm run dev` running while developing); `php artisan alfakit:doctor` checks the setup.', previous: $exception);
+        }
     }
 
     /**

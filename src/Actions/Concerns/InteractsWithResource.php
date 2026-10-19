@@ -41,6 +41,6 @@ trait InteractsWithResource
             return \AlfaSix\Alfakit\Support\Authorization::allows($ability, $record ?? $this->getModel());
         }
 
-        return $resource::can($ability, $record);
+        return $resource::authorizes($ability, $record);
     }
 }

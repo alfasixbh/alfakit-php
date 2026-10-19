@@ -398,6 +398,15 @@ return [
         'size' => 'Size',
         'no_tree' => 'The server sent no schema tree for this page.',
     ],
+    // A file of a FileUpload, named in its buttons' labels.
+    'file_upload' => [
+        'remove' => 'Remove :name',
+        'move_up' => 'Move :name up',
+        'move_down' => 'Move :name down',
+        'edit' => 'Edit :name',
+        'open' => 'Open :name',
+        'download' => 'Download :name',
+    ],
     'image_editor' => [
         'title' => 'Edit image',
         'keyboard_hint' => 'Arrow keys move the crop area. Shift and arrow keys resize it.',

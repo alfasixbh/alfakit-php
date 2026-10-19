@@ -91,6 +91,22 @@ it('is idempotent and prints commands instead of installing with --no-install', 
         ->and(substr_count(file_get_contents("{$this->sandbox}/resources/js/alfakit/app.tsx"), "import './echo';"))->toBe(1);
 });
 
+it('formats echo.ts and the edited entry with the app formatter', function (): void {
+    (new Filesystem)->ensureDirectoryExists("{$this->sandbox}/node_modules/.bin");
+    file_put_contents("{$this->sandbox}/node_modules/.bin/prettier", '');
+    file_put_contents("{$this->sandbox}/.prettierrc", '{ "semi": true, "tabWidth": 4 }');
+
+    $this->artisan('alfakit:realtime', ['--no-install' => true])->assertSuccessful();
+
+    Process::assertRan(function (PendingProcess $process): bool {
+        $command = (array) $process->command;
+
+        return array_slice($command, 0, 2) === ["{$this->sandbox}/node_modules/.bin/prettier", '--write']
+            && in_array("{$this->sandbox}/resources/js/alfakit/echo.ts", $command, true)
+            && in_array("{$this->sandbox}/resources/js/alfakit/app.tsx", $command, true);
+    });
+});
+
 it('adds the framework Echo package when install:broadcasting configured it in the app entry', function (): void {
     file_put_contents("{$this->sandbox}/vendor/composer/installed.json", json_encode(['packages' => [['name' => 'laravel/reverb']]]));
     file_put_contents("{$this->sandbox}/config/reverb.php", '<?php return [];');

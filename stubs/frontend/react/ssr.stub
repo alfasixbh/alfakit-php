@@ -11,7 +11,9 @@ import { createAlfakitServer } from '@alfakit/react/server';
  */
 createServer(
     createAlfakitServer({
-        discover: import.meta.glob('./{fields,columns,entries,widgets,pages,components,blocks}/**/*.tsx'),
+        discover: import.meta.glob(
+            './{fields,columns,entries,widgets,pages,components,blocks}/**/*.tsx',
+        ),
         components: {
             // 'map-picker': MapPicker,
         },

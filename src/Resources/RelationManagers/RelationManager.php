@@ -322,8 +322,10 @@ abstract class RelationManager implements HasResource
         }
 
         $attribute = static::getRecordTitleAttribute();
+        $title = $attribute !== null ? data_get($record, $attribute) : null;
 
-        return $attribute !== null ? (string) data_get($record, $attribute) : (string) $record->getKey();
+        // Without a title attribute (or value), the model label names the record, as on resources.
+        return filled($title) && is_scalar($title) ? (string) $title : Str::ucfirst($this->getModelLabel());
     }
 
     public function getIdentifier(): string

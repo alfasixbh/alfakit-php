@@ -6,6 +6,7 @@ namespace AlfaSix\Alfakit\Infolists\Components;
 
 use AlfaSix\Alfakit\Support\Concerns\HasImageStackStyles;
 use AlfaSix\Alfakit\Support\Concerns\HasTemporaryUrlExpiry;
+use AlfaSix\Alfakit\Support\TemporaryUrls;
 use AlfaSix\Alfakit\Tables\Columns\ImageColumn;
 use BackedEnum;
 use Closure;
@@ -184,14 +185,15 @@ class ImageEntry extends Entry
             return $path;
         }
 
-        $disk = Storage::disk($this->evaluate($this->disk) ?? config('alfakit.default_filesystem_disk', config('filesystems.default')));
+        $diskName = $this->evaluate($this->disk) ?? config('alfakit.default_filesystem_disk', config('filesystems.default'));
+        $disk = Storage::disk($diskName);
 
         if ($this->evaluate($this->shouldCheckFileExistence) && ! $disk->exists($path)) {
             return null;
         }
 
         try {
-            return ($this->evaluate($this->visibility) ?? 'public') === 'private'
+            return ($this->evaluate($this->visibility) ?? TemporaryUrls::defaultVisibility((string) $diskName)) === 'private'
                 ? $disk->temporaryUrl($path, $this->getTemporaryUrlExpiration())
                 : $disk->url($path);
         } catch (Throwable) {

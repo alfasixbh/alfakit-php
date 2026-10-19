@@ -85,6 +85,7 @@ final class TokenRewriter
         $this->countConstructs(counted: ! $force);
         $this->findClass();
         $this->replaceUnsupportedParent();
+        $this->removeLivewireContracts();
         $this->renameIdentifiers();
         $this->rewriteStrings();
         $this->rewriteIconsAndColors();
@@ -750,6 +751,140 @@ final class TokenRewriter
             $this->classClose = $this->matchClose($j);
 
             return;
+        }
+    }
+
+    /**
+     * Pages, widgets and relation managers have forms, tables, infolists and actions built in:
+     * the Livewire contracts and traits Filament needs on them (`implements HasForms`,
+     * `use InteractsWithForms;`) are removed, or they would be fatal once Filament is gone.
+     */
+    private function removeLivewireContracts(): void
+    {
+        if ($this->classOpen < 0 || ! $this->parentIsAlfakit('Pages\\Page', 'Widgets\\Widget', 'Resources\\RelationManagers\\RelationManager')) {
+            return;
+        }
+
+        $contracts = [
+            'Filament\\Forms\\Contracts\\HasForms', 'Filament\\Forms\\Concerns\\InteractsWithForms',
+            'Filament\\Tables\\Contracts\\HasTable', 'Filament\\Tables\\Concerns\\InteractsWithTable',
+            'Filament\\Actions\\Contracts\\HasActions', 'Filament\\Actions\\Concerns\\InteractsWithActions',
+            'Filament\\Infolists\\Contracts\\HasInfolists', 'Filament\\Infolists\\Concerns\\InteractsWithInfolists',
+            'Filament\\Schemas\\Contracts\\HasSchemas', 'Filament\\Schemas\\Concerns\\InteractsWithSchemas',
+        ];
+
+        // `implements A, B` in the class header.
+        $implements = null;
+
+        for ($i = $this->classOpen - 1; $i >= 0 && ! $this->tokens[$i]->is(T_CLASS); $i--) {
+            if ($this->tokens[$i]->is(T_IMPLEMENTS)) {
+                $implements = $i;
+            }
+        }
+
+        if ($implements !== null) {
+            $this->removeNamesFromList($implements, $this->classOpen, $contracts, 'implements');
+        }
+
+        // `use A, B;` trait statements in the class body (not inside methods or closures).
+        $depth = 0;
+
+        for ($i = $this->classOpen + 1; $i < $this->classClose; $i++) {
+            $text = $this->tokens[$i]->text;
+
+            if ($text === '{' || $this->tokens[$i]->is([T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES])) {
+                $depth++;
+            } elseif ($text === '}') {
+                $depth--;
+            } elseif ($depth === 0 && $this->tokens[$i]->is(T_USE)) {
+                $end = $i;
+
+                while ($end < $this->classClose && $this->tokens[$end]->text !== ';' && $this->tokens[$end]->text !== '{') {
+                    $end++;
+                }
+
+                if ($this->tokens[$end]->text === ';') {
+                    $this->removeNamesFromList($i, $end, $contracts, 'use');
+                }
+
+                $i = $end;
+            }
+        }
+    }
+
+    /**
+     * Drop the names in `$names` from the comma-separated list after the keyword at `$keyword`
+     * (up to `$end`, exclusive: `{` of the class or `;` of a trait use), and the keyword with it
+     * when nothing is left.
+     *
+     * @param  list<string>  $names
+     */
+    private function removeNamesFromList(int $keyword, int $end, array $names, string $kind): void
+    {
+        $items = [];
+        $from = null;
+
+        for ($i = $keyword + 1; $i <= $end; $i++) {
+            if ($i === $end || $this->tokens[$i]->text === ',') {
+                if ($from !== null) {
+                    $items[] = [$from, $i - 1];
+                }
+
+                $from = null;
+
+                continue;
+            }
+
+            if ($from === null && ! $this->tokens[$i]->is(T_WHITESPACE)) {
+                $from = $i;
+            }
+        }
+
+        $kept = [];
+        $removed = [];
+
+        foreach ($items as [$start, $stop]) {
+            $name = trim($this->text($start, $stop));
+
+            if (in_array($this->resolve($name), $names, true)) {
+                $removed[] = $name;
+            } else {
+                $kept[] = $name;
+            }
+        }
+
+        if ($removed === []) {
+            return;
+        }
+
+        $line = $this->tokens[$keyword]->line;
+        $this->blank($keyword, $end - 1);
+
+        if ($kept !== []) {
+            $after = $kind === 'implements' ? ($this->tokens[$end - 1]->is(T_WHITESPACE) ? $this->tokens[$end - 1]->text : ' ') : '';
+            $this->out[$keyword] = $kind.' '.implode(', ', $kept).$after;
+        } elseif ($kind === 'implements') {
+            // `class X extends Page implements HasForms` then `{`: keep the line break before `{`.
+            if ($this->tokens[$keyword - 1]->is(T_WHITESPACE)) {
+                $this->out[$keyword - 1] = '';
+            }
+
+            $this->out[$keyword] = $this->tokens[$end - 1]->is(T_WHITESPACE) ? $this->tokens[$end - 1]->text : ' ';
+        } else {
+            // The whole `use …;` line goes, with a blank line after it.
+            $this->out[$end] = '';
+
+            if ($this->tokens[$keyword - 1]->is(T_WHITESPACE)) {
+                $this->out[$keyword - 1] = (string) preg_replace('/[ \t]+$/', '', $this->out[$keyword - 1]);
+            }
+
+            if ($end + 1 < $this->count && $this->tokens[$end + 1]->is(T_WHITESPACE)) {
+                $this->out[$end + 1] = (string) preg_replace('/^[ \t]*\n([ \t]*\n)?/', '', $this->out[$end + 1]);
+            }
+        }
+
+        foreach ($removed as $name) {
+            $this->report->note(MigrationReport::SECTION_CLASSES, $this->file, $line, "`{$name}` removed", 'AlfaKit pages, widgets and relation managers have forms, tables, infolists and actions built in; no Livewire contract or trait is needed.');
         }
     }
 

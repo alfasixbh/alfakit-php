@@ -162,6 +162,38 @@ final class ResourceCodeBuilder
      */
     private function formField(array $column): string
     {
+        return $this->formFieldComponent($column).$this->formFieldDefault($column);
+    }
+
+    /**
+     * `->default(...)` from the column's literal database default, so a new record starts
+     * with the value the database would store (a `false` toggle is already off).
+     *
+     * @param  ColumnInfo  $column
+     */
+    private function formFieldDefault(array $column): string
+    {
+        $default = $column['default'] ?? null;
+
+        if ($default === null || $default === false) {
+            return '';
+        }
+
+        $code = match (true) {
+            $default === true => 'true',
+            is_int($default) => (string) $default,
+            is_float($default) => var_export($default, true),
+            default => "'".addcslashes($default, "\\'")."'",
+        };
+
+        return "\n                    ->default({$code})";
+    }
+
+    /**
+     * @param  ColumnInfo  $column
+     */
+    private function formFieldComponent(array $column): string
+    {
         $name = $column['name'];
         $required = $column['nullable'] ? '' : "\n                    ->required()";
         $unique = $column['unique'] ? "\n                    ->unique(ignoreRecord: true)" : '';

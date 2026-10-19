@@ -302,6 +302,38 @@ it('verifies the email address with the signed link of its own notification', fu
     $this->get('/verify-email')->assertRedirect('http://localhost/dashboard');
 });
 
+it('takes over Fortify\'s verification link route instead of registering the name twice', function (): void {
+    config()->set('auth.providers.users.model', VerifiableUser::class);
+    app('auth')->forgetGuards();
+
+    // Fortify registers this route even with `'views' => false`.
+    Route::middleware('web')->get('/email/verify/{id}/{hash}', fn () => 'fortify')->name('verification.verify');
+
+    authKit();
+    $user = VerifiableUser::query()->create(['name' => 'Vera', 'email' => 'vera@example.com', 'password' => 'password']);
+    $this->actingAs($user);
+
+    $named = collect(Route::getRoutes()->getRoutes())->filter(fn ($route): bool => $route->getName() === 'verification.verify');
+
+    expect($named)->toHaveCount(1)
+        ->and($named->first()->uri())->toBe('email/verify/{id}/{hash}')
+        ->and($named->first()->getActionName())->toContain('AuthKitController@verify');
+
+    $url = (new class extends VerifyEmail
+    {
+        public function url(object $notifiable): string
+        {
+            return $this->verificationUrl($notifiable);
+        }
+    })->url($user);
+
+    expect($url)->toStartWith('http://localhost/email/verify/'.$user->id.'/');
+
+    $this->get($url)->assertRedirect('http://localhost/dashboard');
+
+    expect($user->fresh()->hasVerifiedEmail())->toBeTrue();
+});
+
 // ---------------------------------------------------------------- Account
 
 it('sends guests to sign in and back to the account page', function (): void {

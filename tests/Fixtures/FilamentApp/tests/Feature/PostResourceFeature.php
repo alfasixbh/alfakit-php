@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Filament\Resources\PostResource\Pages\ListPosts;
 use App\Models\Post;
 

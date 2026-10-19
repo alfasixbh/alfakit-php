@@ -72,7 +72,7 @@ trait ResolvesContext
                 abort_unless($user->canAccessPanel($panel), 403);
             }
 
-            $this->runPanelAuthMiddleware(request(), $panel->getAuthMiddleware());
+            $this->runPanelAuthMiddleware(request(), $class::getPanelAuthMiddleware($panel));
         }
 
         if ($panel->hasTenancy()) {

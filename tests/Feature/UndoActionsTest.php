@@ -150,7 +150,12 @@ it('undoes the edit page save', function (): void {
 
     inertiaPost($this, '/undo/_alfakit/actions/undo', ['undo' => $undo['token']])->assertRedirect();
 
-    expect($post->fresh()->title)->toBe('Before');
+    expect($post->fresh()->title)->toBe('Before')
+        // The open edit form shows the restored values, not the undone ones.
+        ->and(session(Inertia\Support\SessionKey::FLASH_DATA)['alfakitFormRefresh'] ?? null)->toMatchArray([
+            'component' => 'form',
+            'state' => ['title' => 'Before'],
+        ]);
 });
 
 it('runs undoUsing() for custom actions with the data the handler kept', function (): void {

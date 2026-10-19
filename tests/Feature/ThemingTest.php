@@ -131,6 +131,24 @@ it('can give a panel its own stylesheet', function (): void {
     expect($panel->getViteEntries())->toBe(['resources/css/admin.css', config('alfakit.inertia.vite.js')]);
 });
 
+it('explains how to rebuild when the Vite manifest has no panel entries', function (): void {
+    $directory = 'alfakit-test-build-'.uniqid();
+    $manifest = public_path($directory.'/manifest.json');
+    @mkdir(dirname($manifest), 0777, true);
+    file_put_contents($manifest, json_encode(['resources/js/app.tsx' => ['file' => 'assets/app.js']]));
+    $original = app(Illuminate\Foundation\Vite::class);
+    app()->instance(Illuminate\Foundation\Vite::class, (new Illuminate\Foundation\Vite)->useBuildDirectory($directory));
+
+    try {
+        expect(fn () => alfakit()->getPanel('admin')->renderViteTags())
+            ->toThrow(Illuminate\Foundation\ViteException::class, 'npm run build');
+    } finally {
+        @unlink($manifest);
+        @rmdir(dirname($manifest));
+        app()->instance(Illuminate\Foundation\Vite::class, $original);
+    }
+});
+
 it('gives every theme its own structure, not just colours', function (): void {
     $panel = alfakit()->getPanel('admin');
     $designs = [];

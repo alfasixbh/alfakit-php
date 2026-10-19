@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace AlfaSix\Alfakit\Commands\Support;
 
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Throwable;
 
 /**
  * The first-party plugins `alfakit:setup` and `alfakit:add` can install. Read at runtime
@@ -20,6 +22,9 @@ final class PluginCatalog
 
     /** The tenant of the live demo whose pages the showcase paths point into. */
     public const DEMO_TENANT = 'manama';
+
+    /** The monorepo's packages/plugins directory, overridable in tests (an app installed from Packagist has none). */
+    public static ?string $pluginsDirectory = null;
 
     /**
      * @return array<string, array{label: string, description: string, package: string, class: string, commands: list<list<string>>, migrate: bool, notes: list<string>}>
@@ -203,7 +208,7 @@ final class PluginCatalog
     {
         return [
             // The monorepo / path repositories: packages/plugins next to packages/alfakit.
-            ...(glob(dirname(__DIR__, 4).'/plugins/*/composer.json') ?: []),
+            ...(glob((self::$pluginsDirectory ?? dirname(__DIR__, 4).'/plugins').'/*/composer.json') ?: []),
             ...(glob(base_path('vendor/alfasix/alfakit-*/composer.json')) ?: []),
         ];
     }
@@ -239,6 +244,34 @@ final class PluginCatalog
     }
 
     /**
+     * Why a plugin's dependency tables can't be created in this app, or null: an app table
+     * of the same name that isn't the dependency's (`tags` without Spatie's `taggables`).
+     * Its migration would fail on every `php artisan migrate`, so it isn't published.
+     */
+    public static function tableConflict(string $slug): ?string
+    {
+        $tables = match (Str::slug($slug)) {
+            'tags' => ['tags' => 'taggables'],
+            default => [],
+        };
+
+        foreach ($tables as $table => $companion) {
+            try {
+                if (Schema::hasTable($table) && ! Schema::hasTable($companion)) {
+                    return "Your database already has a `{$table}` table that isn't Spatie Laravel Tags' (there is no `{$companion}` table), so its migration was not published. "
+                        ."Rename your table, or give Spatie its own: a model extending Spatie\\Tags\\Tag with `protected \$table = 'spatie_tags';` and a `getForeignKey()` returning 'tag_id', as `tag_model` in config/tags.php (php artisan vendor:publish --tag=tags-config), "
+                        ."then php artisan vendor:publish --tag=tags-migrations, use `spatie_tags` in the migration (also in `constrained('spatie_tags')`) and migrate. "
+                        ."A model with its own `tags()` relationship can't use HasTags as is.";
+                }
+            } catch (Throwable) {
+                // No database yet: nothing to collide with.
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Install recipes that composer.json can't express: dependencies' migrations and notes.
      *
      * @return array{commands?: list<list<string>>, migrate?: bool, notes?: list<string>}
@@ -248,19 +281,27 @@ final class PluginCatalog
         return match ($slug) {
             'shield' => ['commands' => [['alfakit-shield:install', '--panel={panel}']], 'migrate' => true, 'notes' => [
                 'Add Spatie\\Permission\\Traits\\HasRoles to your User model.',
-                'Then: php artisan alfakit-shield:generate --panel={panel} && php artisan alfakit-shield:super-admin --panel={panel}',
+                'Generate the permissions and make yourself a super admin: php artisan alfakit-shield:generate --panel={panel} && php artisan alfakit-shield:super-admin --panel={panel}',
             ]],
             'activity-log' => ['commands' => [['vendor:publish', '--provider=Spatie\\Activitylog\\ActivitylogServiceProvider', '--tag=activitylog-migrations']], 'migrate' => true, 'notes' => ['Add Spatie\\Activitylog\\Models\\Concerns\\LogsActivity to the models you want to log.']],
             'media-library' => ['commands' => [['vendor:publish', '--provider=Spatie\\MediaLibrary\\MediaLibraryServiceProvider', '--tag=medialibrary-migrations']], 'migrate' => true, 'notes' => ['Add HasMedia / InteractsWithMedia to your models.']],
             'tags' => ['commands' => [['vendor:publish', '--provider=Spatie\\Tags\\TagsServiceProvider', '--tag=tags-migrations']], 'migrate' => true, 'notes' => ['Add Spatie\\Tags\\HasTags to your models.']],
             'settings' => ['commands' => [['vendor:publish', '--provider=Spatie\\LaravelSettings\\LaravelSettingsServiceProvider', '--tag=migrations']], 'migrate' => true, 'notes' => ['Create a settings page: php artisan make:alfakit-settings-page']],
             'backup' => ['notes' => ['Configure spatie/laravel-backup (config/backup.php) and run a queue worker.']],
-            'health' => ['notes' => ['Register your spatie/laravel-health checks and a result store.']],
+            // spatie/laravel-health's default result store (Eloquent) needs its table.
+            'health' => ['commands' => [['vendor:publish', '--tag=health-migrations']], 'migrate' => true, 'notes' => ['Register your spatie/laravel-health checks (Health::checks([...]) in a service provider).']],
+            'ops' => ['notes' => ['Allow access with OpsPlugin::make()->authorize(...) or the viewAlfakitOps gate; the pages answer 403 until then.']],
+            'translation-manager' => ['notes' => ['Allow access with TranslationManagerPlugin::make()->authorize(...) or the manageTranslations gate; the page answers 403 until then.']],
+            // The template history (optional, but `alfakit:doctor` reports it missing).
+            'mail-templates' => ['commands' => [['vendor:publish', '--tag=alfakit-record-versions-migrations']], 'migrate' => true, 'notes' => ['Allow access with MailTemplatesPlugin::make()->authorize(...) or the manageAlfakitMailTemplates gate; the resource is hidden until then.']],
             'billing' => ['notes' => ['Set up Laravel Cashier (migrations, keys, webhook) and add Billable to the model that pays.']],
             'feature-flags' => ['commands' => [['vendor:publish', '--tag=pennant-migrations']], 'migrate' => true, 'notes' => ['Allow access with ->authorize(...) or the manageFeatureFlags gate.']],
-            'forms' => ['notes' => ['Publish the public form page: php artisan alfakit-forms:page']],
+            // Submissions are exported with AlfaKit's exporter, which needs the exports tables.
+            'forms' => ['commands' => [['vendor:publish', '--tag=alfakit-import-export-migrations']], 'migrate' => true, 'notes' => ['Publish the public form page: php artisan alfakit-forms:page']],
+            'analytics' => ['commands' => [['vendor:publish', '--tag=alfakit-import-export-migrations']], 'migrate' => true],
             'helpdesk' => ['notes' => ['Publish the customer portal pages: php artisan alfakit-helpdesk:pages']],
             'ai' => ['notes' => ['Configure a provider: php artisan alfakit:ai-setup']],
+            'api' => ['notes' => ['Expose resources: ApiPlugin::make()->resources([PostResource::class]) (or implement ExposesApi on a resource); nothing is exposed until then.']],
             'cms' => ['notes' => ['Link the public disk: php artisan storage:link']],
             default => [],
         };

@@ -311,6 +311,23 @@ it('does not touch files in a dry run but writes the report', function (): void 
         ->toContain('`composer remove filament/filament filament/spatie-laravel-media-library-plugin bezhansalleh/filament-shield --no-interaction --no-scripts`');
 });
 
+it('counts the same constructs in a dry run as in the real run', function (): void {
+    $constructs = function (): int {
+        preg_match('/\| Filament constructs found \| (\d+) /', $this->files->get($this->sandbox.'/alfakit-migration-report.md'), $match);
+
+        return (int) ($match[1] ?? -1);
+    };
+
+    runMigration($this, ['--dry-run' => true])->assertSuccessful();
+    $dry = $constructs();
+
+    // The next steps are printed, not only written to the report.
+    runMigration($this)->expectsOutputToContain('npm install && npm run build')->assertSuccessful();
+
+    // The provider entry is renamed by the PHP rewrite; the dry run counted it twice.
+    expect($dry)->toBeGreaterThan(0)->toBe($constructs());
+});
+
 it('is idempotent: a second run finds nothing to migrate', function (): void {
     runMigration($this)->assertSuccessful();
     $after = snapshotFiles($this->sandbox);

@@ -60,7 +60,8 @@ class DatePicker extends Field
     {
         parent::setUp();
 
-        $this->rule('date');
+        // A time of day has no year, month or day, which Laravel's `date` rule requires.
+        $this->rule('date', fn (): bool => $this->hasDate());
     }
 
     /**

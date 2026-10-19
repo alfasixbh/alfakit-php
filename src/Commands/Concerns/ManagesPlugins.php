@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AlfaSix\Alfakit\Commands\Concerns;
 
+use AlfaSix\Alfakit\Commands\SetupCommand;
 use AlfaSix\Alfakit\Commands\Support\AppEnvironment;
 use AlfaSix\Alfakit\Commands\Support\PanelProviderEditor;
 use AlfaSix\Alfakit\Commands\Support\PluginCatalog;
@@ -46,6 +47,9 @@ trait ManagesPlugins
             }
 
             $newlyInstalled = true;
+            // Its composer.json is in vendor now: read the real entry (plugin class, its own
+            // migration tag) instead of the fallback used before it was installed.
+            $plugin = PluginCatalog::get($slug);
         }
 
         $provider = PanelProviderEditor::path($panelId);
@@ -69,8 +73,18 @@ trait ManagesPlugins
             return ['status' => 'already', 'detail' => '', 'notes' => $notes, 'migrate' => false];
         }
 
+        // An app table of the same name as the dependency's: its migration would fail.
+        if (($conflict = PluginCatalog::tableConflict($slug)) !== null) {
+            return ['status' => 'done', 'detail' => $registered ? 'registered on '.$panelId : '', 'notes' => [...$notes, $conflict], 'migrate' => false];
+        }
+
         foreach ($plugin['commands'] as $command) {
             $command = array_map(static fn (string $argument): string => str_replace('{panel}', $panelId, $argument), $command);
+
+            // A plugin installed earlier (only registered now) already has its migrations.
+            if (! $newlyInstalled && AppEnvironment::migrationsAlreadyPublished($command)) {
+                continue;
+            }
 
             if (AppEnvironment::artisan($command)->failed()) {
                 $notes[] = 'Run: php artisan '.implode(' ', $command);
@@ -130,9 +144,48 @@ trait ManagesPlugins
 
         $result = AppEnvironment::composerRemove([$plugin['package']], output: fn (string $buffer) => $this->output->write($buffer));
 
+        if ($result->successful() && $slug === 'shield' && ! AppEnvironment::hasComposerPackage('spatie/laravel-permission')) {
+            $notes = [...$notes, ...$this->forgetRoles($files)];
+        }
+
         return $result->successful()
             ? ['status' => 'done', 'detail' => 'removed', 'notes' => $notes]
             : ['status' => 'failed', 'detail' => "composer remove {$plugin['package']}", 'notes' => $notes];
+    }
+
+    /**
+     * spatie/laravel-permission went away with Shield: take `HasRoles` (which `alfakit:setup
+     * --roles` added) off the user model, or every request loading it would fail, and point
+     * at the roles field of the generated users resource.
+     *
+     * @return list<string>
+     */
+    protected function forgetRoles(Filesystem $files): array
+    {
+        $notes = [];
+        $model = (string) config('auth.providers.users.model', 'App\\Models\\User');
+        $path = app_path(str_replace('\\', '/', Str::after($model, 'App\\')).'.php');
+        $trait = 'Spatie\\Permission\\Traits\\HasRoles';
+
+        if ($files->exists($path)) {
+            $contents = $files->get($path);
+            $updated = SetupCommand::removeTrait($contents, $trait);
+
+            if ($updated !== $contents) {
+                $files->put($path, $updated);
+                $notes[] = 'Removed '.$trait.' from '.$model.' (spatie/laravel-permission was removed with Shield).';
+            } elseif (str_contains($contents, 'HasRoles')) {
+                $notes[] = 'Remove '.$trait.' from '.$model.': spatie/laravel-permission was removed with Shield.';
+            }
+        }
+
+        foreach ([...($files->glob(app_path('Alfakit/Resources/UserResource.php')) ?: []), ...($files->glob(app_path('Alfakit/*/Resources/UserResource.php')) ?: [])] as $resource) {
+            if (str_contains($files->get($resource), "'roles'")) {
+                $notes[] = 'Remove the roles field, column and filter from '.Str::after($resource, base_path().'/').' (or regenerate it with php artisan alfakit:users --force).';
+            }
+        }
+
+        return $notes;
     }
 
     /**

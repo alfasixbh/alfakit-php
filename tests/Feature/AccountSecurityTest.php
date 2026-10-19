@@ -164,6 +164,12 @@ it('impersonates a user from the users table and leaves again', function (): voi
     $superAdmin = accountUser(['role' => 'super-admin']);
     $this->actingAs($admin);
 
+    // Starting and leaving are switches, not real sign-ins ("last signed in" listeners skip them).
+    $switches = [];
+    Illuminate\Support\Facades\Event::listen(Illuminate\Auth\Events\Login::class, function () use (&$switches): void {
+        $switches[] = Impersonation::isSwitching();
+    });
+
     $props = inertiaProps(inertiaGet($this, '/account/users'));
     $records = collect($props['page']['content'][0]['records'])->keyBy('key');
 
@@ -190,7 +196,9 @@ it('impersonates a user from the users table and leaves again', function (): voi
     $this->post('/account/impersonation/leave')->assertRedirect();
 
     $this->assertAuthenticatedAs($admin);
-    expect(inertiaProps(inertiaGet($this, '/account'))['alfakit'])->not->toHaveKey('impersonation');
+    expect(inertiaProps(inertiaGet($this, '/account'))['alfakit'])->not->toHaveKey('impersonation')
+        ->and($switches)->toBe([true, true])
+        ->and(Impersonation::isSwitching())->toBeFalse();
 });
 
 it('does not let members impersonate', function (): void {

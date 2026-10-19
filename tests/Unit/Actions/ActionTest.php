@@ -149,3 +149,33 @@ it('prebuilt edit and delete actions work without a resource', function (): void
     expect($post->fresh()->trashed())->toBeTrue()
         ->and(DeleteAction::make()->record($post->fresh())->isVisible())->toBeFalse();
 });
+
+it('sends the success notification of a custom action', function (): void {
+    session()->start();
+
+    Action::make('archive')->action(fn () => null)->successNotificationTitle('Archived')->execute();
+
+    expect(Notification::getFlashed())->toHaveCount(1)
+        ->and(Notification::getFlashed()[0])->toMatchArray(['title' => 'Archived', 'status' => 'success']);
+});
+
+it('does not add the success notification when the handler sent one or none is configured', function (): void {
+    session()->start();
+
+    Action::make('archive')
+        ->action(fn () => Notification::make()->title('Custom')->send())
+        ->successNotificationTitle('Archived')
+        ->execute();
+    Action::make('plain')->action(fn () => null)->execute();
+
+    expect(array_column(Notification::getFlashed(), 'title'))->toBe(['Custom']);
+});
+
+it('sends a prebuilt action success notification only once', function (): void {
+    session()->start();
+    $post = Post::query()->create(['title' => 'Once', 'slug' => 'once']);
+
+    DeleteAction::make()->record($post)->execute();
+
+    expect(Notification::getFlashed())->toHaveCount(1);
+});

@@ -255,8 +255,10 @@ class Panel
 
     protected ?string $tenantOwnershipRelationshipName = null;
 
+    /** @var class-string<RegisterTenant>|null */
     protected ?string $tenantRegistrationPage = null;
 
+    /** @var class-string<EditTenantProfile>|null */
     protected ?string $tenantProfilePage = null;
 
     /** @var array<array-key, mixed>|Closure */
@@ -830,6 +832,16 @@ class Panel
     }
 
     /**
+     * Where `discoverResources()` looks: the generators write a panel's classes there.
+     *
+     * @return list<array{directory: string, namespace: string}>
+     */
+    public function getResourceDiscovery(): array
+    {
+        return array_values($this->resourceDiscovery);
+    }
+
+    /**
      * Page classes, and configured registrations (`SettingsPage::make('general')`).
      *
      * @param  array<class-string<Page>|PageConfiguration>  $pages
@@ -943,7 +955,17 @@ class Panel
     {
         $pages = $this->resolveComponents($this->pages, $this->pageDiscovery, Page::class, 'pages');
 
-        return $pages === [] && $this->widgets === [] && $this->widgetDiscovery === [] ? $pages : $pages;
+        // An app's own `Dashboard extends Dashboard` (discovered) replaces the registered
+        // parent on the same route instead of adding a second one.
+        return $this->resolvedComponents['pages:overridden'] ??= array_values(array_filter($pages, static function (string $page) use ($pages): bool {
+            foreach ($pages as $other) {
+                if ($other !== $page && is_subclass_of($other, $page) && $other::getRoutePath() === $page::getRoutePath()) {
+                    return false;
+                }
+            }
+
+            return true;
+        }));
     }
 
     /**
@@ -1448,8 +1470,10 @@ class Panel
     }
 
     /**
-     * @param  class-string<Page>  $base
-     * @return class-string<Page>
+     * @template T of Page
+     *
+     * @param  class-string<T>  $base
+     * @return class-string<T>
      */
     protected function ensureTenantPage(string $page, string $base, string $method): string
     {
@@ -1732,23 +1756,36 @@ class Panel
         // With several dashboards, the one at the panel root is home.
         foreach ($this->getPages() as $page) {
             if (is_a($page, Dashboard::class, true) && trim($page::getRoutePath(), '/') === '') {
-                return $this->route('pages.'.$page::getSlug(), $parameters);
+                return $this->route($page::getRelativeRouteName(), $parameters);
             }
         }
 
         foreach ($this->getPages() as $page) {
             if (is_a($page, Dashboard::class, true)) {
-                return $this->route('pages.'.$page::getSlug(), $parameters);
+                return $this->route($page::getRelativeRouteName(), $parameters);
             }
         }
 
         $pages = $this->getPages();
+        $resources = $this->getResources();
 
-        if ($pages !== []) {
-            return $this->route('pages.'.$pages[0]::getSlug(), $parameters);
+        // The first item of the navigation, never a hidden page such as the users
+        // resource's forced `ChangePassword` page (starter-kit panels have no dashboard).
+        foreach ($pages as $page) {
+            if ($page::shouldRegisterNavigation()) {
+                return $this->route($page::getRelativeRouteName(), $parameters);
+            }
         }
 
-        $resources = $this->getResources();
+        foreach ($resources as $resource) {
+            if ($resource::shouldRegisterNavigation() && $resource::hasPage('index')) {
+                return $resource::getUrl('index', $parameters);
+            }
+        }
+
+        if ($pages !== []) {
+            return $this->route($pages[0]::getRelativeRouteName(), $parameters);
+        }
 
         if ($resources !== []) {
             return $resources[0]::getUrl('index', $parameters);
@@ -1792,6 +1829,26 @@ class Panel
         return $this->hasEmailVerification ? $this->route('auth.email-verification.prompt') : null;
     }
 
+    /**
+     * The tenant registration page's own label ("Register team"), for the tenant menu.
+     */
+    public function getTenantRegistrationLabel(): ?string
+    {
+        $page = $this->tenantRegistrationPage;
+
+        return $page === null ? null : $page::getLabel();
+    }
+
+    /**
+     * The tenant profile page's own label ("Team settings"), for the tenant menu.
+     */
+    public function getTenantProfileLabel(): ?string
+    {
+        $page = $this->tenantProfilePage;
+
+        return $page === null ? null : $page::getLabel();
+    }
+
     public function getTenantRegistrationUrl(): ?string
     {
         return $this->hasTenantRegistration() ? $this->route('tenant.registration') : null;
@@ -1827,16 +1884,16 @@ class Panel
 
                 // Tenant-less routes: auth and tenant registration.
                 if ($this->hasLogin) {
-                    $router->get($this->getLoginRoutePath(), $this->loginPage)->name('auth.login')->middleware('guest:'.$this->authGuard);
+                    $router->get($this->getLoginRoutePath(), $this->loginPage)->name('auth.login')->middleware(Http\Middleware\RedirectIfAuthenticated::class.':'.$this->id);
                 }
 
                 if ($this->hasRegistration) {
-                    $router->get($this->getRegistrationRoutePath(), $this->registrationPage)->name('auth.register')->middleware('guest:'.$this->authGuard);
+                    $router->get($this->getRegistrationRoutePath(), $this->registrationPage)->name('auth.register')->middleware(Http\Middleware\RedirectIfAuthenticated::class.':'.$this->id);
                 }
 
                 if ($this->hasPasswordReset) {
-                    $router->get($this->getPasswordResetRequestRoutePath(), RequestPasswordReset::class)->name('auth.password-reset.request')->middleware('guest:'.$this->authGuard);
-                    $router->get($this->getPasswordResetRoutePath(), ResetPassword::class)->name('auth.password-reset.reset')->middleware('guest:'.$this->authGuard);
+                    $router->get($this->getPasswordResetRequestRoutePath(), RequestPasswordReset::class)->name('auth.password-reset.request')->middleware(Http\Middleware\RedirectIfAuthenticated::class.':'.$this->id);
+                    $router->get($this->getPasswordResetRoutePath(), ResetPassword::class)->name('auth.password-reset.reset')->middleware(Http\Middleware\RedirectIfAuthenticated::class.':'.$this->id);
                 }
 
                 $router->post('/logout', LogoutController::class)->name('auth.logout');
@@ -1847,7 +1904,7 @@ class Panel
                 $this->registerEmailChangeVerificationRoutes($router);
 
                 if ($this->hasEmailVerification) {
-                    $router->get($this->getEmailVerificationPromptRoutePath(), EmailVerificationPrompt::class)->name('auth.email-verification.prompt')->middleware(Authenticate::class.':'.$this->id);
+                    $router->get($this->getEmailVerificationPromptRoutePath(), EmailVerificationPrompt::class)->name('auth.email-verification.prompt')->middleware(EmailVerificationPrompt::getPanelAuthMiddleware($this));
                     $router->get($this->getEmailVerificationRoutePath().'/{id}/{hash}', VerifyEmailController::class)->name('auth.email-verification.verify')->middleware([Authenticate::class.':'.$this->id, 'signed', 'throttle:6,1']);
                 }
 

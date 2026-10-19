@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AlfaSix\Alfakit\Commands\Concerns;
 
+use AlfaSix\Alfakit\Commands\Support\ModelInspector;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Schema as DbSchema;
 use Illuminate\Support\Str;
@@ -54,6 +55,17 @@ trait GuessesModelColumns
 
             return null;
         }
+    }
+
+    /**
+     * A json column or one with an array / json / collection cast (SQLite reports json
+     * columns as `text`, so the cast decides).
+     */
+    protected static function isJsonColumn(Model $model, string $name, string $type): bool
+    {
+        $cast = $model->getCasts()[$name] ?? null;
+
+        return ModelInspector::kind($name, $type, is_string($cast) ? $cast : null) === 'json';
     }
 
     protected static function isBooleanColumn(string $name, string $type): bool

@@ -179,6 +179,7 @@ trait GeneratesFrontendComponents
             : "{$importLine}\n{$withComponent}";
 
         $filesystem->put($entry, $withImport);
+        \AlfaSix\Alfakit\Commands\Support\FrontendFormatter::format([$entry]);
 
         $this->components->task("Registered '{$key}' in ".Str::after($entry, base_path().'/'));
     }

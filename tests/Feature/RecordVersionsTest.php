@@ -289,5 +289,36 @@ it('diffs text word by word and shows JSON and empty values as text', function (
         ->and(VersionDiff::toText('<p>Hi&nbsp;<em>there</em></p><p>Bye</p>'))->toBe('Hi there Bye')
         ->and(VersionDiff::compare(['a' => '1', 'b' => 'x'], ['a' => 1, 'b' => 'y']))->toBe([
             ['attribute' => 'b', 'label' => 'B', 'old' => 'x', 'new' => 'y'],
-        ]);
+        ])
+        // Labelled like fields and columns: "Author", "Cover image URL", not "Author Id".
+        ->and(array_column(VersionDiff::compare(null, ['author_id' => 1, 'cover_image_url' => 'x']), 'label'))->toBe(['Author', 'Cover image URL']);
+});
+
+it('keeps the current owner when a version is restored in a scopeToUser() panel', function (): void {
+    Panels::register('vportal', fn (Panel $panel): Panel => $panel
+        ->login()
+        ->resources([VersionedPostResource::class])
+        ->scopeToUser('author_id')
+        ->pages([Dashboard::class]));
+
+    $cora = versionsUser('Cora');
+    $dan = versionsUser('Dan');
+    $post = versionedPost($cora, ['title' => 'Draft']);
+    $created = $post->recordVersions()->first();
+
+    // Staff hand the record over to Dan, who edits it.
+    $post->update(['author_id' => $dan->getKey()]);
+    $post->update(['title' => 'Final']);
+
+    $this->actingAs($dan);
+    $token = inertiaProps(inertiaGet($this, "/vportal/versioned-posts/{$post->getKey()}/edit"))['page']['token'];
+
+    inertiaPost($this, '/vportal/_alfakit/actions', ['token' => $token, 'component' => 'page', 'action' => 'history>restoreVersion', 'arguments' => ['version' => $created->getKey()]])
+        ->assertRedirect();
+
+    $post->refresh();
+
+    // The content comes back; the owner stays Dan (not Cora, the owner in that version).
+    expect($post->title)->toBe('Draft')
+        ->and($post->author_id)->toBe($dan->getKey());
 });

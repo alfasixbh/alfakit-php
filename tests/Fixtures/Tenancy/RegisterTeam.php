@@ -19,7 +19,7 @@ class RegisterTeam extends RegisterTenant
 
     public function form(Schema $schema): Schema
     {
-        return $schema->components([TextInput::make('name')->required(), TextInput::make('slug')->required()]);
+        return $schema->components([TextInput::make('name')->required(), TextInput::make('slug')->required()->unique()]);
     }
 
     protected function handleRegistration(array $data): Model

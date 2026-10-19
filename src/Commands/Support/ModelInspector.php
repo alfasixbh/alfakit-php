@@ -18,11 +18,11 @@ use Throwable;
 
 /**
  * What `alfakit:generate` knows about a model: its table's columns (type, length,
- * nullability, unique indexes, foreign keys), enum casts, Eloquent relationships (public
+ * nullability, unique indexes, foreign keys, literal defaults), enum casts, Eloquent relationships (public
  * methods declaring a `Relation` return type) and whether it soft deletes. Every column
  * gets a `kind` that decides the generated form field, table column, filter and entry.
  *
- * @phpstan-type ColumnInfo array{name: string, type: string, kind: string, nullable: bool, length: int|null, unique: bool, enum: class-string|null, relationship: string|null, related: class-string<Model>|null, titleAttribute: string|null}
+ * @phpstan-type ColumnInfo array{name: string, type: string, kind: string, nullable: bool, length: int|null, unique: bool, enum: class-string|null, relationship: string|null, related: class-string<Model>|null, titleAttribute: string|null, default?: bool|int|float|string|null}
  * @phpstan-type RelationInfo array{name: string, type: string, related: class-string<Model>, titleAttribute: string}
  */
 final class ModelInspector
@@ -134,10 +134,12 @@ final class ModelInspector
                 }
             }
 
+            $kind = $name === $model->getKeyName() ? 'key' : self::kind($name, $type, $cast, $enum, $relation !== null);
+
             $columns[] = [
                 'name' => $name,
                 'type' => $type,
-                'kind' => $name === $model->getKeyName() ? 'key' : self::kind($name, $type, $cast, $enum, $relation !== null),
+                'kind' => $kind,
                 'nullable' => (bool) $column['nullable'],
                 'length' => preg_match('/\((\d+)\)/', (string) $column['type'], $match) === 1 ? (int) $match[1] : null,
                 'unique' => isset($unique[$name]),
@@ -145,6 +147,7 @@ final class ModelInspector
                 'relationship' => $relation['name'] ?? null,
                 'related' => $relation['related'] ?? null,
                 'titleAttribute' => $relation['titleAttribute'] ?? null,
+                'default' => self::defaultValue($column['default'] ?? null, $kind),
             ];
         }
 
@@ -188,6 +191,58 @@ final class ModelInspector
             str_contains($name, 'color') || str_contains($name, 'colour') => 'color',
             preg_match('/(^|_)(url|website|link)$/', $name) === 1 => 'url',
             default => 'string',
+        };
+    }
+
+    /**
+     * The literal default of a column, as the PHP value a generated field's `->default()`
+     * gets: booleans, numbers and strings. Null for no default, a `NULL` default, an empty
+     * string, a database expression (`CURRENT_TIMESTAMP`, `now()`, `nextval(...)`) and kinds
+     * whose fields don't take a literal (keys, relations, dates, JSON, passwords, files).
+     */
+    public static function defaultValue(mixed $default, string $kind): bool|int|float|string|null
+    {
+        if ($default === null || in_array($kind, ['key', 'relation', 'json', 'date', 'datetime', 'time', 'password', 'image'], true)) {
+            return null;
+        }
+
+        if (is_bool($default) || is_int($default) || is_float($default)) {
+            $value = $default;
+        } else {
+            $raw = trim((string) $default);
+
+            // PostgreSQL casts (`'draft'::character varying`) and wrapping parentheses (SQLite, SQL Server).
+            $raw = (string) preg_replace('/::[\w\s\[\]"]+$/', '', $raw);
+
+            while (preg_match('/^\((.*)\)$/s', $raw, $match) === 1) {
+                $raw = trim($match[1]);
+            }
+
+            if (preg_match("/^(?:N|_\w+\s*)?'(.*)'$/s", $raw, $match) === 1) {
+                $value = str_replace("''", "'", $match[1]);
+            } elseif ($raw === '' || strcasecmp($raw, 'null') === 0) {
+                return null;
+            } elseif (is_numeric($raw) || in_array(strtolower($raw), ['true', 'false'], true)) {
+                $value = $raw;
+            } elseif (preg_match('/[()]/', $raw) === 1 || preg_match('/^(current_(timestamp|date|time|user)|localtime(stamp)?|now|sysdate|uuid)$/i', $raw) === 1) {
+                // An expression the database evaluates.
+                return null;
+            } else {
+                // MySQL reports string defaults without quotes.
+                $value = $raw;
+            }
+        }
+
+        return match ($kind) {
+            'boolean' => match (true) {
+                is_bool($value) => $value,
+                in_array(strtolower((string) $value), ['1', 'true', 't', 'yes', 'on', "b'1'"], true) => true,
+                in_array(strtolower((string) $value), ['0', 'false', 'f', 'no', 'off', "b'0'"], true) => false,
+                default => null,
+            },
+            'integer' => is_numeric($value) && (string) (int) $value === (string) $value ? (int) $value : null,
+            'decimal' => is_numeric($value) ? (str_contains((string) $value, '.') || str_contains(strtolower((string) $value), 'e') ? (float) $value : (int) $value) : null,
+            default => $value === '' || is_bool($value) ? null : (string) $value,
         };
     }
 

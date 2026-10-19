@@ -12,6 +12,7 @@ use AlfaSix\Alfakit\Tables\Table;
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Support\Str;
 use RuntimeException;
 
 /**
@@ -212,7 +213,7 @@ class AttachAction extends Action
         $searchColumns = $this->getRecordSelectSearchColumns($titleAttribute);
 
         $select = Select::make('recordId')
-            ->label($this->relationManager->getModelLabel())
+            ->label(Str::ucfirst($this->relationManager->getModelLabel()))
             ->required()
             ->multiple($this->isMultiple)
             ->searchable()
@@ -251,7 +252,7 @@ class AttachAction extends Action
         $configuration = $this->tableSelect;
 
         $select = ModalTableSelect::make('recordId')
-            ->label($this->relationManager->getModelLabel())
+            ->label(Str::ucfirst($this->relationManager->getModelLabel()))
             ->required()
             ->multiple($this->isMultiple)
             ->recordTitleAttribute($titleAttribute);

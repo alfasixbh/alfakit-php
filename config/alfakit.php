@@ -240,13 +240,16 @@ return [
     | Code generation
     |--------------------------------------------------------------------------
     |
-    | Defaults for the `make:alfakit-*` commands.
+    | Defaults for the `make:alfakit-*` commands. `format_frontend` formats the frontend
+    | files they write (and `alfakit:eject` copies) with the app's own formatter:
+    | `vp fmt` (a `fmt` section in vite.config), Oxfmt or Prettier from node_modules/.bin.
     |
     */
 
     'file_generation' => [
         'namespace' => 'App\\Alfakit',
         'path' => app_path('Alfakit'),
+        'format_frontend' => true,
     ],
 
     /*

@@ -293,14 +293,47 @@ class Doctor
             }
         }
 
-        yield $missing === []
-            ? DoctorCheck::ok('Frontend', 'Assets', 'built; the manifest has every panel entry')
+        if ($missing === []) {
+            yield DoctorCheck::ok('Frontend', 'Assets', 'built; the manifest has every panel entry');
+
+            return;
+        }
+
+        $viteConfig = $this->viteConfig();
+        $unconfigured = array_values(array_filter(
+            array_keys($missing),
+            static fn (string $entry): bool => $viteConfig === null || ! str_contains($viteConfig, $entry),
+        ));
+
+        // The installer adds the entries to vite.config: a manifest without them is usually
+        // a build from before AlfaKit was installed (starter kits ship one).
+        yield $unconfigured === []
+            ? DoctorCheck::error(
+                'Frontend',
+                'Assets',
+                'the build is older than the panel entries (the Vite manifest has no '.implode(', ', array_keys($missing)).')',
+                'npm run build (or npm run dev while developing)',
+            )
             : DoctorCheck::error(
                 'Frontend',
                 'Assets',
                 'the Vite manifest has no '.implode(', ', array_keys($missing)),
-                'Add the entries to laravel({ input: [...] }) in vite.config and run npm run build.',
+                'Add '.implode(', ', $unconfigured).' to laravel({ input: [...] }) in vite.config and run npm run build.',
             );
+    }
+
+    /** The contents of the app's Vite config, or null when there is none. */
+    protected function viteConfig(): ?string
+    {
+        foreach (['ts', 'js', 'mts', 'mjs'] as $extension) {
+            $path = $this->env->basePath("vite.config.{$extension}");
+
+            if (is_file($path)) {
+                return (string) file_get_contents($path);
+            }
+        }
+
+        return null;
     }
 
     // ---------------------------------------------------------------- SSR
@@ -730,7 +763,8 @@ class Doctor
             $features['Customizable dashboards'] = [(string) config('alfakit.dashboards.layouts_table', 'alfakit_dashboard_layouts'), 'alfakit-dashboard-migrations'];
         }
 
-        if ($this->sourcesContain(['ExportAction', 'ExportBulkAction', 'ImportAction'])) {
+        // Whole words: a page's own `getExportAction()` is not AlfaKit's exporter.
+        if ($this->sourcesMatch('/\\b(Export|ExportBulk|Import)Action\\b/')) {
             $features['Imports and exports'] = ['exports', 'alfakit-import-export-migrations'];
         }
 
@@ -850,6 +884,17 @@ class Doctor
         }
 
         return $this->sources;
+    }
+
+    protected function sourcesMatch(string $pattern): bool
+    {
+        foreach ($this->sources() as $contents) {
+            if (preg_match($pattern, $contents) === 1) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

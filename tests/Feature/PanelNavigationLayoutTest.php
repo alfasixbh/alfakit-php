@@ -103,6 +103,39 @@ it('generates a cluster class', function (): void {
     @unlink($path);
 });
 
+it('registers the clusters directory on the panel provider once, unless it discovers clusters already', function (): void {
+    $provider = app_path('Providers/Alfakit/NavPanelProvider.php');
+    $path = app_path('Alfakit/Nav/Clusters/Reports.php');
+    expect(is_file($provider))->toBeFalse();
+    @mkdir(dirname($provider), 0777, true);
+    file_put_contents($provider, "<?php\n\nclass NavPanelProvider\n{\n    public function panel(\$panel)\n    {\n        return \$panel\n            ->id('nav')\n            ->path('nav');\n    }\n}\n");
+
+    try {
+        $this->artisan('make:alfakit-cluster', ['name' => 'Reports', '--panel' => 'nav'])
+            ->doesntExpectOutputToContain('Register it on the panel')
+            ->assertSuccessful();
+        $this->artisan('make:alfakit-cluster', ['name' => 'Billing', '--panel' => 'nav'])->assertSuccessful();
+
+        $contents = (string) file_get_contents($provider);
+
+        expect(substr_count($contents, '->discoverClusters('))->toBe(1)
+            ->and($contents)->toContain("->discoverClusters(in: app_path('Alfakit/Nav/Clusters'), for: 'App\\\\Alfakit\\\\Nav\\\\Clusters')")
+            ->and(shell_exec('php -l '.escapeshellarg($provider)))->toContain('No syntax errors');
+
+        // Clusters discovered elsewhere: leave the provider alone and say what to add.
+        file_put_contents($provider, str_replace("app_path('Alfakit/Nav/Clusters'), for: 'App\\\\Alfakit\\\\Nav\\\\Clusters'", "app_path('Other'), for: 'App\\\\Other'", $contents));
+        $this->artisan('make:alfakit-cluster', ['name' => 'Audit', '--panel' => 'nav', '--force' => true])
+            ->expectsOutputToContain('Register it on the panel')
+            ->assertSuccessful();
+    } finally {
+        @unlink($provider);
+
+        foreach (['Reports', 'Billing', 'Audit'] as $cluster) {
+            @unlink(app_path("Alfakit/Nav/Clusters/{$cluster}.php"));
+        }
+    }
+});
+
 // ---------------------------------------------------------------- Record sub-navigation
 
 it('renders record sub-navigation on record pages', function (): void {

@@ -189,6 +189,7 @@ trait HasStarterKit
                     'url' => $this->getUrl($item),
                 ], $tenants),
                 'registrationUrl' => $this->getTenantRegistrationUrl(),
+                'registrationLabel' => $this->getTenantRegistrationUrl() === null ? null : $this->getTenantRegistrationLabel(),
                 'searchable' => $this->isTenantMenuSearchable(count($tenants)) ? true : null,
             ]) : null,
         ]);

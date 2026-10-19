@@ -200,6 +200,14 @@ class MigrateFromFilamentCommand extends Command
             if (! $process->isSuccessful()) {
                 $this->components->error('composer remove failed; run it yourself: '.implode(' ', $command));
                 $report->add(MigrationReport::SECTION_CONFIG, 'composer.json', null, 'Filament packages still installed', 'Run `'.implode(' ', $command).'`.');
+
+                continue;
+            }
+
+            // `--no-scripts` skips `package:discover`: the cached manifest still lists the removed
+            // packages' providers, so the app wouldn't boot. Laravel rebuilds both on the next boot.
+            foreach (['packages.php', 'services.php'] as $cache) {
+                @unlink($this->laravel->basePath("bootstrap/cache/{$cache}"));
             }
         }
     }
@@ -245,6 +253,12 @@ class MigrateFromFilamentCommand extends Command
         $this->components->twoColumnDetail('Converted automatically', "{$metrics['automatic']} ({$metrics['percent']}%)");
         $this->components->twoColumnDetail('Need a manual step', "{$metrics['manual']} (search for ".MigrationReport::TODO_MARKER.", {$metrics['markers']} marker(s))");
         $this->newLine();
+        $this->components->info('Next steps:');
+        $this->components->bulletList([
+            'Build the frontend: <fg=cyan>npm install && npm run build</>',
+            ...(($command = $report->pluginCommand()) !== null ? ["Add the first-party plugins: <fg=cyan>{$command}</>"] : []),
+            'Run <fg=cyan>php artisan alfakit:optimize-clear</>, then your test suite.',
+        ]);
         $this->components->info('Report written to '.$reportPath);
     }
 }

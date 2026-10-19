@@ -52,11 +52,19 @@ class EjectCommand extends Command
     /** @var array<string, string> Files copied (or kept) during this run: source path => destination path. */
     protected array $copied = [];
 
+    /** @var array<int, string> Files this run wrote (not the existing ones it kept). */
+    protected array $written = [];
+
+    /** @var array<int, string> Entries (`app.*`, `ssr.*`) this run registered the component in. */
+    protected array $editedEntries = [];
+
     public function handle(Filesystem $files): int
     {
         $this->files = $files;
         // Artisan reuses the command instance within a process (tests, tinker).
         $this->copied = [];
+        $this->written = [];
+        $this->editedEntries = [];
         $adapter = $this->resolveAdapter();
 
         if ($adapter === null) {
@@ -112,6 +120,10 @@ class EjectCommand extends Command
         foreach (['app', 'ssr'] as $entryName) {
             $this->registerIn($entryName, $key, $name, $statement);
         }
+
+        // The copied renderer source and the edited entries take the app's own formatter
+        // (`vp fmt`, Oxfmt or Prettier), so they pass its checks as written.
+        Support\FrontendFormatter::format([...array_values($this->written), ...$this->editedEntries]);
 
         $copied = count(array_filter($this->copied, fn (string $path): bool => str_contains($path, '/_alfakit/')));
 
@@ -296,6 +308,7 @@ class EjectCommand extends Command
 
         $this->files->ensureDirectoryExists(dirname($target));
         $this->files->put($target, $code);
+        $this->written[] = $target;
         $this->components->twoColumnDetail($relativeTarget, '<fg=green>'.($depth === 0 ? 'ejected' : 'copied').'</>');
     }
 
@@ -513,13 +526,16 @@ class EjectCommand extends Command
         $contents = $this->files->get($entry);
         $relativeEntry = Str::after($entry, base_path().'/');
 
-        if (preg_match('/[\'"]'.preg_quote($key, '/').'[\'"]\s*:/', $contents) === 1) {
+        // Quoted only when needed (`'column:TextColumn'`), as the formatters write keys.
+        $property = preg_match('/^[A-Za-z_$][\w$]*$/', $key) === 1 ? $key : "'{$key}'";
+
+        if (preg_match('/(?<![\w$\'"-])([\'"]?)'.preg_quote($key, '/').'\1\s*:/', $contents) === 1) {
             $this->components->twoColumnDetail($relativeEntry, "<fg=yellow>'{$key}' already registered</>");
 
             return;
         }
 
-        $withComponent = preg_replace('/(\bcomponents\s*:\s*\{)/', "$1\n        '{$key}': {$component},", $contents, 1, $replaced);
+        $withComponent = preg_replace('/(\bcomponents\s*:\s*\{)/', "$1\n        {$property}: {$component},", $contents, 1, $replaced);
 
         if (! is_string($withComponent) || $replaced !== 1) {
             $this->components->warn("Could not find `components: {` in {$relativeEntry}. Register the component yourself:\n\n{$statement}\n\ncreateAlfakit({ components: { '{$key}': {$component} } })");
@@ -537,6 +553,7 @@ class EjectCommand extends Command
         }
 
         $this->files->put($entry, $withComponent);
+        $this->editedEntries[] = $entry;
         $this->components->twoColumnDetail($relativeEntry, "<fg=green>registered '{$key}'</>");
     }
 }

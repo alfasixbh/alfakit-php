@@ -17,6 +17,9 @@ abstract class EditTenantProfile extends Page
 {
     protected static bool $shouldRegisterNavigation = false;
 
+    // Registered by `tenantRegistration()` / `tenantProfile()` only, never discovered as a page.
+    protected static bool $isDiscovered = false;
+
     public static function getRelativeRouteName(): string
     {
         return 'tenant.profile';

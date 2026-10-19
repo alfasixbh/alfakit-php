@@ -334,3 +334,32 @@ it('generates a singular resource', function (): void {
     app(Illuminate\Filesystem\Filesystem::class)->deleteDirectory("{$directory}/SettingResource");
     @unlink("{$directory}/SettingResource.php");
 });
+
+it('writes generated resources with sorted imports, the way Pint expects them', function (): void {
+    $directory = app_path('Alfakit/Admin/Resources');
+    @unlink("{$directory}/InvoiceResource.php");
+
+    $this->artisan('make:alfakit-resource', ['model' => 'Invoice', '--view' => true, '--panel' => 'admin', '--force' => true])->assertSuccessful();
+
+    foreach (["{$directory}/InvoiceResource.php", "{$directory}/InvoiceResource/Pages/EditInvoice.php", "{$directory}/InvoiceResource/Pages/ListInvoices.php"] as $file) {
+        preg_match_all('/^use ([^;]+);$/m', (string) file_get_contents($file), $matches);
+        $sorted = $matches[1];
+        usort($sorted, static fn (string $a, string $b): int => strcasecmp(str_replace('\\', ' ', $a), str_replace('\\', ' ', $b)));
+
+        expect($matches[1])->not->toBe([])->toBe($sorted);
+    }
+
+    app(Illuminate\Filesystem\Filesystem::class)->deleteDirectory("{$directory}/InvoiceResource");
+    @unlink("{$directory}/InvoiceResource.php");
+});
+
+it('tells you how to create a model that does not exist yet', function (): void {
+    $directory = app_path('Alfakit/Admin/Resources');
+
+    $this->artisan('make:alfakit-resource', ['model' => 'Gizmo', '--generate' => true, '--panel' => 'admin', '--force' => true])
+        ->expectsOutputToContain('Model App\\Models\\Gizmo not found. Create it first (php artisan make:model Gizmo --migration), or pass --model --migration')
+        ->assertSuccessful();
+
+    app(Illuminate\Filesystem\Filesystem::class)->deleteDirectory("{$directory}/GizmoResource");
+    @unlink("{$directory}/GizmoResource.php");
+});

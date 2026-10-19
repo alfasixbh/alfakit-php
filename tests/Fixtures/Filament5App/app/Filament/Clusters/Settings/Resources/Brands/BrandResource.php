@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\Clusters\Settings\Resources\Brands;
 
 use App\Filament\Clusters\Settings\Resources\Brands\Pages\ManageBrands;

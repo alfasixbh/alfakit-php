@@ -8,6 +8,7 @@ use AlfaSix\Alfakit\Contracts\CanAccessPanel;
 use AlfaSix\Alfakit\Contracts\CanBeImpersonated;
 use AlfaSix\Alfakit\Contracts\CanImpersonate;
 use AlfaSix\Alfakit\Panel;
+use Closure;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Contracts\Auth\UserProvider;
 use Illuminate\Database\Eloquent\Model;
@@ -20,6 +21,8 @@ use Illuminate\Support\Facades\Gate;
  */
 final class Impersonation
 {
+    private static bool $switching = false;
+
     /**
      * Whether `$impersonator` may sign in as `$target` on this panel: never themselves, never
      * while already impersonating, only when the impersonator implements `CanImpersonate`,
@@ -77,7 +80,7 @@ final class Impersonation
         ]);
 
         if (method_exists($guard, 'login')) {
-            $guard->login($target);
+            self::switchTo(fn () => $guard->login($target));
         }
 
         // A new session id for the new identity; the impersonation record is kept.
@@ -103,7 +106,7 @@ final class Impersonation
         $guard = $panel->auth();
 
         if (method_exists($guard, 'login')) {
-            $guard->login($impersonator);
+            self::switchTo(fn () => $guard->login($impersonator));
         }
 
         session()->forget(self::sessionKey($panel));
@@ -112,6 +115,26 @@ final class Impersonation
         $back = is_array($record) && is_string($record['back'] ?? null) ? $record['back'] : null;
 
         return redirect()->to($back ?? $panel->getUrl());
+    }
+
+    /**
+     * Whether the current sign-in is an impersonation switch (starting or leaving), not a
+     * real sign-in: `Login` listeners that record "last signed in" can skip it.
+     */
+    public static function isSwitching(): bool
+    {
+        return self::$switching;
+    }
+
+    private static function switchTo(Closure $login): void
+    {
+        self::$switching = true;
+
+        try {
+            $login();
+        } finally {
+            self::$switching = false;
+        }
     }
 
     public static function isImpersonating(Panel $panel): bool

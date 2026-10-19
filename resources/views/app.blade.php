@@ -59,7 +59,7 @@
         {{-- Plugin stylesheets and scripts (Assets::register()), before the app's own CSS so it can override them. --}}
         {!! \AlfaSix\Alfakit\Support\Assets\Assets::renderTags($alfakitPanel->getId(), $alfakitCspNonce) !!}
 
-        @vite($alfakitPanel->getViteEntries())
+        {{ $alfakitPanel->renderViteTags() }}
 
         <x-inertia::head>
             <title>{{ $alfakitPanel->getBrandName() }}</title>

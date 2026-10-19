@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace AlfaSix\Alfakit\Commands\Concerns;
 
-use AlfaSix\Alfakit\Support\SchemaGenerator;
+use AlfaSix\Alfakit\Commands\Support\ModelInspector;
+use AlfaSix\Alfakit\Commands\Support\ResourceCodeBuilder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 use Throwable;
@@ -67,7 +68,7 @@ trait GeneratesStandaloneComponents
 
     /**
      * The form components / table columns and their imports: generated from the model's
-     * table with `--generate` (`SchemaGenerator`), otherwise the stub's examples.
+     * table with `--generate` (the `alfakit:generate` defaults), otherwise the stub's examples.
      *
      * @return array{0: string, 1: string, 2: string}
      */
@@ -99,9 +100,12 @@ trait GeneratesStandaloneComponents
         }
 
         try {
-            $generated = $kind === 'form'
-                ? SchemaGenerator::formComponents($modelClass, 12)
-                : SchemaGenerator::tableColumns($modelClass, 16);
+            // The defaults of `alfakit:generate`: casts (enums, booleans, arrays) and relationships count.
+            $builder = new ResourceCodeBuilder(ModelInspector::inspect($modelClass)['columns']);
+            $code = $kind === 'form'
+                ? (string) preg_replace('/^    /m', '', $builder->formFields($builder->defaultFormColumns()))
+                : $builder->tableColumns($builder->defaultTableColumns());
+            $generated = ['code' => $code, 'imports' => $builder->imports()];
         } catch (Throwable $exception) {
             $this->components->warn("Could not read the table of {$modelClass} ({$exception->getMessage()}); using the examples.");
 

@@ -227,6 +227,8 @@ trait HasGroups
                 'key' => $key,
                 'title' => $group->getTitle($record),
                 'description' => $group->getDescription($record),
+                'icon' => $group->getIcon($record),
+                'color' => $group->getColor($record),
                 'summary' => $summaryQuery === null ? null : ($this->summarizeQuery($group->scopeQueryByKey(clone $summaryQuery, $key === '' ? null : $key)) ?: null),
                 'collapsible' => $collapsible ?: null,
             ], static fn (mixed $value): bool => $value !== null);

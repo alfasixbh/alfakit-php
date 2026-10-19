@@ -320,10 +320,21 @@ class AuthKitPanel extends StandalonePanel
         $guest = 'guest:'.$this->getAuthGuard();
         $auth = Authenticate::class;
 
+        // Fortify registers `verification.verify` even with its views off. Taking over its URI
+        // replaces that route, so the name isn't registered twice (which breaks Wayfinder).
+        $verifyUri = $this->hasEmailVerification() ? $this->existingRouteUri($router, $this->pageRouteNamePrefix.'verification.verify') : null;
+
+        if ($verifyUri !== null) {
+            $router->middleware($this->getMiddleware())
+                ->get($verifyUri, [AuthKitController::class, 'verify'])
+                ->name($this->pageRouteNamePrefix.'verification.verify')
+                ->middleware([$auth, 'signed', 'throttle:6,1']);
+        }
+
         $router->prefix($this->getPath())
             ->name($this->pageRouteNamePrefix)
             ->middleware($this->getMiddleware())
-            ->group(function (Router $router) use ($guest, $auth): void {
+            ->group(function (Router $router) use ($guest, $auth, $verifyUri): void {
                 if ($this->hasLogin()) {
                     $router->get('/login', [AuthKitController::class, 'login'])->name('login')->middleware($guest);
                 }
@@ -341,7 +352,10 @@ class AuthKitPanel extends StandalonePanel
 
                 if ($this->hasEmailVerification()) {
                     $router->get('/verify-email', [AuthKitController::class, 'verifyEmail'])->name('verification.notice')->middleware($auth);
-                    $router->get('/verify-email/{id}/{hash}', [AuthKitController::class, 'verify'])->name('verification.verify')->middleware([$auth, 'signed', 'throttle:6,1']);
+
+                    if ($verifyUri === null) {
+                        $router->get('/verify-email/{id}/{hash}', [AuthKitController::class, 'verify'])->name('verification.verify')->middleware([$auth, 'signed', 'throttle:6,1']);
+                    }
                 }
 
                 if ($this->hasLogin()) {
@@ -369,5 +383,19 @@ class AuthKitPanel extends StandalonePanel
 
                 $this->registerEmailChangeVerificationRoutes($router);
             });
+    }
+
+    /**
+     * The URI of a route another package (Fortify) already registered under `$name`.
+     */
+    protected function existingRouteUri(Router $router, string $name): ?string
+    {
+        foreach ($router->getRoutes()->getRoutes() as $route) {
+            if ($route->getName() === $name) {
+                return '/'.ltrim($route->uri(), '/');
+            }
+        }
+
+        return null;
     }
 }

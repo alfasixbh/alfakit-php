@@ -243,7 +243,12 @@ class HistoryAction extends Action
 
                 abort_unless(method_exists($record, 'restoreRecordVersion'), 404);
 
-                $record->restoreRecordVersion($version);
+                // In a `scopeToUser()` panel the record keeps its current owner: restoring
+                // an older owner would move it into another user's account.
+                $resource = $this->getResource();
+                $owner = $resource !== null && is_a($record, $resource::getModel()) ? $resource::getUserOwnerAttributes($record) : [];
+
+                $record->restoreRecordVersion($version, $owner);
 
                 \AlfaSix\Alfakit\Notifications\Notification::make()
                     ->success()

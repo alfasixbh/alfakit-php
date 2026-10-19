@@ -6,6 +6,7 @@ namespace AlfaSix\Alfakit\Commands;
 
 use AlfaSix\Alfakit\Commands\Concerns\CanGenerateFiles;
 use AlfaSix\Alfakit\Commands\Support\AppEnvironment;
+use AlfaSix\Alfakit\Commands\Support\FrontendFormatter;
 use AlfaSix\Alfakit\Commands\Support\PanelProviderEditor;
 use Illuminate\Console\Command;
 use Illuminate\Filesystem\Filesystem;
@@ -181,10 +182,14 @@ class RealtimeCommand extends Command
     protected function installEchoClient(Filesystem $files): void
     {
         $echo = resource_path('js/alfakit/echo.ts');
+        // Written files go through the app's formatter (vp fmt / oxfmt / Prettier), like
+        // every other generated frontend file.
+        $written = [];
 
         if (! $files->exists($echo) || $this->option('force')) {
             $files->ensureDirectoryExists(dirname($echo));
             $files->put($echo, $files->get($this->stubPath('realtime/echo')));
+            $written[] = $echo;
             $this->steps[] = ['resources/js/alfakit/echo.ts', '<fg=green>created</>'];
         } else {
             $this->steps[] = ['resources/js/alfakit/echo.ts', '<fg=gray>exists</>'];
@@ -210,11 +215,16 @@ class RealtimeCommand extends Command
                 $this->steps[] = [$relative, '<fg=gray>imports Echo</>'];
             } else {
                 $files->put($entry, "import '{$import}';\n".$contents);
+                $written[] = $entry;
                 $this->steps[] = [$relative, '<fg=green>imports Echo</>'];
             }
 
+            FrontendFormatter::format($written);
+
             return;
         }
+
+        FrontendFormatter::format($written);
 
         $this->steps[] = ['Echo import', '<fg=yellow>no panel entry found</>: import \'./alfakit/echo\' in your browser entry'];
     }

@@ -364,9 +364,11 @@ final class FilamentMigrator
             }
 
             $contents = $this->files->get($providers);
+            $filamentClass = 'App\\Providers\\Filament\\'.$file->getFilenameWithoutExtension();
 
-            if (str_contains($contents, $class)) {
-                // The PHP rewrite already renamed the Filament provider entry.
+            // The PHP rewrite renamed the Filament provider entry (and counted it), or will in
+            // a real run: a dry run must not count it a second time.
+            if (str_contains($contents, $class) || str_contains($contents, $filamentClass)) {
                 $this->report->action("Registered `{$class}` in `bootstrap/providers.php` (the Filament provider entry was renamed).");
 
                 continue;

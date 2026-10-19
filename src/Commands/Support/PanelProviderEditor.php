@@ -54,6 +54,31 @@ final class PanelProviderEditor
     }
 
     /**
+     * Register a service provider in `bootstrap/providers.php`. A file that imports its
+     * providers (the starter kits) gets a `use` and `Name::class`, sorted the way Pint
+     * expects; otherwise the fully qualified class. Null when the file has no list.
+     */
+    public static function addBootstrapProvider(string $contents, string $provider): ?string
+    {
+        $provider = ltrim($provider, '\\');
+        $basename = class_basename($provider);
+
+        if (str_contains($contents, $provider.'::class') || preg_match('/^use '.preg_quote($provider, '/').';$/m', $contents) === 1) {
+            return $contents;
+        }
+
+        $imports = preg_match('/^use [^;]+;$/m', $contents) === 1 && preg_match('/\b'.preg_quote($basename, '/').'\b/', $contents) !== 1;
+        $entry = $imports ? $basename : $provider;
+        $updated = preg_replace('/\];\s*$/', "    {$entry}::class,\n];\n", $contents, 1, $count);
+
+        if ($updated === null || $count !== 1) {
+            return null;
+        }
+
+        return $imports ? self::addImport($updated, $provider) : $updated;
+    }
+
+    /**
      * Sort the top-level class imports alphabetically (Pint's `ordered_imports`), keeping
      * `use function` / `use const` groups after them.
      */
@@ -260,7 +285,9 @@ final class PanelProviderEditor
                 continue;
             }
 
-            if ($char === "'" || $char === '"') {
+            if (($comment = self::endOfComment($contents, $i)) !== null) {
+                $i = $comment;
+            } elseif ($char === "'" || $char === '"') {
                 $quote = $char;
             } elseif ($char === '(' || $char === '[' || $char === '{') {
                 $depth++;
@@ -370,7 +397,9 @@ final class PanelProviderEditor
                 continue;
             }
 
-            if ($char === "'" || $char === '"') {
+            if (($comment = self::endOfComment($contents, $i)) !== null) {
+                $i = $comment;
+            } elseif ($char === "'" || $char === '"') {
                 $quote = $char;
             } elseif ($char === $opening) {
                 $depth++;
@@ -380,5 +409,28 @@ final class PanelProviderEditor
         }
 
         return $length - 1;
+    }
+
+    /**
+     * When a comment (line comments with `//` or `#`, or a block comment) starts at `$offset`, the offset of its last
+     * character, so scanners skip it (an apostrophe in a comment is not a string); else null.
+     */
+    private static function endOfComment(string $contents, int $offset): ?int
+    {
+        $pair = substr($contents, $offset, 2);
+
+        if ($pair === '//' || ($contents[$offset] === '#' && $pair !== '#[')) {
+            $newline = strpos($contents, "\n", $offset);
+
+            return $newline === false ? strlen($contents) - 1 : $newline - 1;
+        }
+
+        if ($pair === '/*') {
+            $close = strpos($contents, '*/', $offset + 2);
+
+            return $close === false ? strlen($contents) - 1 : $close + 1;
+        }
+
+        return null;
     }
 }

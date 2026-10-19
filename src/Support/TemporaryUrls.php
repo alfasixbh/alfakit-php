@@ -23,6 +23,23 @@ final class TemporaryUrls
     }
 
     /**
+     * The visibility of a disk's files when a component does not set one. A disk's own
+     * `visibility` wins. Without one, a local disk with no public `url` (Laravel's default
+     * `local` disk in storage/app/private) can't be reached by a plain link, so its files
+     * are private and shown through signed URLs (`serve` makes them work on local disks).
+     */
+    public static function defaultVisibility(string $disk): string
+    {
+        $config = (array) config("filesystems.disks.{$disk}", []);
+
+        if (isset($config['visibility']) && is_string($config['visibility'])) {
+            return $config['visibility'] === 'private' ? 'private' : 'public';
+        }
+
+        return ($config['driver'] ?? null) === 'local' && empty($config['url']) ? 'private' : 'public';
+    }
+
+    /**
      * @param  int|null  $minutes  Null uses the configured default.
      */
     public static function expiresAt(?int $minutes = null): CarbonInterface

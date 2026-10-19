@@ -226,20 +226,25 @@ trait HasActions
     {
         $action->context($this);
 
-        if ($action instanceof Action) {
-            if (method_exists($this, 'getRecord') && ($record = $this->getRecord()) !== null) {
-                $action->record($record);
-            } elseif (method_exists($this, 'getModel') && ($model = $this->getModel()) !== null) {
-                $action->model($model);
+        $record = method_exists($this, 'getRecord') ? $this->getRecord() : null;
+        $model = $record === null && method_exists($this, 'getModel') ? $this->getModel() : null;
+        $resource = $this instanceof \AlfaSix\Alfakit\Contracts\HasResource ? $this->getResourceClass() : null;
+
+        // Actions in groups get the record, model and record title like ungrouped ones.
+        foreach ($action instanceof ActionGroup ? $action->getFlatActions() : [$action] as $nested) {
+            if ($record !== null) {
+                $nested->record($record);
+            } elseif ($model !== null) {
+                $nested->model($model);
             }
 
-            if ($this instanceof \AlfaSix\Alfakit\Contracts\HasResource && ($resource = $this->getResourceClass()) !== null) {
-                $action->recordTitle(fn (?\Illuminate\Database\Eloquent\Model $record): ?string => $record !== null ? $resource::getRecordTitle($record) : null);
+            if ($resource !== null) {
+                $nested->recordTitle(fn (?\Illuminate\Database\Eloquent\Model $record): ?string => $record !== null ? $resource::getRecordTitle($record) : null);
             }
-        } else {
-            if (method_exists($this, 'getRecord') && ($record = $this->getRecord()) !== null) {
-                $action->record($record);
-            }
+        }
+
+        if ($action instanceof ActionGroup && $record !== null) {
+            $action->record($record);
         }
 
         return $action;

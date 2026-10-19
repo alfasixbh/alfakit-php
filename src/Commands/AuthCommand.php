@@ -7,6 +7,7 @@ namespace AlfaSix\Alfakit\Commands;
 use AlfaSix\Alfakit\Commands\Concerns\CanGenerateFiles;
 use AlfaSix\Alfakit\Commands\Concerns\DetectsFrontendAdapter;
 use AlfaSix\Alfakit\Commands\Support\AppEnvironment;
+use AlfaSix\Alfakit\Commands\Support\PanelProviderEditor;
 use Illuminate\Console\Command;
 use Illuminate\Filesystem\Filesystem;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -61,7 +62,10 @@ class AuthCommand extends Command
             $this->writeMigration($files);
         }
 
-        if ($fortify) {
+        // The auth kit's pages take Laravel's route names (`login`, `verification.notice`,
+        // `two-factor.login`…), so Fortify's view routes must go whether or not its backend is
+        // kept: two routes with one name break `route()` and Wayfinder's generated exports.
+        if (AppEnvironment::hasFortify()) {
             $this->turnOffFortifyViews($files);
         }
 
@@ -141,7 +145,7 @@ class AuthCommand extends Command
             return;
         }
 
-        $updated = preg_replace('/\];\s*$/', "    {$provider}::class,\n];\n", $contents, 1);
+        $updated = PanelProviderEditor::addBootstrapProvider($contents, $provider);
 
         if ($updated !== null) {
             $files->put($path, $updated);
@@ -182,7 +186,8 @@ class AuthCommand extends Command
     }
 
     /**
-     * Fortify keeps its POST routes and actions; its pages become AlfaKit's.
+     * Fortify keeps its POST routes and actions; its pages (and their route names) become
+     * AlfaKit's.
      */
     protected function turnOffFortifyViews(Filesystem $files): void
     {

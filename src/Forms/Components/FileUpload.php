@@ -6,6 +6,7 @@ namespace AlfaSix\Alfakit\Forms\Components;
 
 use AlfaSix\Alfakit\Support\Concerns\HasTemporaryUrlExpiry;
 use AlfaSix\Alfakit\Support\TemporaryUpload;
+use AlfaSix\Alfakit\Support\TemporaryUrls;
 use AlfaSix\Alfakit\Support\Url;
 use Closure;
 use Illuminate\Contracts\Filesystem\Filesystem;
@@ -725,16 +726,7 @@ class FileUpload extends Field
             return $visibility;
         }
 
-        $config = (array) config("filesystems.disks.{$this->getDiskName()}", []);
-
-        // A disk's own `visibility` wins. Without one, a local disk with no public `url`
-        // (Laravel's default `local` disk in storage/app/private) can't be reached by a
-        // plain link, so its files are private and shown through signed URLs.
-        if (isset($config['visibility']) && is_string($config['visibility'])) {
-            return $config['visibility'] === 'private' ? 'private' : 'public';
-        }
-
-        return ($config['driver'] ?? null) === 'local' && empty($config['url']) ? 'private' : 'public';
+        return TemporaryUrls::defaultVisibility($this->getDiskName());
     }
 
     /**

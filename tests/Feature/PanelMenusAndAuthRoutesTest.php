@@ -233,6 +233,41 @@ it('registers the auth pages at custom slugs', function (): void {
     $this->get('/slugs')->assertRedirect('http://localhost/slugs/sign-in');
 });
 
+it('links verification mails sent from a panel back to that panel', function (): void {
+    Panels::register('verifying', fn (Panel $panel): Panel => $panel->login()->registration()->emailVerification()->pages([Dashboard::class]));
+    $user = menuUser();
+
+    alfakit()->setCurrentPanel(alfakit()->getPanel('verifying'));
+    $url = (new Illuminate\Auth\Notifications\VerifyEmail)->toMail($user)->actionUrl;
+
+    expect($url)->toStartWith("http://localhost/verifying/email-verification/verify/{$user->getKey()}/")
+        ->toContain('signature=');
+
+    // Outside a panel, Laravel's own `verification.verify` route (e.g. a starter kit's) is kept.
+    alfakit()->setCurrentPanel(null);
+    Illuminate\Support\Facades\Route::get('/email/verify/{id}/{hash}', fn () => 'ok')->name('verification.verify');
+    Illuminate\Support\Facades\Route::getRoutes()->refreshNameLookups();
+
+    expect((new Illuminate\Auth\Notifications\VerifyEmail)->toMail($user)->actionUrl)->toStartWith("http://localhost/email/verify/{$user->getKey()}/");
+});
+
+it('lets an unverified user resend the verification mail from the prompt', function (): void {
+    config()->set('auth.providers.users.model', AlfaSix\Alfakit\Tests\Fixtures\Models\VerifiableUser::class);
+    app('auth')->forgetGuards();
+    Panels::register('unverified', fn (Panel $panel): Panel => $panel->login()->emailVerification()->pages([Dashboard::class]));
+    $user = AlfaSix\Alfakit\Tests\Fixtures\Models\VerifiableUser::query()->create(['name' => 'Vera', 'email' => 'vera'.uniqid().'@example.com', 'password' => 'password']);
+    NotificationFacade::fake();
+    $this->actingAs($user);
+
+    $this->get('/unverified')->assertRedirect('http://localhost/unverified/email-verification/prompt');
+    $token = inertiaProps(inertiaGet($this, '/unverified/email-verification/prompt'))['page']['token'];
+
+    // The prompt's own action passes, although the panel's other pages still need a verified address.
+    inertiaPost($this, '/unverified/_alfakit/actions', ['token' => $token, 'component' => 'page', 'action' => 'resend'])->assertRedirect();
+
+    NotificationFacade::assertSentTo($user, Illuminate\Auth\Notifications\VerifyEmail::class);
+});
+
 it('builds the profile form from overridable component helpers', function (): void {
     Panels::register('prof', fn (Panel $panel): Panel => $panel->login()->profile(ProfileWithUsername::class)->pages([Dashboard::class]));
 

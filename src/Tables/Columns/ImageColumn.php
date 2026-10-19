@@ -6,6 +6,7 @@ namespace AlfaSix\Alfakit\Tables\Columns;
 
 use AlfaSix\Alfakit\Support\Concerns\HasImageStackStyles;
 use AlfaSix\Alfakit\Support\Concerns\HasTemporaryUrlExpiry;
+use AlfaSix\Alfakit\Support\TemporaryUrls;
 use BackedEnum;
 use Closure;
 use Illuminate\Support\Arr;
@@ -185,7 +186,7 @@ class ImageColumn extends Column
         }
 
         try {
-            if (($this->evaluate($this->visibility) ?? 'public') === 'private') {
+            if (($this->evaluate($this->visibility) ?? TemporaryUrls::defaultVisibility($this->getDiskName())) === 'private') {
                 return $disk->temporaryUrl($path, $this->getTemporaryUrlExpiration());
             }
 

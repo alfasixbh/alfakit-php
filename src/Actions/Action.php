@@ -584,6 +584,13 @@ class Action
             return $result;
         });
 
+        // `successNotificationTitle()` / `successNotification()` on a custom action: sent
+        // when the handler and hooks sent nothing themselves (prebuilt actions send theirs
+        // from an `after()` hook, and an explicit `Notification::make()->send()` wins).
+        if (\AlfaSix\Alfakit\Notifications\Notification::countSent() === $notificationsBefore) {
+            $this->sendSuccessNotification();
+        }
+
         // After the commit: the toast's "Undo" button.
         $this->issueUndo($notificationsBefore);
 

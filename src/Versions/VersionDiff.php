@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace AlfaSix\Alfakit\Versions;
 
-use Illuminate\Support\Str;
+use AlfaSix\Alfakit\Support\Labels;
 
 /**
  * Field-by-field changes between two snapshots, for the history slide-over. Values are
@@ -46,7 +46,7 @@ final class VersionDiff
 
             $change = [
                 'attribute' => (string) $attribute,
-                'label' => $labels[$attribute] ?? Str::headline((string) $attribute),
+                'label' => $labels[$attribute] ?? Labels::fromName((string) $attribute, isRelationshipPath: false),
                 'old' => $oldText,
                 'new' => $newText,
             ];

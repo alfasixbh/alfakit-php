@@ -7,14 +7,12 @@ namespace App\Providers\Alfakit;
 use AlfaSix\Alfakit\Pages\Dashboard;
 use AlfaSix\Alfakit\Panel;
 use AlfaSix\Alfakit\PanelProvider;
-use AlfaSix\Alfakit\Widgets\StatsOverviewWidget;
 
 class {{ class }} extends PanelProvider
 {
     public function panel(Panel $panel): Panel
     {
-        return $panel
-            ->default()
+        return $panel{{ default }}
             ->id('{{ id }}')
             ->path('{{ path }}')
             ->login()

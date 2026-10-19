@@ -11,7 +11,9 @@ import { createAlfakitServer } from '@alfakit/svelte/server';
  */
 createServer(
     createAlfakitServer({
-        discover: import.meta.glob('./{fields,columns,entries,widgets,pages,components,blocks}/**/*.svelte'),
+        discover: import.meta.glob(
+            './{fields,columns,entries,widgets,pages,components,blocks}/**/*.svelte',
+        ),
         components: {
             // 'map-picker': MapPicker,
         },

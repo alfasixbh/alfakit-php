@@ -109,6 +109,10 @@ class EmailAuthentication implements MultiFactorAuthenticationProvider
 
         session()->forget($this->sessionKey());
 
+        // A used code no longer holds back the next one: signing in right after setting
+        // the method up (or after another sign-in) emails a fresh code at once.
+        RateLimiter::clear($this->throttleKey($user));
+
         return true;
     }
 
@@ -118,7 +122,7 @@ class EmailAuthentication implements MultiFactorAuthenticationProvider
     public function sendCode(Authenticatable $user): bool
     {
         $email = $this->getEmail($user);
-        $throttleKey = 'alfakit-mfa-email|'.$user->getAuthIdentifier();
+        $throttleKey = $this->throttleKey($user);
 
         if ($email === null || RateLimiter::tooManyAttempts($throttleKey, 1)) {
             return false;
@@ -143,6 +147,11 @@ class EmailAuthentication implements MultiFactorAuthenticationProvider
         }
 
         return true;
+    }
+
+    protected function throttleKey(Authenticatable $user): string
+    {
+        return 'alfakit-mfa-email|'.$user->getAuthIdentifier();
     }
 
     public function hasPendingCode(Authenticatable $user): bool

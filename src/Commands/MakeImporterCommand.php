@@ -7,9 +7,12 @@ namespace AlfaSix\Alfakit\Commands;
 use AlfaSix\Alfakit\Commands\Concerns\CanGenerateFiles;
 use AlfaSix\Alfakit\Commands\Concerns\GuessesModelColumns;
 use AlfaSix\Alfakit\Commands\Concerns\WarnsAboutDeprecatedAliases;
+use AlfaSix\Alfakit\Commands\Support\ModelInspector;
 use Illuminate\Console\Command;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 use Symfony\Component\Console\Attribute\AsCommand;
+use Throwable;
 
 use function Laravel\Prompts\text;
 
@@ -78,7 +81,7 @@ class MakeImporterCommand extends Command
             if (Str::endsWith($name, '_id')) {
                 $relationship = Str::camel(Str::beforeLast($name, '_id'));
                 $name = Str::snake($relationship);
-                $chain[] = method_exists($model, $relationship) ? '->relationship()' : "->relationship('{$relationship}')";
+                $chain[] = method_exists($model, $relationship) ? $this->relationshipChain($model, $relationship) : "->relationship('{$relationship}')";
             } elseif (static::isBooleanColumn($name, $type)) {
                 $chain[] = '->boolean()';
                 $rules[] = 'boolean';
@@ -90,9 +93,9 @@ class MakeImporterCommand extends Command
                 $rules[] = 'numeric';
             } elseif (static::isDateColumn($type)) {
                 $rules[] = 'date';
-            } elseif (in_array($type, ['json', 'jsonb'], true)) {
-                $chain[] = '->array()';
-                $rules[] = 'array';
+            } elseif (static::isJsonColumn($model, $name, $type)) {
+                // `make:alfakit-exporter` writes these as JSON (`listAsJson()`): read them back.
+                $chain[] = '->castStateUsing(fn (mixed $state): mixed => is_string($state) && json_validate($state) ? json_decode($state, true) : $state)';
             } elseif (str_contains($name, 'email')) {
                 $rules[] = 'email';
                 $rules[] = 'max:255';
@@ -112,5 +115,23 @@ class MakeImporterCommand extends Command
         }
 
         return $lines === [] ? null : implode("\n", $lines);
+    }
+
+    /**
+     * A BelongsTo column resolved by the related record's title (what `make:alfakit-exporter`
+     * writes, e.g. `category.name`) or its key, so an exported file imports again.
+     */
+    protected function relationshipChain(Model $model, string $relationship): string
+    {
+        try {
+            $related = $model->{$relationship}()->getRelated();
+            $title = ModelInspector::titleAttribute($related);
+        } catch (Throwable) {
+            return '->relationship()';
+        }
+
+        $key = $related->getKeyName();
+
+        return $title === $key ? '->relationship()' : "->relationship(resolveUsing: ['{$title}', '{$key}'])";
     }
 }

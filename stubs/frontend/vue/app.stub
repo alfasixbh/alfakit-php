@@ -9,7 +9,9 @@ import { createAlfakit } from '@alfakit/vue';
  * a page uses them. Register anything else, or override a file, under `components`/`pages`.
  */
 void createAlfakit({
-    discover: import.meta.glob('./{fields,columns,entries,widgets,pages,components,blocks}/**/*.vue'),
+    discover: import.meta.glob(
+        './{fields,columns,entries,widgets,pages,components,blocks}/**/*.vue',
+    ),
     components: {
         // 'map-picker': MapPicker,
     },

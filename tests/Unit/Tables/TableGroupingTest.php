@@ -166,3 +166,72 @@ it('groups custom array records, keeping each group together', function (): void
     expect(array_column($desc['recordGroups'], 'key'))->toBe(['inactive', 'active', ''])
         ->and(array_column(groupedArrayTable()->groupsOnly()->state(groupingState(['group' => 'status']))->toSchema()['recordGroups'], 'key'))->toBe(['', 'active', 'inactive']);
 });
+
+// ---------------------------------------------------------------- Enum groups
+
+enum TableGroupingPlainStatus: string
+{
+    case Draft = 'draft';
+    case Published = 'published';
+}
+
+class TableGroupingEnumPost extends Post
+{
+    protected $table = 'posts';
+
+    protected function casts(): array
+    {
+        return [...parent::casts(), 'status' => AlfaSix\Alfakit\Tests\Fixtures\PageTable\PostStatus::class];
+    }
+}
+
+class TableGroupingPlainEnumPost extends Post
+{
+    protected $table = 'posts';
+
+    protected function casts(): array
+    {
+        return [...parent::casts(), 'status' => TableGroupingPlainStatus::class];
+    }
+}
+
+it('titles groups of an enum-cast attribute with the enum label, colour and icon', function (): void {
+    seedSummaryPosts();
+
+    $schema = Table::make()->query(TableGroupingEnumPost::query())
+        ->columns([TextColumn::make('title')])
+        ->groups([Group::make('status')])
+        ->state(groupingState(['group' => 'status']))
+        ->toSchema();
+
+    expect($schema['recordGroups'])->toBe([
+        ['key' => 'draft', 'title' => 'Status: Draft copy', 'icon' => 'pencil', 'color' => 'gray'],
+        ['key' => 'published', 'title' => 'Status: Live', 'icon' => 'circle-check', 'color' => 'success'],
+    ]);
+});
+
+it('titles groups of an enum without HasLabel with the headlined case name', function (): void {
+    seedSummaryPosts();
+
+    $schema = Table::make()->query(TableGroupingPlainEnumPost::query())
+        ->columns([TextColumn::make('title')])
+        ->groups([Group::make('status')])
+        ->state(groupingState(['group' => 'status']))
+        ->toSchema();
+
+    expect(array_column($schema['recordGroups'], 'title'))->toBe(['Status: Draft', 'Status: Published'])
+        ->and(array_column($schema['recordGroups'], 'key'))->toBe(['draft', 'published'])
+        ->and($schema['recordGroups'][0])->not->toHaveKey('icon');
+});
+
+it('turns raw group values back into enum cases with enum()', function (): void {
+    $row = ['__key' => '1', 'status' => 'published'];
+    $group = Group::make('status')->enum(AlfaSix\Alfakit\Tests\Fixtures\PageTable\PostStatus::class)->titlePrefixedWithLabel(false);
+
+    expect($group->getTitle($row))->toBe('Live')
+        ->and($group->getKey($row))->toBe('published')
+        ->and($group->getIcon($row))->toBe('circle-check')
+        ->and($group->getColor($row))->toBe('success')
+        ->and(Group::make('status')->titlePrefixedWithLabel(false)->getTitle($row))->toBe('published')
+        ->and($group->getTitle(['status' => 'unknown']))->toBe('unknown');
+});

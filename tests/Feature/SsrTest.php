@@ -63,3 +63,29 @@ it('ships an SSR entry stub for every adapter', function (string $adapter, strin
     ['vue', '@inertiajs/vue3'],
     ['svelte', '@inertiajs/svelte'],
 ]);
+
+it('adds the panel entries to the Vite inputs one per line, as the starter kits format them', function (): void {
+    $config = <<<'JS'
+        export default defineConfig({
+            plugins: lazyPlugins(() => [
+                laravel({
+                    input: ['resources/css/app.css', 'resources/js/app.ts'],
+                    refresh: true,
+                }),
+            ]),
+        });
+        JS;
+
+    expect(InstallCommand::addViteInputsTo($config, ['resources/css/alfakit.css', 'resources/js/alfakit/app.ts']))
+        ->toContain("            input: [\n                'resources/css/app.css',\n                'resources/js/app.ts',\n                'resources/css/alfakit.css',\n                'resources/js/alfakit/app.ts',\n            ],\n            refresh: true,")
+        ->and(InstallCommand::addViteInputsTo('export default {}', ['x']))->toBeNull();
+
+    // The entry stubs break the long glob like the formatter does (80 columns).
+    foreach (['react', 'vue', 'svelte'] as $adapter) {
+        foreach (['app', 'ssr'] as $stub) {
+            foreach (explode("\n", (string) file_get_contents(dirname(__DIR__, 2)."/stubs/frontend/{$adapter}/{$stub}.stub")) as $line) {
+                expect(str_contains($line, 'import.meta.glob(\'') && mb_strlen($line) > 80)->toBeFalse();
+            }
+        }
+    }
+});

@@ -26,6 +26,8 @@ class MyPostResource extends Resource
         return $schema->components([
             TextInput::make('title')->required(),
             TextInput::make('slug')->required(),
+            // An owner field a customer could change: saving keeps the signed-in owner.
+            TextInput::make('author_id')->integer(),
         ]);
     }
 

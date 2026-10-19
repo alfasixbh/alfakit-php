@@ -115,7 +115,7 @@ class InstallCommand extends Command
             'Create a user: php artisan make:alfakit-user',
             'Create a resource: php artisan make:alfakit-resource Post --generate',
             'Run the migrations: php artisan migrate',
-            'Run your dev server (npm run dev) and visit /'.$path,
+            'Build the frontend (npm run build, or keep npm run dev running) and visit /'.$path.'; until then the panel fails with "Unable to locate file in Vite manifest"',
         ]);
 
         return self::SUCCESS;
@@ -229,15 +229,9 @@ class InstallCommand extends Command
                 return;
             }
 
-            $updated = preg_replace_callback(
-                '/input:\s*\[([^\]]*)\]/s',
-                static fn (array $matches): string => 'input: ['.rtrim($matches[1]).(trim($matches[1]) === '' ? '' : ', ')."'".implode("', '", $inputs)."']",
-                $contents,
-                1,
-                $count,
-            );
+            $updated = static::addViteInputsTo($contents, $inputs);
 
-            if ($count === 1 && $updated !== null) {
+            if ($updated !== null) {
                 $filesystem->put($configPath, $updated);
                 $this->components->task("Added Alfakit entries to {$candidate}");
             } else {
@@ -248,6 +242,31 @@ class InstallCommand extends Command
         }
 
         $this->components->warn('No vite.config found. Add resources/css/alfakit.css and the alfakit entry to your Vite inputs.');
+    }
+
+    /**
+     * Add the entries to laravel-vite-plugin's `input: [...]`, one per line like the starter
+     * kits' formatter (80 columns) writes a list that long, keeping the file's quotes.
+     * Returns null when the config has no `input` array.
+     *
+     * @param  array<string>  $inputs
+     */
+    public static function addViteInputsTo(string $contents, array $inputs): ?string
+    {
+        if (preg_match('/^([ \t]*)(.*?)input:\s*\[([^\]]*)\]/m', $contents, $match, PREG_OFFSET_CAPTURE) !== 1) {
+            return null;
+        }
+
+        [$indent, $before, $existing] = [$match[1][0], $match[2][0], $match[3][0]];
+        preg_match_all('/([\'"])(.*?)\1/', $existing, $strings, PREG_SET_ORDER);
+
+        $quote = $strings[0][1] ?? "'";
+        $items = [...array_map(static fn (array $string): string => $string[0], $strings), ...array_map(static fn (string $input): string => $quote.$input.$quote, $inputs)];
+        // Items one level deeper than the line holding `input:`, the closing bracket on its level.
+        $itemIndent = $indent.'    ';
+        $list = "input: [\n".implode('', array_map(static fn (string $item): string => $itemIndent.$item.",\n", $items)).$indent.']';
+
+        return substr($contents, 0, $match[0][1]).$indent.$before.$list.substr($contents, $match[0][1] + strlen($match[0][0]));
     }
 
     /**

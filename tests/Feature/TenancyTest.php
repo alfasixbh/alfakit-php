@@ -177,3 +177,35 @@ it('refuses a token replayed under another tenant the user belongs to', function
 
     expect(Project::query()->where('name', 'Replayed')->exists())->toBeFalse();
 });
+
+it('validates unique() on the tenant registration form against the tenant table', function (): void {
+    [$user] = tenantUser();
+
+    $props = inertiaProps(inertiaGet($this->actingAs($user), '/app/new'));
+    $token = $props['page']['token'];
+
+    // The documented `TextInput::make('slug')->unique()` checks the teams table (it used the field name as table).
+    inertiaPost($this, '/app/_alfakit/actions', ['token' => $token, 'action' => 'register', 'data' => ['name' => 'Again', 'slug' => 'alpha']])
+        ->assertInvalid(['slug']);
+
+    inertiaPost($this, '/app/_alfakit/actions', ['token' => $token, 'action' => 'register', 'data' => ['name' => 'Gamma', 'slug' => 'gamma']])
+        ->assertRedirect('http://localhost/app/gamma');
+});
+
+it('never discovers tenant registration and profile pages as ordinary pages', function (): void {
+    $panel = AlfaSix\Alfakit\Panel::make()->id('discovery')->path('discovery')
+        ->discoverPages(in: dirname(__DIR__).'/Fixtures/Tenancy', for: 'AlfaSix\\Alfakit\\Tests\\Fixtures\\Tenancy');
+
+    expect($panel->getPages())->not->toContain(AlfaSix\Alfakit\Tests\Fixtures\Tenancy\RegisterTeam::class);
+});
+
+it('labels the tenant menu links with the registration and profile pages\' own labels', function (): void {
+    [$user] = tenantUser();
+
+    $tenancy = inertiaProps(inertiaGet($this->actingAs($user), '/app/alpha/projects'))['alfakit']['tenancy'];
+
+    // `RegisterTeam::getLabel()`; without a profile page there is no profile link or label.
+    expect($tenancy['registrationUrl'])->toBe('http://localhost/app/new')
+        ->and($tenancy['registrationLabel'])->toBe('Create team')
+        ->and($tenancy['profileLabel'] ?? null)->toBeNull();
+});

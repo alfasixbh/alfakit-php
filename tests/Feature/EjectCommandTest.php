@@ -139,9 +139,32 @@ it('ejects a component, rewrites imports and registers it in the app and SSR ent
 
         expect($contents)
             ->toContain("import { TextInputField } from './components/text-input';")
-            ->toContain("'TextInput': TextInputField,")
-            ->and(substr_count($contents, "'TextInput'"))->toBe(1);
+            ->toContain('TextInput: TextInputField,')
+            ->not->toContain("'TextInput'")
+            ->and(substr_count($contents, 'TextInput:'))->toBe(1);
     }
+});
+
+it('formats the ejected files and the edited entries with the app formatter', function (): void {
+    Illuminate\Support\Facades\Process::fake();
+    fakeReactPackage($this->sandbox);
+    $this->files->put(resource_path('js/alfakit/app.tsx'), ejectEntry());
+    $this->files->ensureDirectoryExists(base_path('node_modules/.bin'));
+    $this->files->put(base_path('node_modules/.bin/prettier'), '');
+    $this->files->put(base_path('.prettierrc'), '{ "semi": true, "tabWidth": 4 }');
+
+    $this->artisan('alfakit:eject', ['component' => 'TextInput'])->assertSuccessful();
+
+    Illuminate\Support\Facades\Process::assertRanTimes(function (Illuminate\Process\PendingProcess $process): bool {
+        $command = (array) $process->command;
+
+        return array_slice($command, 0, 2) === [base_path('node_modules/.bin/prettier'), '--write']
+            && in_array(resource_path('js/alfakit/components/text-input.tsx'), $command, true)
+            && in_array(resource_path('js/alfakit/components/_alfakit/lib/mask.ts'), $command, true)
+            && in_array(resource_path('js/alfakit/app.tsx'), $command, true)
+            // CSS helpers are not formatted.
+            && ! in_array(resource_path('js/alfakit/components/_alfakit/components/fields/text-input.css'), $command, true);
+    }, 1);
 });
 
 it('names the direct dependencies of the copy that package.json does not list', function (): void {
@@ -172,7 +195,7 @@ it('is idempotent and only overwrites with --force', function (): void {
     $this->artisan('alfakit:eject', ['component' => 'TextInput'])->assertSuccessful();
 
     expect(file_get_contents(resource_path('js/alfakit/components/text-input.tsx')))->toContain('// my change')
-        ->and(substr_count(file_get_contents(resource_path('js/alfakit/app.tsx')), "'TextInput'"))->toBe(1)
+        ->and(substr_count(file_get_contents(resource_path('js/alfakit/app.tsx')), 'TextInput:'))->toBe(1)
         ->and(substr_count(file_get_contents(resource_path('js/alfakit/app.tsx')), 'import { TextInputField }'))->toBe(1);
 
     $this->artisan('alfakit:eject', ['component' => 'TextInput', '--force' => true])->assertSuccessful();

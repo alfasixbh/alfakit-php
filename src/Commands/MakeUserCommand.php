@@ -6,6 +6,7 @@ namespace AlfaSix\Alfakit\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 use Symfony\Component\Console\Attribute\AsCommand;
 
 use function Laravel\Prompts\password;
@@ -37,6 +38,12 @@ class MakeUserCommand extends Command
             'email' => $email,
             'password' => Hash::make($passwordValue),
         ]);
+
+        // Created from the console: the address is trusted, so a panel with
+        // `->emailVerification()` doesn't send this user to the verification prompt.
+        if (Schema::connection($user->getConnectionName())->hasColumn($user->getTable(), 'email_verified_at') && $user->getAttribute('email_verified_at') === null) {
+            $user->forceFill(['email_verified_at' => now()])->save();
+        }
 
         $this->components->info("User {$user->getAttribute('email')} created. Sign in at ".($panel->getLoginUrl() ?? url($panel->getPath())));
 

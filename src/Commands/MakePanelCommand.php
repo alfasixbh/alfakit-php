@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AlfaSix\Alfakit\Commands;
 
 use AlfaSix\Alfakit\Commands\Concerns\CanGenerateFiles;
+use AlfaSix\Alfakit\Commands\Support\PanelProviderEditor;
 use Illuminate\Console\Command;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Str;
@@ -30,8 +31,11 @@ class MakePanelCommand extends Command
             'class' => $class,
             'id' => $id,
             'path' => $path,
-            'namespaceSuffix' => $this->panelNamespaceSuffix($id),
+            // The stub writes namespaces with escaped separators, like 'App\\Alfakit'.
+            'namespaceSuffix' => str_replace('\\', '\\\\', $this->panelNamespaceSuffix($id)),
             'directorySuffix' => $this->panelNamespaceSuffix($id) === '' ? '' : '/'.Str::studly($id),
+            // Only the first panel is the default one.
+            'default' => $this->hasOtherDefaultPanel($id) ? '' : "\n            ->default()",
         ], (bool) $this->option('force'));
 
         if ($written) {
@@ -39,6 +43,17 @@ class MakePanelCommand extends Command
         }
 
         return self::SUCCESS;
+    }
+
+    protected function hasOtherDefaultPanel(string $id): bool
+    {
+        foreach (alfakit()->getPanels() as $panel) {
+            if ($panel->getId() !== $id && $panel->isDefault()) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     protected function registerProvider(Filesystem $filesystem, string $provider): void
@@ -57,7 +72,7 @@ class MakePanelCommand extends Command
             return;
         }
 
-        $updated = preg_replace('/\];\s*$/', "    {$provider}::class,\n];\n", $contents, 1);
+        $updated = PanelProviderEditor::addBootstrapProvider($contents, $provider);
 
         if ($updated !== null) {
             $filesystem->put($providersPath, $updated);

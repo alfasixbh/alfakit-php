@@ -80,7 +80,7 @@ class UserResource extends Resource
                             ->rule(Password::default())
                             ->dehydrated(fn (?string $state): bool => filled($state))
                             ->dehydrateStateUsing(fn (string $state): string => Hash::make($state))
-                            ->helperText(fn (string $operation): ?string => $operation === 'edit' ? __('alfakit::users.fields.password_help') : null),
+                            ->helperText(fn (string $operation) => $operation === 'edit' ? __('alfakit::users.fields.password_help') : null),
 {{ rolesFormField }}                        Toggle::make('password_change_required')
                             ->label(__('alfakit::users.fields.password_change_required'))
                             ->helperText(__('alfakit::users.fields.password_change_required_help')),

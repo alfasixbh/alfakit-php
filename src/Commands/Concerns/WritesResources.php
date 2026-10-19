@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace AlfaSix\Alfakit\Commands\Concerns;
 
+use AlfaSix\Alfakit\Commands\Support\ModelInspector;
+use AlfaSix\Alfakit\Resources\Resource;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
+use Throwable;
 
 /**
  * Writes a resource class and its pages from the generator stubs, for
@@ -69,6 +73,7 @@ trait WritesResources
             'viewPage' => $view ? "\n            'view' => Pages\\View{$model}::route('/{record}')," : '',
             'infolist' => $options['infolist'] ?? '',
             'relations' => $options['relations'] ?? '            //',
+            'recordTitleAttribute' => ($title = $this->recordTitleAttributeFor($modelClass)) === null ? '' : "\n\n    protected static ?string \$recordTitleAttribute = '{$title}';",
         ], $force);
 
         $pagesNamespace = "{$namespace}\\{$resource}\\Pages";
@@ -95,6 +100,40 @@ trait WritesResources
     }
 
     /**
+     * The class of `--nested=PostResource` (or a fully qualified class) in the namespace of
+     * the panel's resources.
+     */
+    protected function parentResourceClass(string $parent, string $namespace): string
+    {
+        $parent = Str::endsWith($parent, 'Resource') ? $parent : "{$parent}Resource";
+
+        return Str::contains($parent, '\\') ? ltrim($parent, '\\') : "{$namespace}\\{$parent}";
+    }
+
+    /**
+     * Leave out the foreign key to the parent of a nested resource (`--nested=PostResource`):
+     * its pages create records under the parent record in the URL.
+     *
+     * @template TColumn of array{name: string, related: ?string}
+     *
+     * @param  list<TColumn>  $columns
+     * @return list<TColumn>
+     */
+    protected function withoutParentColumn(array $columns, string $parent, ?string $panelId): array
+    {
+        $namespace = $this->getGenerationNamespace().$this->panelNamespaceSuffix($panelId).'\\Resources';
+        $class = $this->parentResourceClass($parent, $namespace);
+
+        if (! class_exists($class) || ! is_subclass_of($class, Resource::class)) {
+            return $columns;
+        }
+
+        $parentModel = ltrim($class::getModel(), '\\');
+
+        return array_values(array_filter($columns, static fn (array $column): bool => $column['related'] === null || ltrim($column['related'], '\\') !== $parentModel));
+    }
+
+    /**
      * Point a generated resource at its parent resource (`--nested=PostResource`).
      */
     protected function nestResource(string $path, string $parent, string $namespace): void
@@ -103,8 +142,7 @@ trait WritesResources
             return;
         }
 
-        $parent = Str::endsWith($parent, 'Resource') ? $parent : "{$parent}Resource";
-        $class = Str::contains($parent, '\\') ? ltrim($parent, '\\') : "{$namespace}\\{$parent}";
+        $class = $this->parentResourceClass($parent, $namespace);
         $short = class_basename($class);
         $contents = (string) file_get_contents($path);
 
@@ -122,5 +160,83 @@ trait WritesResources
         file_put_contents($path, $contents);
 
         $this->components->info("Nested under {$short}: its pages live at /{parent}/{record}/... Link to them from a relation manager with `protected static ?string \$relatedResource`.");
+    }
+
+    /**
+     * Leave out the owner column of a panel that scopes records to the signed-in user
+     * (`scopeToUser('customer_id')` or a `customer` relationship): the owner is filled in
+     * on save, and a select of every user would show customers each other's names.
+     *
+     * @template TColumn of array{name: string, relationship: ?string}
+     *
+     * @param  list<TColumn>  $columns
+     * @return list<TColumn>
+     */
+    protected function withoutUserOwnerColumn(array $columns, ?string $panelId): array
+    {
+        $panels = alfakit()->getPanels();
+        $panel = $panelId !== null ? ($panels[$panelId] ?? null) : alfakit()->getDefaultPanel();
+        $ownership = $panel?->getUserOwnership();
+
+        if ($ownership === null) {
+            return $columns;
+        }
+
+        $kept = array_values(array_filter($columns, static fn (array $column): bool => $column['name'] !== $ownership && $column['relationship'] !== $ownership));
+
+        if (count($kept) !== count($columns)) {
+            $this->components->info("Left out the owner column `{$ownership}`: the panel scopes records to the signed-in user and fills it in.");
+        }
+
+        return $kept;
+    }
+
+    /**
+     * Leave out the tenant ownership column of a tenancy panel (`team_id` of
+     * `->tenant(Team::class, ownershipRelationship: 'team')`): new records are associated
+     * with the current tenant, so a select of the one current tenant is noise.
+     *
+     * @template TColumn of array{name: string, relationship: ?string}
+     *
+     * @param  list<TColumn>  $columns
+     * @return list<TColumn>
+     */
+    protected function withoutTenantOwnerColumn(array $columns, ?string $panelId): array
+    {
+        $panels = alfakit()->getPanels();
+        $panel = $panelId !== null ? ($panels[$panelId] ?? null) : alfakit()->getDefaultPanel();
+
+        if ($panel === null || ! $panel->hasTenancy()) {
+            return $columns;
+        }
+
+        $relationship = $panel->getTenantOwnershipRelationshipName();
+        $kept = array_values(array_filter($columns, static fn (array $column): bool => $column['relationship'] !== $relationship && $column['name'] !== Str::snake($relationship).'_id'));
+
+        if (count($kept) !== count($columns)) {
+            $this->components->info("Left out the tenant column of `{$relationship}()`: new records belong to the current tenant.");
+        }
+
+        return $kept;
+    }
+
+    /**
+     * The column that names a record (`name`, `title`, `email`…), so page titles, breadcrumbs
+     * and modal headings read "Edit Product 1" rather than "Edit 1"; null without one.
+     */
+    protected function recordTitleAttributeFor(string $modelClass): ?string
+    {
+        if (! class_exists($modelClass) || ! is_subclass_of($modelClass, Model::class)) {
+            return null;
+        }
+
+        try {
+            $model = new $modelClass;
+            $attribute = ModelInspector::titleAttribute($model);
+        } catch (Throwable) {
+            return null;
+        }
+
+        return $attribute === $model->getKeyName() ? null : $attribute;
     }
 }

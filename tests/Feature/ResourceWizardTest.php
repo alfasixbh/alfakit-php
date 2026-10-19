@@ -184,3 +184,67 @@ it('tidies imports', function (): void {
 
     expect(GeneratedCode::tidyImports($code))->toBe("<?php\n\nnamespace App;\n\nuse A\\Used;\n\nclass X extends Used\n{\n}\n");
 });
+
+it('reads literal column defaults and skips expressions', function (mixed $raw, string $kind, mixed $expected): void {
+    expect(ModelInspector::defaultValue($raw, $kind))->toBe($expected);
+})->with([
+    ["'draft'", 'string', 'draft'],
+    ["'draft'::character varying", 'string', 'draft'],
+    ['draft', 'string', 'draft'],
+    ["'it''s'", 'string', "it's"],
+    ["''", 'string', null],
+    ['NULL', 'string', null],
+    ['CURRENT_TIMESTAMP', 'datetime', null],
+    ['now()', 'string', null],
+    ["nextval('gadgets_id_seq'::regclass)", 'integer', null],
+    ["'1'", 'boolean', true],
+    ['true', 'boolean', true],
+    ['0', 'boolean', false],
+    ['(5)', 'integer', 5],
+    ["'12.50'", 'decimal', 12.5],
+    ["'pending'", 'enum', 'pending'],
+    ["'{}'", 'json', null],
+]);
+
+it('gives generated fields the literal database defaults of their columns', function (): void {
+    Illuminate\Support\Facades\Schema::create('wizard_defaults_gadgets', function (Illuminate\Database\Schema\Blueprint $table): void {
+        $table->id();
+        $table->string('name');
+        $table->string('status')->default('draft');
+        $table->string('quote')->default("it's");
+        $table->boolean('is_active')->default(true);
+        $table->boolean('is_featured')->default(false);
+        $table->unsignedInteger('stock')->default(10);
+        $table->decimal('price', 8, 2)->default(9.99);
+        $table->timestamp('checked_at')->useCurrent();
+        $table->json('options')->nullable();
+        $table->timestamps();
+    });
+
+    $columns = array_column(ModelInspector::inspect(AlfaSix\Alfakit\Tests\Fixtures\Models\DefaultsGadget::class)['columns'], 'default', 'name');
+
+    expect($columns)->toMatchArray([
+        'name' => null,
+        'status' => 'draft',
+        'is_active' => true,
+        'is_featured' => false,
+        'stock' => 10,
+        'price' => 9.99,
+        'checked_at' => null,
+    ]);
+
+    $this->artisan('alfakit:generate', ['model' => AlfaSix\Alfakit\Tests\Fixtures\Models\DefaultsGadget::class, '--no-interaction' => true])->assertSuccessful();
+
+    $code = wizardFile($this->sandbox, 'Resources/DefaultsGadgetResource.php');
+
+    expect($code)
+        ->toContain("Toggle::make('is_active')\n                    ->default(true),")
+        ->toContain("Toggle::make('is_featured'),")
+        ->toContain("TextInput::make('status')\n                    ->maxLength(255)\n                    ->required()\n                    ->default('draft'),")
+        ->toContain("->default('it\\'s'),")
+        ->toContain("->integer()\n                    ->required()\n                    ->default(10),")
+        ->toContain("->numeric()\n                    ->required()\n                    ->default(9.99),")
+        ->not->toContain("TextInput::make('name')\n                    ->maxLength(255)\n                    ->required()\n                    ->default(");
+
+    expect(fn () => token_get_all($code, TOKEN_PARSE))->not->toThrow(ParseError::class);
+});

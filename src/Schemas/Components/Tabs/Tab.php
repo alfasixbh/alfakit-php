@@ -6,9 +6,11 @@ namespace AlfaSix\Alfakit\Schemas\Components\Tabs;
 
 use AlfaSix\Alfakit\Schemas\Components\Concerns\HasIcon;
 use AlfaSix\Alfakit\Schemas\Components\Group;
+use AlfaSix\Alfakit\Schemas\Components\Tabs;
 use AlfaSix\Alfakit\Schemas\Components\Tabs\Concerns\CanModifyQuery;
 use AlfaSix\Alfakit\Schemas\DeferredLoading;
 use Closure;
+use Illuminate\Support\Str;
 
 class Tab extends Group
 {
@@ -89,7 +91,7 @@ class Tab extends Group
 
         $parent = $this->hasContainer() ? $this->getContainer()->getParentComponent() : null;
 
-        return $parent instanceof \AlfaSix\Alfakit\Schemas\Components\Tabs && $parent->isLoadingDeferred();
+        return $parent instanceof Tabs && $parent->isLoadingDeferred();
     }
 
     protected function getDefaultLabel(): ?string
@@ -97,9 +99,65 @@ class Tab extends Group
         return null;
     }
 
+    /**
+     * The tab's value in the query string (`Tabs::persistTabInQueryString()`): its `id()`,
+     * its explicit `key()`, else the slug of its label ("Billing address" →
+     * `billing-address`). A slug an earlier sibling already uses gets `-2`, `-3`…
+     */
+    public function getQueryStringValue(): string
+    {
+        if (! $this->hasContainer()) {
+            return $this->getOwnQueryStringValue();
+        }
+
+        $taken = [];
+
+        foreach ($this->getContainer()->getComponents(withHidden: true) as $sibling) {
+            if (! $sibling instanceof self) {
+                continue;
+            }
+
+            $value = $sibling->getOwnQueryStringValue();
+            $unique = $value;
+
+            for ($suffix = 2; in_array($unique, $taken, true); $suffix++) {
+                $unique = "{$value}-{$suffix}";
+            }
+
+            if ($sibling === $this) {
+                return $unique;
+            }
+
+            $taken[] = $unique;
+        }
+
+        return $this->getOwnQueryStringValue();
+    }
+
+    protected function getOwnQueryStringValue(): string
+    {
+        $explicit = $this->getId() ?? $this->evaluate($this->key);
+
+        if (filled($explicit)) {
+            return (string) $explicit;
+        }
+
+        $slug = Str::slug(\AlfaSix\Alfakit\Support\Html::toText($this->getLabel()));
+
+        return $slug !== '' ? $slug : Str::afterLast($this->getKey(), '.');
+    }
+
+    protected function isInQueryStringTabs(): bool
+    {
+        $parent = $this->hasContainer() ? $this->getContainer()->getParentComponent() : null;
+
+        return $parent instanceof Tabs && $parent->isTabPersistedInQueryString();
+    }
+
     protected function getSchemaProps(): array
     {
         return [
+            'queryValue' => $this->isInQueryStringTabs() ? $this->getQueryStringValue() : null,
             'icon' => $this->getIcon(),
             'iconPosition' => $this->getIcon() ? $this->getIconPosition()->value : null,
             ...$this->isBadgeDeferred() && DeferredLoading::rendersPlaceholders()

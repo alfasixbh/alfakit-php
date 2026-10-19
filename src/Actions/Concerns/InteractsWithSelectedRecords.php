@@ -186,7 +186,7 @@ trait InteractsWithSelectedRecords
         $resource = $context instanceof HasResource ? $context->getResourceClass() : null;
 
         if ($resource !== null) {
-            return $resource::can($ability, $record);
+            return $resource::authorizes($ability, $record);
         }
 
         // Without a resource (custom tables) the model's policy applies, when it has the ability.

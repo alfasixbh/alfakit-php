@@ -5,11 +5,13 @@ declare(strict_types=1);
 use AlfaSix\Alfakit\Forms\Components\Builder;
 use AlfaSix\Alfakit\Forms\Components\Builder\Block;
 use AlfaSix\Alfakit\Forms\Components\CheckboxList;
+use AlfaSix\Alfakit\Forms\Components\DatePicker;
 use AlfaSix\Alfakit\Forms\Components\FileUpload;
 use AlfaSix\Alfakit\Forms\Components\Repeater;
 use AlfaSix\Alfakit\Forms\Components\RichEditor;
 use AlfaSix\Alfakit\Forms\Components\RichEditor\FileAttachmentUrls;
 use AlfaSix\Alfakit\Forms\Components\TextInput;
+use AlfaSix\Alfakit\Forms\Components\TimePicker;
 use AlfaSix\Alfakit\Forms\Components\Toggle;
 use AlfaSix\Alfakit\Schemas\Schema;
 use AlfaSix\Alfakit\Tests\Fixtures\Models\Post;
@@ -37,6 +39,17 @@ function formErrors(Schema $schema): array
 
     return [];
 }
+
+// ---------------------------------------------------------------- date and time pickers
+
+it('accepts a time of day in a TimePicker and still validates dates', function (): void {
+    $time = schema([TimePicker::make('opens_at')])->fill()->applyClientState(['opens_at' => '14:45:00']);
+    $date = fn (string $value): Schema => schema([DatePicker::make('starts_on')])->fill()->applyClientState(['starts_on' => $value]);
+
+    expect(formErrors($time))->toBe([])
+        ->and(formErrors($date('2026-10-22')))->toBe([])
+        ->and(formErrors($date('not a date')))->toHaveKey('starts_on');
+});
 
 // ---------------------------------------------------------------- unique()
 

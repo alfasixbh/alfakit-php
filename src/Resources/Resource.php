@@ -31,6 +31,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
+use ReflectionMethod;
 use ReflectionProperty;
 use UnitEnum;
 use WeakMap;
@@ -318,6 +319,17 @@ abstract class Resource
         return static::$recordTitleAttribute;
     }
 
+    /**
+     * Whether records have a title of their own (a `$recordTitleAttribute` or an overridden
+     * `getRecordTitle()`), rather than the model label every record shares. Lists that must
+     * tell records apart (trees, kanban cards, search results) use it.
+     */
+    public static function hasRecordTitle(): bool
+    {
+        return static::getRecordTitleAttribute() !== null
+            || (new ReflectionMethod(static::class, 'getRecordTitle'))->getDeclaringClass()->getName() !== self::class;
+    }
+
     public static function getRecordTitle(?Model $record): ?string
     {
         if ($record === null) {
@@ -325,12 +337,11 @@ abstract class Resource
         }
 
         $attribute = static::getRecordTitleAttribute();
+        $title = $attribute !== null ? data_get($record, $attribute) : null;
 
-        if ($attribute !== null) {
-            return (string) data_get($record, $attribute);
-        }
-
-        return (string) $record->getKey();
+        // Without a title attribute (or value), the record is named by the model label, as in
+        // Filament: "Edit Post", "Delete Post", never by its key.
+        return filled($title) && is_scalar($title) ? (string) $title : Str::ucfirst(static::getModelLabel());
     }
 
     public static function getRecordRouteKeyName(): ?string
@@ -561,6 +572,34 @@ abstract class Resource
         $record->setAttribute($ownership, $key);
     }
 
+    /**
+     * The attributes that hold a record's owner when the resource is scoped to the user
+     * (`scopeToUser()`): the column, or a `BelongsTo` relationship's foreign key (and morph
+     * type). Restoring a version or saving a form never changes them in a scoped panel.
+     *
+     * @return list<string>
+     */
+    public static function getUserOwnerAttributes(Model $record): array
+    {
+        $ownership = static::getUserOwnership();
+
+        if ($ownership === null) {
+            return [];
+        }
+
+        if (method_exists($record, $ownership)) {
+            $relationship = $record->{$ownership}();
+
+            if ($relationship instanceof \Illuminate\Database\Eloquent\Relations\MorphTo) {
+                return [$relationship->getForeignKeyName(), $relationship->getMorphType()];
+            }
+
+            return $relationship instanceof \Illuminate\Database\Eloquent\Relations\BelongsTo ? [$relationship->getForeignKeyName()] : [];
+        }
+
+        return [$ownership];
+    }
+
     // ---------------------------------------------------------------- Authorisation
 
     public static function can(string $action, ?Model $record = null): bool
@@ -600,6 +639,24 @@ abstract class Resource
     public static function shouldCheckPolicyExistence(): bool
     {
         return static::$shouldCheckPolicyExistence;
+    }
+
+    /**
+     * The check prebuilt actions, tables and undo run for an ability: the matching
+     * `can*()` method (so overriding `canCreate()`, `canEdit()`, `canView()`, `canDelete()`
+     * or `canDeleteAny()` covers them too, as in Filament), else `can()`.
+     */
+    public static function authorizes(string $ability, ?Model $record = null): bool
+    {
+        return match (true) {
+            $ability === 'viewAny' => static::canViewAny(),
+            $ability === 'create' => static::canCreate(),
+            $ability === 'deleteAny' => static::canDeleteAny(),
+            $ability === 'update' && $record !== null => static::canEdit($record),
+            $ability === 'view' && $record !== null => static::canView($record),
+            $ability === 'delete' && $record !== null => static::canDelete($record),
+            default => static::can($ability, $record),
+        };
     }
 
     public static function canViewAny(): bool
@@ -643,7 +700,11 @@ abstract class Resource
     {
         $parent = static::getParentResource();
 
-        return $parent === null ? 'resources.'.static::getSlug() : $parent::getRouteBaseName().'.'.static::getSlug();
+        // A nested slug (`cms/pages`) becomes dotted segments: route names with "/" break
+        // tools that turn them into code, such as the starter kits' Wayfinder.
+        $slug = str_replace('/', '.', trim(static::getSlug(), '/'));
+
+        return $parent === null ? 'resources.'.$slug : $parent::getRouteBaseName().'.'.$slug;
     }
 
     public static function registerRoutes(Panel $panel): void

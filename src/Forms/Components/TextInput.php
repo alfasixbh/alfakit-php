@@ -380,12 +380,32 @@ class TextInput extends Field
 
     protected function shouldMutateStateForValidation(): bool
     {
-        return parent::shouldMutateStateForValidation() || $this->isTrimmed() || $this->getStripCharacters() !== [];
+        return parent::shouldMutateStateForValidation() || $this->isTrimmed() || $this->getStripCharacters() !== [] || $this->holdsNumberAsText();
     }
 
     protected function mutateStateForValidation(mixed $state): mixed
     {
+        // A text input validates its value as a string: a number from the record (an
+        // integer column) or from `$set()` is the text the input shows.
+        if ($this->holdsNumberAsText() && (is_int($state) || is_float($state))) {
+            $state = (string) $state;
+        }
+
         return $this->cleanState($state);
+    }
+
+    /**
+     * Whether the input is a text input (not `numeric()`/`integer()`) whose state is a number.
+     */
+    protected function holdsNumberAsText(): bool
+    {
+        if ($this->evaluate($this->isInteger) || $this->evaluate($this->isNumeric)) {
+            return false;
+        }
+
+        $state = $this->getState();
+
+        return is_int($state) || is_float($state);
     }
 
     protected function mutateDehydratedState(mixed $state): mixed

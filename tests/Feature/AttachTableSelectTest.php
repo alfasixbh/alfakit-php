@@ -88,6 +88,13 @@ it('keeps the searchable select without tableSelect()', function (): void {
     expect(attachTableSelectAction($course, AttachAction::make())->getRecordSelect())->not->toBeInstanceOf(ModalTableSelect::class);
 });
 
+it('labels the record select with the capitalised model label', function (): void {
+    $course = Course::query()->create(['name' => 'Maths']);
+
+    expect(attachTableSelectAction($course, AttachAction::make())->getRecordSelect()->getLabel())->toBe('Student')
+        ->and(attachTableSelectAction($course, AttachAction::make()->tableSelect(AttachTableSelectStudentsTable::class))->getRecordSelect()->getLabel())->toBe('Student');
+});
+
 it('customises the select button and modal with selectAction()', function (): void {
     $field = ModalTableSelect::make('project_id')
         ->label('Project')

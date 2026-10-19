@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace AlfaSix\Alfakit\Commands\Support;
 
 use AlfaSix\Alfakit\Commands\MakeThemeCommand;
+use Composer\Autoload\ClassLoader;
 use Composer\InstalledVersions;
 use Illuminate\Contracts\Process\ProcessResult;
 use Illuminate\Support\Facades\Process;
+use Illuminate\Support\ServiceProvider;
 
 /**
  * What the setup commands need to know about, and do to, the application: installed
@@ -110,10 +112,52 @@ final class AppEnvironment
      */
     public static function composerRequire(array $packages, bool $dev = false, ?callable $output = null): ProcessResult
     {
-        return Process::path(base_path())->timeout(900)->run(
+        $result = Process::path(base_path())->timeout(900)->run(
             ['composer', 'require', ...$packages, ...($dev ? ['--dev'] : []), '--no-interaction'],
             $output === null ? null : static fn (string $type, string $buffer) => $output($buffer),
         );
+
+        if ($result->successful()) {
+            self::refreshAutoloader();
+        }
+
+        return $result;
+    }
+
+    /**
+     * Teach the running process's Composer autoloader the classes of packages that a
+     * `composer require` subprocess just installed, so later steps of the same command
+     * (which may load a model that now uses one of their traits) can autoload them.
+     */
+    public static function refreshAutoloader(?string $vendorDir = null): void
+    {
+        $vendorDir = rtrim($vendorDir ?? base_path('vendor'), '/');
+        $composer = $vendorDir.'/composer';
+
+        if (! class_exists(ClassLoader::class) || ! is_dir($composer)) {
+            return;
+        }
+
+        $loader = ClassLoader::getRegisteredLoaders()[$vendorDir] ?? null;
+
+        if ($loader === null) {
+            return;
+        }
+
+        foreach (is_file($composer.'/autoload_namespaces.php') ? (array) require $composer.'/autoload_namespaces.php' : [] as $prefix => $paths) {
+            $loader->set((string) $prefix, $paths);
+        }
+
+        foreach (is_file($composer.'/autoload_psr4.php') ? (array) require $composer.'/autoload_psr4.php' : [] as $prefix => $paths) {
+            $loader->setPsr4((string) $prefix, $paths);
+        }
+
+        if (is_file($composer.'/autoload_classmap.php')) {
+            $loader->addClassMap((array) require $composer.'/autoload_classmap.php');
+        }
+
+        // The loader remembers classes it failed to find; forget them so they are looked up again.
+        (fn () => $this->missingClasses = [])->call($loader);
     }
 
     /**
@@ -163,6 +207,63 @@ final class AppEnvironment
             [PHP_BINARY, 'artisan', ...$arguments],
             $output === null ? null : static fn (string $type, string $buffer) => $output($buffer),
         );
+    }
+
+    /**
+     * Whether `vendor:publish --tag=…` (with an optional `--provider=…`) only publishes
+     * migrations that the app already has under any timestamp, so running it again would
+     * add a second copy (`publishesMigrations()` stamps a new date every time). False when
+     * the tag publishes anything else or isn't known to this process (a package installed
+     * a moment ago by a subprocess).
+     *
+     * @param  array<int, string>  $command
+     */
+    public static function migrationsAlreadyPublished(array $command): bool
+    {
+        if (($command[0] ?? null) !== 'vendor:publish') {
+            return false;
+        }
+
+        $option = static function (string $name) use ($command): ?string {
+            foreach ($command as $argument) {
+                if (str_starts_with($argument, "--{$name}=")) {
+                    return substr($argument, strlen($name) + 3);
+                }
+            }
+
+            return null;
+        };
+
+        $tag = $option('tag');
+
+        if ($tag === null) {
+            return false;
+        }
+
+        $paths = ServiceProvider::pathsToPublish($option('provider'), $tag);
+        $migrations = rtrim(database_path('migrations'), '/');
+        $names = [];
+
+        foreach ($paths as $from => $to) {
+            if (rtrim((string) $to, '/') !== $migrations || ! is_dir($from)) {
+                return false;
+            }
+
+            foreach (glob(rtrim($from, '/').'/*.php') ?: [] as $file) {
+                $names[] = (string) preg_replace('/^\d{4}_\d{2}_\d{2}_\d{6}_/', '', basename($file));
+            }
+        }
+
+        if ($names === []) {
+            return false;
+        }
+
+        $existing = array_map(
+            static fn (string $file): string => (string) preg_replace('/^\d{4}_\d{2}_\d{2}_\d{6}_/', '', basename($file)),
+            glob($migrations.'/*.php') ?: [],
+        );
+
+        return array_diff($names, $existing) === [];
     }
 
     /**

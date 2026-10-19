@@ -278,11 +278,13 @@ abstract class Page
     }
 
     /**
-     * The route name relative to the panel prefix.
+     * The route name relative to the panel prefix. A nested slug (`settings/profile`) becomes
+     * dotted segments (`pages.settings.profile`): route names with "/" break tools that turn
+     * them into code, such as the starter kits' Wayfinder.
      */
     public static function getRelativeRouteName(): string
     {
-        return 'pages.'.static::getSlug();
+        return 'pages.'.str_replace('/', '.', trim(static::getSlug(), '/'));
     }
 
     public static function registerRoutes(Panel $panel): void
@@ -440,6 +442,18 @@ abstract class Page
     public static function requiresAuthentication(): bool
     {
         return true;
+    }
+
+    /**
+     * The panel's auth middleware the page's route runs; the internal endpoints run the same
+     * for the page's context token. Pages registered with less (the email verification
+     * prompt) return less, so their own actions are not turned away.
+     *
+     * @return array<int, mixed>
+     */
+    public static function getPanelAuthMiddleware(Panel $panel): array
+    {
+        return $panel->getAuthMiddleware();
     }
 
     /**

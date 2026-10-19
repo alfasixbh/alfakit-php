@@ -49,7 +49,16 @@ class EditAction extends Action
                     // In a BelongsToMany relation manager, `withPivot()` fields go to the pivot row.
                     [$attributes, $pivot] = $action->splitPivotData($data);
 
-                    $record->fill($attributes)->save();
+                    $record->fill($attributes);
+
+                    // `scopeToUser()` resources: the record stays the signed-in user's.
+                    $resource = $action->getResource();
+
+                    if ($resource !== null && is_a($record, $resource::getModel())) {
+                        $resource::associateRecordWithUser($record);
+                    }
+
+                    $record->save();
 
                     if ($pivot !== []) {
                         $action->getPivotRelationship()?->updateExistingPivot($record->getKey(), $pivot);

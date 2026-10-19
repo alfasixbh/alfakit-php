@@ -133,6 +133,22 @@ it('generates a custom entry for the adapter in package.json, or only the PHP cl
         ->and(file_exists(resource_path('js/alfakit/entries/PlainEntry.svelte')))->toBeFalse();
 });
 
+it('formats the generated component and the edited entry with the app formatter', function (): void {
+    Illuminate\Support\Facades\Process::fake();
+    writeSandbox('resources/js/alfakit/app.tsx', reactEntry());
+    writeSandbox('node_modules/.bin/vp', '');
+    writeSandbox('vite.config.ts', "export default defineConfig({ fmt: { tabWidth: 4, semi: true } })\n");
+
+    $this->artisan('make:alfakit-field', ['name' => 'RatingInput', '--adapter' => 'react'])->assertSuccessful();
+
+    $formatted = fn (string $path) => fn (Illuminate\Process\PendingProcess $process): bool => $process->command === [base_path('node_modules/.bin/vp'), 'fmt', $path];
+
+    Illuminate\Support\Facades\Process::assertRan($formatted(resource_path('js/alfakit/fields/RatingInput.tsx')));
+    Illuminate\Support\Facades\Process::assertRan($formatted(resource_path('js/alfakit/app.tsx')));
+    // PHP classes are Pint's business.
+    Illuminate\Support\Facades\Process::assertDidntRun(fn (Illuminate\Process\PendingProcess $process): bool => str_ends_with((string) end($process->command), '.php'));
+});
+
 it('writes auto-registered components without touching an entry that discovers them', function (): void {
     $entry = file_get_contents(dirname(__DIR__, 2).'/stubs/frontend/react/app.stub');
     writeSandbox('resources/js/alfakit/app.tsx', $entry);

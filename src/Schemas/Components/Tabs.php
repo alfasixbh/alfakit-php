@@ -75,12 +75,21 @@ class Tabs extends Component
         return $this;
     }
 
+    /**
+     * Keep the active tab in the query string under `$key` (`?tab=billing-address`). The
+     * value is the tab's `id()`, its explicit `key()`, or the slug of its label.
+     */
     public function persistTabInQueryString(string|Closure|null $key = 'tab'): static
     {
         $this->shouldPersistInQueryString = $key !== null;
         $this->queryStringKey = $key ?? 'tab';
 
         return $this;
+    }
+
+    public function isTabPersistedInQueryString(): bool
+    {
+        return (bool) $this->evaluate($this->shouldPersistInQueryString);
     }
 
     /**
@@ -143,7 +152,7 @@ class Tabs extends Component
             'activeTab' => $this->evaluate($this->activeTab),
             'contained' => $this->evaluate($this->isContained) ?: null,
             'vertical' => $this->evaluate($this->isVertical) ?: null,
-            'queryStringKey' => $this->evaluate($this->shouldPersistInQueryString) ? $this->evaluate($this->queryStringKey) : null,
+            'queryStringKey' => $this->isTabPersistedInQueryString() ? $this->evaluate($this->queryStringKey) : null,
             'scrollable' => $this->evaluate($this->isScrollable) ? null : false,
             'persistTab' => $this->shouldPersistTab() ? ['key' => $this->getPersistTabKey(), 'storage' => $this->getPersistTabStorage()] : null,
         ];

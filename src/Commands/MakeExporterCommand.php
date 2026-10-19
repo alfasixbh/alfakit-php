@@ -7,6 +7,7 @@ namespace AlfaSix\Alfakit\Commands;
 use AlfaSix\Alfakit\Commands\Concerns\CanGenerateFiles;
 use AlfaSix\Alfakit\Commands\Concerns\GuessesModelColumns;
 use AlfaSix\Alfakit\Commands\Concerns\WarnsAboutDeprecatedAliases;
+use AlfaSix\Alfakit\Commands\Support\ModelInspector;
 use Illuminate\Console\Command;
 use Illuminate\Support\Str;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -83,7 +84,10 @@ class MakeExporterCommand extends Command
                 continue;
             }
 
-            $lines[] = "            ExportColumn::make('{$name}'),";
+            // Arrays as JSON, so keys survive and the importer can read them back.
+            $lines[] = static::isJsonColumn($model, $name, (string) $column['type'])
+                ? "            ExportColumn::make('{$name}')\n                ->listAsJson(),"
+                : "            ExportColumn::make('{$name}'),";
         }
 
         return $lines === [] ? null : implode("\n", $lines);
@@ -92,18 +96,10 @@ class MakeExporterCommand extends Command
     protected function guessTitleAttribute(\Illuminate\Database\Eloquent\Model $model, string $relationship): string
     {
         try {
-            $related = $model->{$relationship}()->getRelated();
-            $columns = array_column(\Illuminate\Support\Facades\Schema::connection($related->getConnectionName())->getColumns($related->getTable()), 'name');
+            // The same title column `make:alfakit-importer` resolves the relationship by.
+            return ModelInspector::titleAttribute($model->{$relationship}()->getRelated());
         } catch (Throwable) {
             return 'name';
         }
-
-        foreach (['name', 'title', 'label', 'email'] as $candidate) {
-            if (in_array($candidate, $columns, true)) {
-                return $candidate;
-            }
-        }
-
-        return $related->getKeyName();
     }
 }

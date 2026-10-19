@@ -89,6 +89,7 @@ it('runs every step from flags without interaction, then skips them on a second 
     ])
         ->expectsOutputToContain('Summary')
         ->expectsOutputToContain('Next steps')
+        ->expectsOutputToContain('Add the logo file public/images/logo.svg')
         ->assertSuccessful();
 
     $provider = file_get_contents(PanelProviderEditor::path('admin'));
@@ -115,6 +116,8 @@ it('runs every step from flags without interaction, then skips them on a second 
     // Second run: nothing is duplicated.
     $this->artisan('alfakit:setup', ['--mode' => 'panel', '--users' => true, '--plugins' => 'comments', '--brand-color' => '#ff6600', '--no-install' => true, '--no-interaction' => true])
         ->expectsOutputToContain('already set up')
+        // The users resource exists: not regenerated, no migrations to run.
+        ->doesntExpectOutputToContain('Run the migrations')
         ->assertSuccessful();
 
     $again = file_get_contents(PanelProviderEditor::path('admin'));
@@ -131,6 +134,8 @@ it('installs roles through Shield: composer, the plugin, its installer and HasRo
 
     $this->artisan('alfakit:setup', ['--mode' => 'panel', '--roles' => true, '--users' => true, '--no-interaction' => true])
         ->expectsOutputToContain('already set up')
+        // The wizard added the trait, so the next steps don't ask for it.
+        ->doesntExpectOutputToContain('Add Spatie\\Permission\\Traits\\HasRoles to your User model')
         ->assertSuccessful();
 
     Process::assertRan(fn (PendingProcess $process): bool => $process->command === ['composer', 'require', 'alfasix/alfakit-shield', '--no-interaction']);
@@ -138,7 +143,7 @@ it('installs roles through Shield: composer, the plugin, its installer and HasRo
 
     $model = file_get_contents("{$sandbox}/app/Models/User.php");
 
-    expect($model)->toContain("    use HasFactory, Notifiable;\n    use HasRoles;\n")
+    expect($model)->toContain("    use HasFactory, Notifiable, HasRoles;\n")
         ->toContain('use Spatie\\Permission\\Traits\\HasRoles;')
         ->and(file_get_contents(PanelProviderEditor::path('admin')))->toContain('ShieldPlugin::make(),')
         ->and(file_get_contents("{$sandbox}/app/Alfakit/Admin/Resources/UserResource.php"))->toContain("Select::make('roles')")
@@ -203,10 +208,16 @@ it('adds a trait after the model\'s trait statements', function (): void {
     $model = "<?php\n\nnamespace App\\Models;\n\nuse Illuminate\\Notifications\\Notifiable;\n\nclass User\n{\n    use Notifiable;\n\n    protected \$fillable = [];\n}\n";
 
     expect(SetupCommand::addTrait($model, 'Spatie\\Permission\\Traits\\HasRoles'))
-        ->toBe("<?php\n\nnamespace App\\Models;\n\nuse Illuminate\\Notifications\\Notifiable;\nuse Spatie\\Permission\\Traits\\HasRoles;\n\nclass User\n{\n    use Notifiable;\n    use HasRoles;\n\n    protected \$fillable = [];\n}\n");
+        ->toBe("<?php\n\nnamespace App\\Models;\n\nuse Illuminate\\Notifications\\Notifiable;\nuse Spatie\\Permission\\Traits\\HasRoles;\n\nclass User\n{\n    use Notifiable, HasRoles;\n\n    protected \$fillable = [];\n}\n");
 
     expect(SetupCommand::addTrait("<?php\n\nnamespace App;\n\nclass User\n{\n    protected \$fillable = [];\n}\n", 'Spatie\\Permission\\Traits\\HasRoles'))
         ->toContain("{\n    use HasRoles;\n\n    protected \$fillable = [];");
+
+    // The starter kits' User: a docblock above a comma-separated trait statement.
+    $starterKit = "<?php\n\nnamespace App\\Models;\n\nclass User\n{\n    /** @use HasFactory<UserFactory> */\n    use HasFactory, Notifiable;\n\n    /**\n     * Casts.\n     */\n    protected function casts(): array\n    {\n        return [];\n    }\n}\n";
+
+    expect(SetupCommand::addTrait($starterKit, 'Spatie\\Permission\\Traits\\HasRoles'))
+        ->toContain("    /** @use HasFactory<UserFactory> */\n    use HasFactory, Notifiable, HasRoles;\n\n    /**\n     * Casts.");
 });
 
 it('recognises CSS colours', function (string $value, bool $valid): void {
@@ -292,7 +303,7 @@ it('sets up Shield roles when a bundle includes it and merges bundles with --plu
         ->assertSuccessful();
 
     Process::assertNothingRan();
-    expect(file_get_contents("{$sandbox}/app/Models/User.php"))->toContain('use HasRoles;');
+    expect(file_get_contents("{$sandbox}/app/Models/User.php"))->toContain('Notifiable, HasRoles;');
 });
 
 it('installs every bundle and every plugin with all', function (): void {
@@ -329,4 +340,22 @@ it('defines bundles of known plugins', function (): void {
             expect(PluginCatalog::has($slug))->toBeTrue("{$bundle}: {$slug}");
         }
     }
+});
+
+it('seeds a verified demo admin, so the demo sign-in works with email verification on', function (): void {
+    $source = str_replace(
+        ['{{ modelClass }}', '{{ model }}', 'namespace Database\\Seeders;', 'class AlfakitDemoSeeder'],
+        [AlfaSix\Alfakit\Tests\Fixtures\Models\User::class, 'User', 'namespace AlfakitDemoSeederTest;', 'class GeneratedDemoSeeder'],
+        (string) file_get_contents(dirname(__DIR__, 2).'/stubs/setup/demo-seeder.stub'),
+    );
+    eval(substr($source, strlen('<?php')));
+
+    (new AlfakitDemoSeederTest\GeneratedDemoSeeder)->run();
+    (new AlfakitDemoSeederTest\GeneratedDemoSeeder)->run();
+
+    $admin = AlfaSix\Alfakit\Tests\Fixtures\Models\User::query()->where('email', 'admin@example.com')->sole();
+
+    expect($admin->email_verified_at)->not->toBeNull()
+        ->and(Illuminate\Support\Facades\Hash::check('password', $admin->password))->toBeTrue()
+        ->and(AlfaSix\Alfakit\Tests\Fixtures\Models\User::query()->where('email', 'like', 'demo%')->count())->toBe(12);
 });

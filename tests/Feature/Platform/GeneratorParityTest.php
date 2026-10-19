@@ -7,9 +7,14 @@ use AlfaSix\Alfakit\Commands\InstallCommand;
 use AlfaSix\Alfakit\Commands\MakeIssueCommand;
 use AlfaSix\Alfakit\Commands\MakeThemeCommand;
 use AlfaSix\Alfakit\Infolists\Components\ColorEntry;
+use AlfaSix\Alfakit\Panel;
 use AlfaSix\Alfakit\Tables\Columns\ColorColumn;
+use AlfaSix\Alfakit\Tests\Fixtures\AuthTenancy\Panels;
 use AlfaSix\Alfakit\Tests\Fixtures\Models\Category;
+use AlfaSix\Alfakit\Tests\Fixtures\Models\Comment;
 use AlfaSix\Alfakit\Tests\Fixtures\Models\Post;
+use AlfaSix\Alfakit\Tests\Fixtures\Models\Team;
+use AlfaSix\Alfakit\Tests\Fixtures\Panel\Resources\PostResource;
 use Illuminate\Filesystem\Filesystem;
 
 /*
@@ -71,6 +76,65 @@ it('generates standalone form fields and table columns from a model', function (
     foreach ([$form, $table] as $code) {
         expect(fn () => token_get_all($code, TOKEN_PARSE))->not->toThrow(ParseError::class);
     }
+});
+
+it('generates resource fields from the model casts, like the wizard', function (): void {
+    $this->artisan('make:alfakit-resource', ['model' => Post::class, '--generate' => true])->assertSuccessful();
+
+    // SQLite reports json columns as text: the `array` cast makes them key-value fields.
+    expect(generatedFile('Resources/PostResource.php'))
+        ->toContain("KeyValue::make('meta')")
+        ->toContain("Toggle::make('is_published')")
+        ->toContain("->relationship('author', ")
+        ->not->toContain("Textarea::make('meta')")
+        ->toContain('protected static ?string $recordTitleAttribute = \'title\';');
+
+    $this->artisan('make:alfakit-form', ['name' => 'PostForm', '--model' => Post::class, '--generate' => true])->assertSuccessful();
+    expect(file_get_contents(app_path('Alfakit/Standalone/PostForm.php')))->toContain("KeyValue::make('meta')");
+});
+
+it('leaves the owner column out of resources for a panel scoped to the signed-in user', function (): void {
+    Panels::register('portal', fn (Panel $panel): Panel => $panel->portal()->scopeToUser('author'));
+
+    $this->artisan('make:alfakit-resource', ['model' => Post::class, '--generate' => true, '--panel' => 'portal'])
+        ->expectsOutputToContain('Left out the owner column')
+        ->assertSuccessful();
+
+    expect(generatedFile('Resources/PostResource.php'))
+        ->toContain("TextInput::make('title')")
+        ->not->toContain("make('author_id')")
+        ->not->toContain('author.');
+
+    $this->artisan('alfakit:generate', ['model' => Post::class, '--panel' => 'portal', '--force' => true, '--no-interaction' => true])->assertSuccessful();
+
+    expect(generatedFile('Resources/PostResource.php'))->not->toContain("make('author_id')");
+});
+
+it('leaves the tenant ownership column out of resources for a tenancy panel', function (): void {
+    Panels::register('teams', fn (Panel $panel): Panel => $panel->tenant(Team::class, ownershipRelationship: 'author'));
+
+    $this->artisan('make:alfakit-resource', ['model' => Post::class, '--generate' => true, '--panel' => 'teams'])
+        ->expectsOutputToContain('Left out the tenant column')
+        ->assertSuccessful();
+
+    expect(generatedFile('Resources/PostResource.php'))
+        ->toContain("TextInput::make('title')")
+        ->not->toContain("make('author_id')")
+        ->not->toContain('author.');
+
+    $this->artisan('alfakit:generate', ['model' => Post::class, '--panel' => 'teams', '--force' => true, '--no-interaction' => true])->assertSuccessful();
+
+    expect(generatedFile('Resources/PostResource.php'))->not->toContain("make('author_id')");
+});
+
+it('leaves the foreign key to the parent out of a nested resource', function (): void {
+    $this->artisan('make:alfakit-resource', ['model' => Comment::class, '--generate' => true, '--nested' => PostResource::class])->assertSuccessful();
+
+    expect(generatedFile('Resources/CommentResource.php'))
+        ->toContain('protected static ?string $parentResource = PostResource::class;')
+        ->toContain("make('body')")
+        ->not->toContain("make('post_id')")
+        ->not->toContain("make('post.");
 });
 
 it('keeps the example fields without --generate or without a model', function (): void {

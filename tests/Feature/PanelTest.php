@@ -57,6 +57,15 @@ it('authenticates through the login action and shares panel data', function (): 
         ->and($dashboard['page']['content'][0]['widgets'][0]['lazy'])->toBeTrue();
 });
 
+it("sends signed-in users from the panel's guest pages to the panel, not the app's home", function (): void {
+    Illuminate\Support\Facades\Route::get('/dashboard', fn () => 'app dashboard')->name('dashboard');
+    Illuminate\Support\Facades\Route::getRoutes()->refreshNameLookups();
+    $this->actingAs(admin());
+
+    $this->get('/admin/login')->assertRedirect('http://localhost/admin');
+    $this->get('/admin/password-reset/request')->assertRedirect('http://localhost/admin');
+});
+
 it('rejects wrong credentials with a validation error', function (): void {
     admin();
     $props = inertiaProps(inertiaGet($this, '/admin/login'));

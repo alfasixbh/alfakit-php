@@ -111,7 +111,7 @@ Read the payload from the page (`get('/contact', ['X-Inertia' => 'true', 'X-Iner
 
 ## App auth kit (sign-in and account pages for the app's users)
 
-`php artisan alfakit:auth [--adapter=] [--mfa] [--fortify|--no-fortify] [--prefix=account] [--home=/dashboard]` writes `app/Providers/AuthKitServiceProvider.php`, adds `\AlfaSix\Alfakit\AuthKit\AuthKit::routes();` to `routes/web.php` and two Inertia pages (`auth/alfakit.tsx` gets `component` + `authKit`; `settings/alfakit.tsx` gets `sections` + `authKit`; Vue/Svelte `auth/Alfakit`, `settings/Alfakit`).
+`php artisan alfakit:auth [--adapter=] [--mfa] [--fortify|--no-fortify] [--prefix=account] [--home=/dashboard]` writes `app/Providers/AuthKitServiceProvider.php`, adds `\AlfaSix\Alfakit\AuthKit\AuthKit::routes();` to `routes/web.php` and two Inertia pages (`auth/alfakit.tsx` gets `component` + `authKit`; `settings/alfakit.tsx` gets `sections` + `authKit`; Vue/Svelte `auth/Alfakit`, `settings/Alfakit`). With Fortify installed it always sets `'views' => false` in `config/fortify.php` (the auth kit owns `login`, `verification.notice`, `two-factor.login`…; duplicate names break Wayfinder), and the kit's `verification.verify` takes over Fortify's `/email/verify/{id}/{hash}` URI.
 
 ```php
 use AlfaSix\Alfakit\Auth\MultiFactor\App\AppAuthentication;
