@@ -34,6 +34,19 @@ final class ModelInspector
     public const TITLE_ATTRIBUTES = ['name', 'title', 'label', 'full_name', 'email', 'subject', 'slug', 'code'];
 
     /**
+     * Whether the model class uses Laravel's SoftDeletes trait; null when the class does not
+     * exist (yet).
+     */
+    public static function softDeletes(string $modelClass): ?bool
+    {
+        if (! class_exists($modelClass)) {
+            return null;
+        }
+
+        return in_array(SoftDeletes::class, class_uses_recursive($modelClass), true);
+    }
+
+    /**
      * Eloquent models of the application (`app/Models`, else `app/`).
      *
      * @return list<class-string<Model>>

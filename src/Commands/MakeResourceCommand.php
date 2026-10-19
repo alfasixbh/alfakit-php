@@ -6,6 +6,7 @@ namespace AlfaSix\Alfakit\Commands;
 
 use AlfaSix\Alfakit\Commands\Concerns\CanGenerateFiles;
 use AlfaSix\Alfakit\Commands\Concerns\WritesResources;
+use AlfaSix\Alfakit\Commands\Support\ModelInspector;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Schema as DbSchema;
@@ -71,7 +72,7 @@ class MakeResourceCommand extends Command
             'formFields' => $formFields,
             'tableColumns' => $tableColumns,
             'imports' => $imports,
-            'softDeletes' => (bool) $this->option('soft-deletes'),
+            'softDeletes' => $this->softDeletesFor($modelClass),
             'view' => (bool) $this->option('view'),
             'simple' => (bool) $this->option('simple'),
             'nested' => filled($this->option('nested')) ? (string) $this->option('nested') : null,
@@ -267,5 +268,24 @@ class MakeResourceCommand extends Command
         $tableColumns[] = "                TextColumn::make('created_at')\n                    ->dateTime()\n                    ->sortable()\n                    ->toggleable(isToggledHiddenByDefault: true),";
 
         return [implode("\n", $fields), implode("\n", $tableColumns), $imports];
+    }
+
+    /**
+     * `--soft-deletes` on a model without the SoftDeletes trait would generate a trashed filter
+     * and restore actions that fail at runtime, so it is left out with a warning.
+     */
+    protected function softDeletesFor(string $modelClass): bool
+    {
+        if (! $this->option('soft-deletes')) {
+            return false;
+        }
+
+        if (ModelInspector::softDeletes($modelClass) === false) {
+            $this->components->warn(str_replace('{class}', $modelClass, 'The model {class} does not use SoftDeletes, so the resource is generated without the trashed filter and restore actions. Add `use SoftDeletes;` to the model and `$table->softDeletes();` to its table, then generate the resource again with --soft-deletes.'));
+
+            return false;
+        }
+
+        return true;
     }
 }

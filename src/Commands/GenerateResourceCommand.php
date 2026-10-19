@@ -96,6 +96,7 @@ class GenerateResourceCommand extends Command
 
         $softDeletes = match (true) {
             (bool) $this->option('no-soft-deletes') => false,
+            (bool) $this->option('soft-deletes') && ! $info['softDeletes'] => $this->warnNoSoftDeletes($modelClass),
             (bool) $this->option('soft-deletes') => true,
             $info['softDeletes'] && $interactive => confirm('The model soft deletes. Add the trashed filter and restore actions?', default: true),
             default => $info['softDeletes'],
@@ -281,5 +282,15 @@ class GenerateResourceCommand extends Command
         if (is_file($path)) {
             file_put_contents($path, GeneratedCode::tidyImports((string) file_get_contents($path)));
         }
+    }
+
+    /**
+     * `--soft-deletes` on a model without the SoftDeletes trait: leave it out with a warning.
+     */
+    protected function warnNoSoftDeletes(string $modelClass): bool
+    {
+        $this->components->warn(str_replace('{class}', $modelClass, 'The model {class} does not use SoftDeletes, so the resource is generated without the trashed filter and restore actions. Add `use SoftDeletes;` to the model and `$table->softDeletes();` to its table, then generate the resource again with --soft-deletes.'));
+
+        return false;
     }
 }

@@ -8,6 +8,7 @@ use AlfaSix\Alfakit\Commands\MakeIssueCommand;
 use AlfaSix\Alfakit\Commands\MakeThemeCommand;
 use AlfaSix\Alfakit\Infolists\Components\ColorEntry;
 use AlfaSix\Alfakit\Tables\Columns\ColorColumn;
+use AlfaSix\Alfakit\Tests\Fixtures\Models\Category;
 use AlfaSix\Alfakit\Tests\Fixtures\Models\Post;
 use Illuminate\Filesystem\Filesystem;
 
@@ -269,4 +270,18 @@ it('only sends plain CSS colours from ColorColumn and ColorEntry', function (): 
         ->and($state(ColorEntry::make('color')->state('var(--x)')))->toBeNull()
         ->and($state(ColorEntry::make('color')->state(null)))->toBeNull()
         ->and($state(ColorEntry::make('color')->state('rgb(1, 2, 3)')))->toBe('rgb(1, 2, 3)');
+});
+
+it('leaves soft-delete support out of a resource whose model does not soft delete', function (): void {
+    $this->artisan('make:alfakit-resource', ['model' => Category::class, '--soft-deletes' => true])
+        ->expectsOutputToContain('does not use SoftDeletes')
+        ->assertSuccessful();
+
+    expect(generatedFile('CategoryResource.php'))->not->toContain('TrashedFilter')->not->toContain('RestoreAction');
+
+    $this->artisan('make:alfakit-resource', ['model' => Post::class, '--soft-deletes' => true])
+        ->doesntExpectOutputToContain('does not use SoftDeletes')
+        ->assertSuccessful();
+
+    expect(generatedFile('PostResource.php'))->toContain('TrashedFilter::make()');
 });

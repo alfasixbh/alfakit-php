@@ -143,6 +143,18 @@ it('applies select, ternary, custom and trashed filters with indicators', functi
     ])->and($schema['filters'][0]['schema'][0]['statePath'])->toBe('category_id.value');
 });
 
+it('leaves the query alone when the trashed filter is used on a model without SoftDeletes', function (): void {
+    seedPosts();
+
+    $names = fn (array $q) => Table::make()->query(User::query())->columns([TextColumn::make('name')])
+        ->filters([TrashedFilter::make()])->defaultSort('name')
+        ->state(stateFrom($q))->getRecords()->pluck('name')->all();
+
+    expect($names([]))->toBe(['Ada', 'Bob'])
+        ->and($names(['filters' => ['trashed' => ['value' => '1']]]))->toBe(['Ada', 'Bob'])
+        ->and($names(['filters' => ['trashed' => ['value' => '0']]]))->toBe(['Ada', 'Bob']);
+});
+
 it('paginates and respects page options', function (): void {
     seedPosts();
 
