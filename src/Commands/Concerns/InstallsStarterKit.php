@@ -40,6 +40,8 @@ trait InstallsStarterKit
             }.">{$label}</> {$change['path']} <fg=gray>{$change['note']}</>");
         }
 
+        $this->createNotificationsTable();
+
         if (! $this->option('no-npm')) {
             $this->installNpmPackage($kit);
         }
@@ -47,6 +49,7 @@ trait InstallsStarterKit
         $this->newLine();
         $this->components->info('AlfaKit runs inside your starter kit app.');
         $this->components->bulletList([
+            'Run the migrations: php artisan migrate',
             'Create a resource: php artisan make:alfakit-resource Post --generate',
             'Build the frontend (npm run build, or npm run dev) and visit /'.trim($path, '/'),
             'Sign in with the app\'s own login; the panel links appear in the app sidebar',

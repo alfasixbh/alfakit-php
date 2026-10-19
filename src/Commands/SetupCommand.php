@@ -239,6 +239,9 @@ class SetupCommand extends Command
         $code = $this->call('alfakit:install', $arguments);
         $this->record('Install ('.$mode.')', $code === self::SUCCESS ? 'done' : 'failed');
 
+        // A panel install adds the notifications table migration.
+        $this->needsMigrations = $this->needsMigrations || ($code === self::SUCCESS && $mode !== 'standalone');
+
         return $code === self::SUCCESS;
     }
 

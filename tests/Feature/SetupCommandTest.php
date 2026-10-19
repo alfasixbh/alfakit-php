@@ -103,7 +103,9 @@ it('runs every step from flags without interaction, then skips them on a second 
         ->toContain('EnsureAccountIsActive::class')
         ->and(shell_exec('php -l '.escapeshellarg(PanelProviderEditor::path('admin'))))->toContain('No syntax errors')
         ->and(file_exists("{$sandbox}/app/Alfakit/Admin/Resources/UserResource.php"))->toBeTrue()
-        ->and(file_get_contents("{$sandbox}/database/seeders/AlfakitDemoSeeder.php"))->toContain('use App\\Models\\User;')->toContain('class AlfakitDemoSeeder extends Seeder');
+        ->and(file_get_contents("{$sandbox}/database/seeders/AlfakitDemoSeeder.php"))->toContain('use App\\Models\\User;')->toContain('class AlfakitDemoSeeder extends Seeder')
+        // The panel's database notifications need Laravel's notifications table.
+        ->and(glob("{$sandbox}/database/migrations/*_create_notifications_table.php"))->toHaveCount(1);
 
     Process::assertRan(fn (PendingProcess $process): bool => is_array($process->command) && array_slice($process->command, 1) === ['artisan', 'vendor:publish', '--tag=alfakit-comments-migrations']);
     Process::assertRan(fn (PendingProcess $process): bool => is_array($process->command) && array_slice($process->command, 1, 2) === ['artisan', 'migrate']);
@@ -118,6 +120,7 @@ it('runs every step from flags without interaction, then skips them on a second 
     $again = file_get_contents(PanelProviderEditor::path('admin'));
 
     expect(substr_count($again, 'CommentsPlugin::make()'))->toBe(1)
+        ->and(glob("{$sandbox}/database/migrations/*_create_notifications_table.php"))->toHaveCount(1)
         ->and(substr_count($again, 'EnsureAccountIsActive::class'))->toBe(1)
         ->and(substr_count($again, '->colors('))->toBe(1);
 });
@@ -172,6 +175,8 @@ it('walks through the questions interactively', function (): void {
         ->expectsQuestion('Brand logo', '')
         ->expectsQuestion('Font family', '')
         ->expectsConfirmation('Add demo data (a seeder with an admin and sample users)?', 'no')
+        // The install added the notifications table migration.
+        ->expectsConfirmation('Run the database migrations now?', 'no')
         ->assertSuccessful();
 
     expect(file_get_contents(PanelProviderEditor::path('admin')))->toContain("'primary' => 'oklch(0.62 0.19 41)'")

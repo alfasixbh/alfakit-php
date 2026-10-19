@@ -81,6 +81,7 @@ class InstallCommand extends Command
         // 2. Panel provider
         if (! $this->option('no-panel')) {
             $this->call('make:alfakit-panel', ['id' => $panelId, '--path' => $path, '--force' => $force]);
+            $this->createNotificationsTable();
         }
 
         // 3. Frontend entry, stylesheet and tsconfig path
@@ -107,18 +108,32 @@ class InstallCommand extends Command
             $this->installNpmPackage($adapter);
         }
 
-        // 7. Database notifications table hint
         $this->newLine();
         $this->components->info('Alfakit is installed.');
         $this->components->bulletList([
             'Register your panel in bootstrap/providers.php if it was not added automatically: App\\Providers\\Alfakit\\'.Str::studly($panelId).'PanelProvider',
             'Create a user: php artisan make:alfakit-user',
             'Create a resource: php artisan make:alfakit-resource Post --generate',
+            'Run the migrations: php artisan migrate',
             'Run your dev server (npm run dev) and visit /'.$path,
-            'For database notifications run: php artisan make:notifications-table && php artisan migrate',
         ]);
 
         return self::SUCCESS;
+    }
+
+    /**
+     * The generated panel turns on database notifications (and the starter-kit install adds
+     * the bell), so the app needs Laravel's `notifications` table: create its migration
+     * unless the app already has one.
+     */
+    protected function createNotificationsTable(): void
+    {
+        if (glob(database_path('migrations/*_create_notifications_table.php')) !== []) {
+            return;
+        }
+
+        $this->callSilently('make:notifications-table');
+        $this->components->task('Created the notifications table migration');
     }
 
     /**
