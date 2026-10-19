@@ -1522,6 +1522,11 @@ class Table implements HasResource
         return $this;
     }
 
+    public function hasRecordUrl(): bool
+    {
+        return $this->recordUrl !== null;
+    }
+
     public function recordUrl(string|Closure|null $url, bool|Closure $shouldOpenInNewTab = false): static
     {
         $this->recordUrl = $url;

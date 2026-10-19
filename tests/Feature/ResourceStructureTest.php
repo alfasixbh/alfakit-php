@@ -6,6 +6,7 @@ use AlfaSix\Alfakit\Resources\ParentRecords;
 use AlfaSix\Alfakit\Tests\Fixtures\ActionsResources\ArPanelProvider;
 use AlfaSix\Alfakit\Tests\Fixtures\ActionsResources\ArticleCommentResource;
 use AlfaSix\Alfakit\Tests\Fixtures\ActionsResources\ArticleResource\Pages\EditArticle;
+use AlfaSix\Alfakit\Tests\Fixtures\ActionsResources\ArticleResource\Pages\ViewArticle;
 use AlfaSix\Alfakit\Tests\Fixtures\ActionsResources\ArticleResource\RelationManagers\CommentsRelationManager;
 use AlfaSix\Alfakit\Tests\Fixtures\ActionsResources\ArticleResource\RelationManagers\TagsRelationManager;
 use AlfaSix\Alfakit\Tests\Fixtures\Models\Category;
@@ -125,6 +126,33 @@ it('links relation manager create and edit actions to the nested resource pages,
     expect($urls->get('create'))->toEndWith("/ar/articles/{$post->id}/comments/create")
         ->and($urls->get('edit'))->toEndWith("/ar/articles/{$post->id}/comments/{$comment->id}/edit")
         ->and($json)->not->toContain('"hasModal":true');
+});
+
+it('keeps a nested resource manager usable on the parent\'s View page and links its rows', function (): void {
+    $post = rsPost();
+    $comment = rsComment($post);
+    $this->actingAs(rsUser());
+    alfakit()->setCurrentPanel(alfakit()->getPanel('ar'));
+    ParentRecords::flush();
+
+    $page = app(ViewArticle::class);
+
+    // Linked to the nested resource: not read-only on a View page, rows open the record.
+    $manager = CommentsRelationManager::make($post, $page);
+    $plain = (new class extends CommentsRelationManager
+    {
+        protected static ?string $relatedResource = null;
+    })::make($post, $page);
+
+    expect($manager->isReadOnly())->toBeFalse()
+        ->and($plain->isReadOnly())->toBeTrue();
+
+    $json = json_encode($manager->getTable()->toSchema(), JSON_UNESCAPED_SLASHES);
+
+    expect($json)->toContain("/ar/articles/{$post->id}/comments/create")
+        ->and($json)->toContain("/ar/articles/{$post->id}/comments/{$comment->id}/edit");
+    expect(collect($manager->getTable()->toSchema()['records'])->firstWhere('key', $comment->id)['url'] ?? null)
+        ->toEndWith("/ar/articles/{$post->id}/comments/{$comment->id}/edit");
 });
 
 it('scopes nested pages to the parent record', function (): void {

@@ -102,10 +102,14 @@ class MakeResourceCommand extends Command
         $parent = class_basename(str_replace('/', '\\', $parent));
         $parent = Str::endsWith($parent, 'Resource') ? $parent : "{$parent}Resource";
 
+        $text = $this->firstTextColumn($modelClass);
+        $title = $this->recordTitleAttributeFor($modelClass) ?? $text['name'] ?? 'id';
+
         $this->call('make:alfakit-relation-manager', array_filter([
             'resource' => $parent,
             'relationship' => Str::camel(Str::plural($model)),
-            'recordTitleAttribute' => $this->recordTitleAttributeFor($modelClass) ?? $this->firstTextColumn($modelClass) ?? 'id',
+            'recordTitleAttribute' => $title,
+            '--rich' => $text !== null && $title === $text['name'] && in_array($text['kind'], ['richtext', 'markdown'], true),
             '--related' => "{$model}Resource",
             '--view' => (bool) $this->option('view'),
             '--register' => true,
@@ -115,18 +119,25 @@ class MakeResourceCommand extends Command
     }
 
     /**
-     * The first plain text column of the model's table, to show in the parent's list.
+     * The first text column of the model's table (plain, then rich text), to show in the
+     * parent's list instead of the key.
+     *
+     * @return array{name: string, kind: string}|null
      */
-    protected function firstTextColumn(string $modelClass): ?string
+    protected function firstTextColumn(string $modelClass): ?array
     {
         try {
-            foreach (ModelInspector::inspect($modelClass)['columns'] as $column) {
-                if (in_array($column['kind'], ['text', 'textarea', 'string'], true) && ! str_ends_with($column['name'], '_id')) {
-                    return $column['name'];
-                }
-            }
+            $columns = ModelInspector::inspect($modelClass)['columns'];
         } catch (Throwable) {
             return null;
+        }
+
+        foreach ([['string', 'text', 'textarea', 'email', 'url'], ['richtext', 'markdown']] as $kinds) {
+            foreach ($columns as $column) {
+                if (in_array($column['kind'], $kinds, true) && ! str_ends_with($column['name'], '_id')) {
+                    return ['name' => $column['name'], 'kind' => $column['kind']];
+                }
+            }
         }
 
         return null;

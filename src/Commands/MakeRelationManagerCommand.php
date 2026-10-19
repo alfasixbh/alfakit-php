@@ -16,7 +16,7 @@ class MakeRelationManagerCommand extends Command
 {
     use CanGenerateFiles;
 
-    protected $signature = 'make:alfakit-relation-manager {resource?} {relationship?} {recordTitleAttribute?} {--attach : Use attach/detach actions (BelongsToMany)} {--associate : Use associate/dissociate actions (HasMany)} {--soft-deletes : Add the trashed filter and restore/force-delete actions} {--view : Add a view action and an infolist} {--related= : The nested resource it links to (e.g. CommentResource): its create, view and edit pages open instead of modals} {--register : Add it to the resource\'s getRelations()} {--panel=} {--force}';
+    protected $signature = 'make:alfakit-relation-manager {resource?} {relationship?} {recordTitleAttribute?} {--attach : Use attach/detach actions (BelongsToMany)} {--associate : Use associate/dissociate actions (HasMany)} {--soft-deletes : Add the trashed filter and restore/force-delete actions} {--view : Add a view action and an infolist} {--related= : The nested resource it links to (e.g. CommentResource): its create, view and edit pages open instead of modals} {--register : Add it to the resource\'s getRelations()} {--rich : The title attribute holds rich text: list it as plain text} {--panel=} {--force}';
 
     public function handle(): int
     {
@@ -74,6 +74,10 @@ class MakeRelationManagerCommand extends Command
             $relatedResource = "\n    protected static ?string \$relatedResource = ".class_basename($relatedClass)."::class;\n";
         }
 
+        $titleColumn = $this->option('rich')
+            ? "TextColumn::make('{$title}')\n                    ->formatStateUsing(fn (?string \$state): string => trim(strip_tags((string) \$state)))\n                    ->limit(80)\n                    ->searchable()"
+            : "TextColumn::make('{$title}')->searchable()";
+
         $this->writeStub('relation-manager', $path, [
             'tableExtras' => $tableExtras,
             'bulkActions' => $bulkActions,
@@ -86,6 +90,7 @@ class MakeRelationManagerCommand extends Command
             'recordActions' => $recordActions,
             'imports' => $imports,
             'relatedResource' => $relatedResource,
+            'titleColumn' => $titleColumn,
         ], (bool) $this->option('force'));
 
         $resourcePath = $this->getGenerationPath().str_replace('\\', '/', $suffix)."/Resources/{$resource}.php";

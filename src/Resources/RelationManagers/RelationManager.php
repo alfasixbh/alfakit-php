@@ -181,6 +181,12 @@ abstract class RelationManager implements HasResource
      */
     public function isReadOnly(): bool
     {
+        // A manager of a nested resource only links to that resource's own pages, which
+        // authorize themselves: adding a reply from a comment's View page doesn't edit the comment.
+        if ($this->linksToNestedResource()) {
+            return false;
+        }
+
         if ($this->page instanceof \AlfaSix\Alfakit\Resources\Pages\ViewRecord && $this->page->getPanel()->hasReadOnlyRelationManagersOnResourceViewPagesByDefault()) {
             return true;
         }
@@ -384,6 +390,18 @@ abstract class RelationManager implements HasResource
 
         $table = $this->table($table);
 
+        // Rows of a nested resource open its record (view page, else edit page).
+        if (! $table->hasRecordUrl() && $this->linksToNestedResource()) {
+            $related = (string) $this->getResourceClass();
+            $page = $this->linksToRelatedResourcePage('view') ? 'view' : ($this->linksToRelatedResourcePage('edit') ? 'edit' : null);
+
+            if ($page !== null) {
+                $table->recordUrl(static fn (Model $record): ?string => ($page === 'view' ? $related::canView($record) : $related::canEdit($record))
+                    ? $related::getUrl($page, ['record' => $record])
+                    : null);
+            }
+        }
+
         foreach ([...$table->getRecordActions(), ...$table->getHeaderActions(), ...$table->getBulkActions(), ...$table->getEmptyStateActions()] as $action) {
             $this->configureAction($action);
         }
@@ -514,6 +532,20 @@ abstract class RelationManager implements HasResource
      * instead of a modal: the related resource is nested under the page's resource and
      * registers that page.
      */
+    /**
+     * Whether the related resource is nested under the page's resource, so the manager's
+     * actions and rows link to its pages.
+     */
+    protected function linksToNestedResource(): bool
+    {
+        $related = $this->getResourceClass();
+
+        return $related !== null
+            && $this->page instanceof HasResource
+            && $related::getParentResource() !== null
+            && $related::getParentResource() === $this->page->getResourceClass();
+    }
+
     protected function linksToRelatedResourcePage(string $page): bool
     {
         $related = $this->getResourceClass();

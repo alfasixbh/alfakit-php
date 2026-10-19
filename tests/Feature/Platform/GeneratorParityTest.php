@@ -411,3 +411,12 @@ it('leaves the parent key out of a nested resource whose relationship has no ret
 
     expect(generatedFile('Resources/UntypedCommentResource.php'))->not->toContain("'post_id'")->toContain("'body'");
 });
+
+it('lists a rich-text title attribute as plain text in a relation manager', function (): void {
+    $this->artisan('make:alfakit-relation-manager', ['resource' => 'PostResource', 'relationship' => 'notes', 'recordTitleAttribute' => 'body', '--rich' => true])->assertSuccessful();
+
+    $manager = generatedFile('PostResource/RelationManagers/NotesRelationManager.php');
+
+    expect($manager)->toContain("TextColumn::make('body')")->toContain('strip_tags((string) $state)')->toContain('->limit(80)')
+        ->and(shell_exec('echo '.escapeshellarg($manager).' | php -l 2>&1'))->toContain('No syntax errors');
+});

@@ -31,7 +31,7 @@ class {{ class }} extends RelationManager
     {
         return $table{{ tableExtras }}
             ->columns([
-                TextColumn::make('{{ recordTitleAttribute }}')->searchable(),
+                {{ titleColumn }},
             ])
             ->headerActions([
                 {{ headerActions }}
