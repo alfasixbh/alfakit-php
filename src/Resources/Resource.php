@@ -858,7 +858,8 @@ abstract class Resource
 
     public static function shouldRegisterNavigation(): bool
     {
-        return static::$shouldRegisterNavigation;
+        // A nested resource's pages need a parent record: link to them from the parent.
+        return static::$shouldRegisterNavigation && ! static::isNested();
     }
 
     /**

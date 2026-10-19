@@ -1787,8 +1787,11 @@ class Panel
             return $this->route($pages[0]::getRelativeRouteName(), $parameters);
         }
 
-        if ($resources !== []) {
-            return $resources[0]::getUrl('index', $parameters);
+        // Nested resources need a parent record in the URL, so they are never the home page.
+        foreach ($resources as $resource) {
+            if (! $resource::isNested() && $resource::hasPage('index')) {
+                return $resource::getUrl('index', $parameters);
+            }
         }
 
         return url($this->path);
