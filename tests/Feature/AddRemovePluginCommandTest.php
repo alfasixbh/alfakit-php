@@ -459,4 +459,3 @@ it('knows every first-party plugin in an app installed from Packagist', function
     expect($plugins)->toHaveCount(27)
         ->and(array_values(array_diff($plugins, $known)))->toBe([]);
 });
-
