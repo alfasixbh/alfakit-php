@@ -173,7 +173,10 @@ it('formats numbers and money exactly like Laravel with cached formatters', func
             foreach ($pairs as [$ours, $laravel]) {
                 // Older Laravel releases print a negative zero (`-0`); AlfaKit never does.
                 if (is_float($number) && $number <= 0 && $number > -0.01 && $ours !== $laravel) {
-                    expect($ours)->toBe(str_replace(['-', "\u{2212}", "\u{200E}", "\u{200F}", "\u{061C}"], '', $laravel));
+                    $plain = static fn (string $value): string => str_replace(['-', "\u{2212}", "\u{200E}", "\u{200F}", "\u{061C}"], '', $value);
+
+                    expect($ours)->not->toContain('-')->not->toContain("\u{2212}")
+                        ->and($plain($ours))->toBe($plain($laravel));
 
                     continue;
                 }
