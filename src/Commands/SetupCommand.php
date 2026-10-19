@@ -51,6 +51,9 @@ class SetupCommand extends Command
         {--logo= : The brand logo: a path under public/ or a URL}
         {--font= : The font family (e.g. Inter)}
         {--demo : Write and run a demo data seeder}
+        {--admin-email= : Create an admin user to sign in with (with --admin-name and --admin-password)}
+        {--admin-name= : The name of the admin user (default: Admin)}
+        {--admin-password= : The password of the admin user}
         {--migrate : Run the migrations at the end without asking}
         {--no-install : Never run composer or npm; print the commands instead}
         {--force : Overwrite generated files}';
@@ -146,9 +149,49 @@ class SetupCommand extends Command
         }
 
         $this->migrate();
+
+        if ($mode === 'panel') {
+            $this->createAdminUser($panelId);
+        }
+
         $this->renderSummary();
 
         return collect($this->summary)->contains('status', 'failed') ? self::FAILURE : self::SUCCESS;
+    }
+
+    /**
+     * The panel's own login needs a user. With `--admin-email` the user is created from the
+     * flags; interactively the wizard offers to create one; otherwise it is a next step.
+     */
+    protected function createAdminUser(string $panelId): void
+    {
+        $email = $this->option('admin-email');
+
+        if (is_string($email) && $email !== '') {
+            if (! is_string($this->option('admin-password')) || $this->option('admin-password') === '') {
+                $this->record('Admin user', 'failed', '--admin-password is required with --admin-email');
+
+                return;
+            }
+
+            $this->runStep('Admin user', 'make:alfakit-user', [
+                '--panel' => $panelId,
+                '--name' => $this->option('admin-name') ?: 'Admin',
+                '--email' => $email,
+                '--password' => $this->option('admin-password'),
+            ]);
+
+            return;
+        }
+
+        if ($this->input->isInteractive() && confirm('Create an admin user to sign in with?', true, hint: 'Asks for a name, email address and password (php artisan make:alfakit-user).')) {
+            $this->runStep('Admin user', 'make:alfakit-user', ['--panel' => $panelId]);
+
+            return;
+        }
+
+        $this->record('Admin user', 'skipped');
+        $this->nextSteps[] = 'Create a user to sign in with: php artisan make:alfakit-user';
     }
 
     // ------------------------------------------------------------------ Detection and install

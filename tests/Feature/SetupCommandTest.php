@@ -5,8 +5,10 @@ declare(strict_types=1);
 use AlfaSix\Alfakit\Commands\SetupCommand;
 use AlfaSix\Alfakit\Commands\Support\PanelProviderEditor;
 use AlfaSix\Alfakit\Commands\Support\PluginCatalog;
+use AlfaSix\Alfakit\Tests\Fixtures\Models\User;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Process\PendingProcess;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Process;
 
 /*
@@ -182,6 +184,8 @@ it('walks through the questions interactively', function (): void {
         ->expectsConfirmation('Add demo data (a seeder with an admin and sample users)?', 'no')
         // The install added the notifications table migration.
         ->expectsConfirmation('Run the database migrations now?', 'no')
+        ->expectsConfirmation('Create an admin user to sign in with?', 'no')
+        ->expectsOutputToContain('php artisan make:alfakit-user')
         ->assertSuccessful();
 
     expect(file_get_contents(PanelProviderEditor::path('admin')))->toContain("'primary' => 'oklch(0.62 0.19 41)'")
@@ -345,7 +349,7 @@ it('defines bundles of known plugins', function (): void {
 it('seeds a verified demo admin, so the demo sign-in works with email verification on', function (): void {
     $source = str_replace(
         ['{{ modelClass }}', '{{ model }}', 'namespace Database\\Seeders;', 'class AlfakitDemoSeeder'],
-        [AlfaSix\Alfakit\Tests\Fixtures\Models\User::class, 'User', 'namespace AlfakitDemoSeederTest;', 'class GeneratedDemoSeeder'],
+        [User::class, 'User', 'namespace AlfakitDemoSeederTest;', 'class GeneratedDemoSeeder'],
         (string) file_get_contents(dirname(__DIR__, 2).'/stubs/setup/demo-seeder.stub'),
     );
     eval(substr($source, strlen('<?php')));
@@ -353,9 +357,37 @@ it('seeds a verified demo admin, so the demo sign-in works with email verificati
     (new AlfakitDemoSeederTest\GeneratedDemoSeeder)->run();
     (new AlfakitDemoSeederTest\GeneratedDemoSeeder)->run();
 
-    $admin = AlfaSix\Alfakit\Tests\Fixtures\Models\User::query()->where('email', 'admin@example.com')->sole();
+    $admin = User::query()->where('email', 'admin@example.com')->sole();
 
     expect($admin->email_verified_at)->not->toBeNull()
-        ->and(Illuminate\Support\Facades\Hash::check('password', $admin->password))->toBeTrue()
-        ->and(AlfaSix\Alfakit\Tests\Fixtures\Models\User::query()->where('email', 'like', 'demo%')->count())->toBe(12);
+        ->and(Hash::check('password', $admin->password))->toBeTrue()
+        ->and(User::query()->where('email', 'like', 'demo%')->count())->toBe(12);
+});
+
+it('creates the admin user to sign in with from the flags', function (): void {
+    setupSandbox($this);
+    config(['auth.providers.users.model' => User::class]);
+
+    $this->artisan('alfakit:setup', [
+        '--mode' => 'panel',
+        '--adapter' => 'react',
+        '--admin-email' => 'owner@example.com',
+        '--admin-name' => 'Owner',
+        '--admin-password' => 'secret-password',
+        '--no-install' => true,
+        '--no-interaction' => true,
+    ])->assertSuccessful();
+
+    $user = User::query()->where('email', 'owner@example.com')->first();
+
+    expect($user)->not->toBeNull()
+        ->and($user->name)->toBe('Owner')
+        ->and(Hash::check('secret-password', $user->password))->toBeTrue();
+
+    // Without a password the step fails instead of creating a user without one.
+    $this->artisan('alfakit:setup', ['--mode' => 'panel', '--adapter' => 'react', '--admin-email' => 'other@example.com', '--no-install' => true, '--no-interaction' => true])
+        ->expectsOutputToContain('--admin-password is required')
+        ->assertFailed();
+
+    expect(User::query()->where('email', 'other@example.com')->exists())->toBeFalse();
 });
