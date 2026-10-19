@@ -89,6 +89,7 @@ final class TokenRewriter
         $this->rewriteStrings();
         $this->rewriteIconsAndColors();
         $this->rewriteEnumTypes();
+        $this->rewriteNullArrayKeys();
         $this->rewriteMethodCalls();
         $this->rewriteClassMembers();
         $this->removeUnusedImports();
@@ -347,6 +348,64 @@ final class TokenRewriter
                 $this->report->converted($this->file);
             }
         }
+    }
+
+    /**
+     * `null => Tab::make('All')` (Filament's tab and option arrays): PHP always stored a null key
+     * as `''`, and PHP 8.5 deprecates writing it, so the key becomes `''`. `match` arms keep
+     * their `null =>`.
+     */
+    private function rewriteNullArrayKeys(): void
+    {
+        for ($i = 0; $i < $this->count; $i++) {
+            if (! $this->tokens[$i]->is(T_STRING) || strtolower($this->tokens[$i]->text) !== 'null') {
+                continue;
+            }
+
+            $next = $this->nextSignificant($i);
+            $previous = $this->previousSignificant($i);
+
+            if ($next === null || ! $this->tokens[$next]->is(T_DOUBLE_ARROW) || $previous === null || ! in_array($this->tokens[$previous]->text, ['[', ',', '('], true)) {
+                continue;
+            }
+
+            if ($this->enclosingOpener($i) === '[' || $this->enclosingOpener($i) === 'array(') {
+                $this->out[$i] = "''";
+                $this->report->converted($this->file);
+            }
+        }
+    }
+
+    /**
+     * The bracket that encloses token `$i`: `[`, `array(`, `(` or `{`, or null at the top level.
+     */
+    private function enclosingOpener(int $i): ?string
+    {
+        $depth = 0;
+
+        for ($j = $i - 1; $j >= 0; $j--) {
+            $text = $this->tokens[$j]->text;
+
+            if (in_array($text, [']', ')', '}'], true)) {
+                $depth++;
+            } elseif (in_array($text, ['[', '(', '{'], true) || $this->tokens[$j]->is([T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES])) {
+                if ($depth > 0) {
+                    $depth--;
+
+                    continue;
+                }
+
+                if ($text === '(') {
+                    $before = $this->previousSignificant($j);
+
+                    return $before !== null && $this->tokens[$before]->is(T_ARRAY) ? 'array(' : '(';
+                }
+
+                return $text === '[' ? '[' : '{';
+            }
+        }
+
+        return null;
     }
 
     private function isTypePosition(int $i): bool
