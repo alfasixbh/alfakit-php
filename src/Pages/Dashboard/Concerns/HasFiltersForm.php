@@ -12,8 +12,8 @@ use AlfaSix\Alfakit\Support\Enums\Color;
 /**
  * Filters shared by every widget of a dashboard. Define the fields in `filtersForm()`;
  * applied values are validated, kept in the session (per user, panel, tenant and dashboard)
- * and read by widgets that use `InteractsWithPageFilters` as `$this->pageFilters`. With
- * `$persistsFiltersInSession = false` they live in the URL instead (`DashboardFilters`), and
+ * and read by widgets that use `InteractsWithPageFilters` as `$this->pageFilters`. When
+ * `persistsFiltersInSession()` returns false they live in the URL instead (`DashboardFilters`), and
  * `live()` fields wait for "Apply" too.
  *
  * Fields marked `live()` apply as soon as they change (the live refresh stores the filters

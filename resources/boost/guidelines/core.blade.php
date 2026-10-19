@@ -19,6 +19,8 @@ AlfaKit (`alfasix/alfakit`) is a FilamentPHP-style admin panel builder that rend
 
 @verbatim
 <code-snippet name="Resource with form, table and actions" lang="php">
+namespace App\Alfakit\Resources;
+
 use AlfaSix\Alfakit\Actions\{DeleteAction, DeleteBulkAction, EditAction};
 use AlfaSix\Alfakit\Forms\Components\{Select, TextInput, Toggle};
 use AlfaSix\Alfakit\Resources\Resource;
@@ -27,6 +29,8 @@ use AlfaSix\Alfakit\Schemas\Schema;
 use AlfaSix\Alfakit\Tables\Columns\{TextColumn, ToggleColumn};
 use AlfaSix\Alfakit\Tables\Filters\SelectFilter;
 use AlfaSix\Alfakit\Tables\Table;
+use App\Alfakit\Resources\PostResource\Pages;
+use App\Models\Post;
 
 class PostResource extends Resource
 {

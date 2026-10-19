@@ -9,8 +9,8 @@ use AlfaSix\Alfakit\Pages\Dashboard\DashboardFilters;
 /**
  * Dashboard filters edited in an action's modal instead of a form above the widgets. Add a
  * `FilterAction` to the header actions; applied values are validated, kept in the session
- * (per user, panel, tenant and dashboard), or in the URL with
- * `$persistsFiltersInSession = false` (`DashboardFilters`), and read by widgets that use
+ * (per user, panel, tenant and dashboard), or in the URL when
+ * `persistsFiltersInSession()` returns false (`DashboardFilters`), and read by widgets that use
  * `InteractsWithPageFilters` as `$this->pageFilters`.
  *
  * ```php

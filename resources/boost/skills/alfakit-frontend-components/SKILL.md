@@ -76,6 +76,10 @@ To change a built-in renderer rather than write one from scratch, `php artisan a
 
 ```php
 // app/Alfakit/Forms/Components/MapPicker.php: type `MapPicker` (the class name)
+namespace App\Alfakit\Forms\Components;
+
+use AlfaSix\Alfakit\Forms\Components\Field;
+
 class MapPicker extends Field
 {
     protected int $zoom = 12;
@@ -138,10 +142,20 @@ Built-in renderers look up the registry by schema type first, so you can add new
 | `tree`                                               | The tree of `alfasix/alfakit-tree` (`TreePage` component, `TreeWidget`), lazy                     | `{ component }` on pages, `{ widget }` (with `widget.tree`)         |
 
 ```php
+namespace App\Alfakit\Tables\Columns;
+
+use AlfaSix\Alfakit\Tables\Columns\Column;
+
 class ProgressColumn extends Column
 {
     // rendered by columns/ProgressColumn.tsx ('column:ProgressColumn'); set $type to share a renderer
 }
+```
+
+```php
+namespace App\Alfakit\Widgets;
+
+use AlfaSix\Alfakit\Widgets\ChartWidget;
 
 class RevenueChart extends ChartWidget
 {
