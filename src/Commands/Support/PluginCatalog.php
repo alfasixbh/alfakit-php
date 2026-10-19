@@ -222,6 +222,8 @@ final class PluginCatalog
     {
         return [
             'activity-log' => 'Browse spatie/laravel-activitylog activities',
+            'ai' => 'AI actions, field assistance, natural-language filters and a panel copilot (laravel/ai)',
+            'analytics' => 'Privacy-first web analytics for your public site',
             'api' => 'JSON REST APIs for your resources',
             'backup' => 'Manage spatie/laravel-backup backups',
             'billing' => 'Subscription billing (Cashier, Paddle, Spark)',
@@ -229,17 +231,23 @@ final class PluginCatalog
             'cms' => 'Block-based pages, menus and redirects',
             'comments' => 'Comments with mentions and reactions on any record',
             'feature-flags' => 'Feature flags',
+            'file-manager' => 'A file manager for any filesystem disk, with a file picker field',
             'forms' => 'A form builder for public forms',
             'health' => 'spatie/laravel-health check results',
+            'helpdesk' => 'Tickets, an agent inbox, a customer portal and live chat',
+            'invoices' => 'Invoices, quotes, credit notes and receipts',
             'kanban' => 'Kanban boards for any model',
+            'mail-templates' => 'Editable email templates with merge tags and previews',
             'media-library' => 'Spatie Media Library fields, columns and entries',
             'ops' => 'Failed jobs, queues, scheduler, logs and system info',
             'settings' => 'Settings pages for spatie/laravel-settings',
             'shield' => 'Roles and permissions (spatie/laravel-permission)',
             'tags' => 'Spatie Tags input, column and entry',
+            'teams' => 'Teams with members, roles, invitations and seat limits',
             'translation-manager' => 'Manage translations in the panel',
             'tree' => 'Drag-and-drop tree pages and widgets',
             'webhooks' => 'Outgoing signed webhooks with a deliveries log',
+            'workflows' => 'State machines and approval workflows for any model',
         ];
     }
 

@@ -439,3 +439,24 @@ it('does not publish the migrations of an already installed plugin a second time
         ->and(AppEnvironment::migrationsAlreadyPublished(['vendor:publish', '--tag=unknown-tag']))->toBeFalse()
         ->and(AppEnvironment::migrationsAlreadyPublished(['alfakit-shield:install']))->toBeFalse();
 });
+
+it('knows every first-party plugin in an app installed from Packagist', function (): void {
+    // An app from Packagist has no monorepo plugins directory and no plugin installed yet.
+    $empty = sys_get_temp_dir().'/alfakit-no-plugins-'.uniqid();
+    mkdir($empty);
+    $original = PluginCatalog::$pluginsDirectory;
+    PluginCatalog::$pluginsDirectory = $empty;
+
+    try {
+        $known = array_keys(PluginCatalog::all());
+    } finally {
+        PluginCatalog::$pluginsDirectory = $original;
+        rmdir($empty);
+    }
+
+    $plugins = array_map('basename', glob(dirname(__DIR__, 3).'/plugins/*', GLOB_ONLYDIR) ?: []);
+
+    expect($plugins)->toHaveCount(27)
+        ->and(array_values(array_diff($plugins, $known)))->toBe([]);
+});
+
