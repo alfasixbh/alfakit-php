@@ -85,7 +85,51 @@ class MakeResourceCommand extends Command
             'force' => (bool) $this->option('force'),
         ]);
 
+        if (filled($this->option('nested')) && ! $this->option('simple')) {
+            $this->linkFromParent($model, $modelClass, (string) $this->option('nested'));
+        }
+
         return self::SUCCESS;
+    }
+
+    /**
+     * A nested resource has no navigation item: without a link from the parent its pages
+     * can only be reached by typing the URL. Generate a relation manager on the parent that
+     * lists the records and links to the nested pages, and register it.
+     */
+    protected function linkFromParent(string $model, string $modelClass, string $parent): void
+    {
+        $parent = class_basename(str_replace('/', '\\', $parent));
+        $parent = Str::endsWith($parent, 'Resource') ? $parent : "{$parent}Resource";
+
+        $this->call('make:alfakit-relation-manager', array_filter([
+            'resource' => $parent,
+            'relationship' => Str::camel(Str::plural($model)),
+            'recordTitleAttribute' => $this->recordTitleAttributeFor($modelClass) ?? $this->firstTextColumn($modelClass) ?? 'id',
+            '--related' => "{$model}Resource",
+            '--view' => (bool) $this->option('view'),
+            '--register' => true,
+            '--panel' => $this->option('panel'),
+            '--force' => (bool) $this->option('force'),
+        ], static fn (mixed $value): bool => $value !== null && $value !== false));
+    }
+
+    /**
+     * The first plain text column of the model's table, to show in the parent's list.
+     */
+    protected function firstTextColumn(string $modelClass): ?string
+    {
+        try {
+            foreach (ModelInspector::inspect($modelClass)['columns'] as $column) {
+                if (in_array($column['kind'], ['text', 'textarea', 'string'], true) && ! str_ends_with($column['name'], '_id')) {
+                    return $column['name'];
+                }
+            }
+        } catch (Throwable) {
+            return null;
+        }
+
+        return null;
     }
 
     /**

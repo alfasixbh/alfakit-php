@@ -16,7 +16,7 @@ class MakeRelationManagerCommand extends Command
 {
     use CanGenerateFiles;
 
-    protected $signature = 'make:alfakit-relation-manager {resource?} {relationship?} {recordTitleAttribute?} {--attach : Use attach/detach actions (BelongsToMany)} {--associate : Use associate/dissociate actions (HasMany)} {--soft-deletes : Add the trashed filter and restore/force-delete actions} {--view : Add a view action and an infolist} {--panel=} {--force}';
+    protected $signature = 'make:alfakit-relation-manager {resource?} {relationship?} {recordTitleAttribute?} {--attach : Use attach/detach actions (BelongsToMany)} {--associate : Use associate/dissociate actions (HasMany)} {--soft-deletes : Add the trashed filter and restore/force-delete actions} {--view : Add a view action and an infolist} {--related= : The nested resource it links to (e.g. CommentResource): its create, view and edit pages open instead of modals} {--register : Add it to the resource\'s getRelations()} {--panel=} {--force}';
 
     public function handle(): int
     {
@@ -64,6 +64,16 @@ class MakeRelationManagerCommand extends Command
             $imports .= "\nuse AlfaSix\\Alfakit\\Actions\\ForceDeleteAction;\nuse AlfaSix\\Alfakit\\Actions\\ForceDeleteBulkAction;\nuse AlfaSix\\Alfakit\\Actions\\RestoreAction;\nuse AlfaSix\\Alfakit\\Actions\\RestoreBulkAction;\nuse AlfaSix\\Alfakit\\Tables\\Filters\\TrashedFilter;\nuse Illuminate\\Database\\Eloquent\\Builder;\nuse Illuminate\\Database\\Eloquent\\SoftDeletingScope;";
         }
 
+        $relatedResource = '';
+        $related = trim((string) $this->option('related'));
+
+        if ($related !== '') {
+            $related = Str::endsWith($related, 'Resource') ? $related : "{$related}Resource";
+            $relatedClass = Str::contains($related, '\\') ? ltrim($related, '\\') : $this->getGenerationNamespace().$suffix."\\Resources\\{$related}";
+            $imports .= "\nuse {$relatedClass};";
+            $relatedResource = "\n    protected static ?string \$relatedResource = ".class_basename($relatedClass)."::class;\n";
+        }
+
         $this->writeStub('relation-manager', $path, [
             'tableExtras' => $tableExtras,
             'bulkActions' => $bulkActions,
@@ -75,10 +85,54 @@ class MakeRelationManagerCommand extends Command
             'headerActions' => $headerActions,
             'recordActions' => $recordActions,
             'imports' => $imports,
+            'relatedResource' => $relatedResource,
         ], (bool) $this->option('force'));
 
-        $this->components->info("Register it in {$resource}::getRelations(): RelationManagers\\{$class}::class");
+        $resourcePath = $this->getGenerationPath().str_replace('\\', '/', $suffix)."/Resources/{$resource}.php";
+
+        if ($this->option('register') && self::registerInResource($resourcePath, "{$resource}\\RelationManagers\\{$class}")) {
+            $this->components->info("Registered it in {$resource}::getRelations().");
+        } else {
+            $this->components->info("Register it in {$resource}::getRelations(): RelationManagers\\{$class}::class");
+        }
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Add the manager to the resource's `getRelations()` (once). False when the method is
+     * missing or not a plain array, so the caller prints the manual step instead.
+     */
+    public static function registerInResource(string $resourcePath, string $relativeClass): bool
+    {
+        if (! is_file($resourcePath)) {
+            return false;
+        }
+
+        $code = (string) file_get_contents($resourcePath);
+        $entry = $relativeClass.'::class';
+
+        if (str_contains($code, $entry)) {
+            return true;
+        }
+
+        $updated = preg_replace(
+            '/(public static function getRelations\(\): array\s*\{\s*return \[)(\s*\/\/\s*(?=\]))?/',
+            '$1'."\n            {$entry},\n        ",
+            $code,
+            1,
+            $count,
+        );
+
+        if (! is_string($updated) || $count !== 1) {
+            return false;
+        }
+
+        // `return [\n            X::class,\n        ` + an existing entry list: tidy the blank line.
+        $updated = (string) preg_replace('/'.preg_quote($entry, '/').',\n        \n/', $entry.",\n", $updated);
+
+        file_put_contents($resourcePath, $updated);
+
+        return true;
     }
 }

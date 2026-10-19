@@ -15,7 +15,7 @@ use AlfaSix\Alfakit\Tables\Table;
 class {{ class }} extends RelationManager
 {
     protected static string $relationship = '{{ relationship }}';
-
+{{ relatedResource }}
     protected static ?string $recordTitleAttribute = '{{ recordTitleAttribute }}';
 
     public function form(Schema $schema): Schema

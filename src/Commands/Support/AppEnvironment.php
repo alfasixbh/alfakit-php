@@ -197,6 +197,63 @@ final class AppEnvironment
     }
 
     /**
+     * `<manager> run build` for the app's package manager (`yarn build` for Yarn).
+     *
+     * @return array<int, string>
+     */
+    public static function npmBuildCommand(): array
+    {
+        $manager = MakeThemeCommand::detectPackageManager();
+
+        return $manager === 'yarn' ? ['yarn', 'build'] : [$manager, 'run', 'build'];
+    }
+
+    /**
+     * Build the app's frontend (its `build` script).
+     */
+    public static function npmBuild(?callable $output = null): ProcessResult
+    {
+        return Process::path(base_path())->timeout(900)->run(
+            self::npmBuildCommand(),
+            $output === null ? null : static fn (string $type, string $buffer) => $output($buffer),
+        );
+    }
+
+    /**
+     * Whether the current frontend serves AlfaKit's Vite entries: a dev server runs, or the
+     * last build's manifest contains the panel entry or the starter kit's AlfaKit page.
+     */
+    public static function frontendIncludesAlfakit(): bool
+    {
+        if (self::viteDevServerRunning()) {
+            return true;
+        }
+
+        $manifest = public_path('build/manifest.json');
+        $entries = is_file($manifest) ? json_decode((string) file_get_contents($manifest), true) : null;
+
+        if (! is_array($entries)) {
+            return false;
+        }
+
+        foreach (array_keys($entries) as $entry) {
+            if (preg_match('#^resources/js/(alfakit/|pages/Alfakit/)#', (string) $entry) === 1) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Whether the Vite dev server is running (`public/hot`), so new entries are served live.
+     */
+    public static function viteDevServerRunning(): bool
+    {
+        return is_file(public_path('hot'));
+    }
+
+    /**
      * Run `php artisan …` in a fresh process.
      *
      * @param  array<int, string>  $arguments

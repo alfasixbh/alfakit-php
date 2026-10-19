@@ -44,6 +44,7 @@ trait InstallsStarterKit
 
         if (! $this->option('no-npm')) {
             $this->installNpmPackage($kit);
+            $this->buildFrontend();
         }
 
         $this->newLine();
@@ -51,7 +52,9 @@ trait InstallsStarterKit
         $this->components->bulletList([
             'Run the migrations: php artisan migrate',
             'Create a resource: php artisan make:alfakit-resource Post --generate',
-            'Build the frontend (npm run build, or npm run dev) and visit /'.trim($path, '/'),
+            $this->frontendBuilt
+                ? 'Visit /'.trim($path, '/')
+                : 'Build the frontend (npm run build, or npm run dev) and visit /'.trim($path, '/').'; until then AlfaKit pages fail with "Unable to locate file in Vite manifest"',
             'Sign in with the app\'s own login; the panel links appear in the app sidebar',
             'In production, implement AlfaSix\\Alfakit\\Contracts\\CanAccessPanel on your User model',
         ]);

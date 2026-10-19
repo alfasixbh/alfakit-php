@@ -20,11 +20,15 @@ use AlfaSix\Alfakit\Commands\OptimizeCommand;
 use AlfaSix\Alfakit\Commands\PruneUploadsCommand;
 use AlfaSix\Alfakit\Localization\TranslationLoader;
 use AlfaSix\Alfakit\Localization\Translations;
+use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Contracts\Translation\Loader;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Console\AboutCommand;
+use Illuminate\Foundation\ViteException;
 use Illuminate\Routing\Router;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\View\ViewException;
+use Throwable;
 
 class AlfakitServiceProvider extends ServiceProvider
 {
@@ -108,6 +112,15 @@ class AlfakitServiceProvider extends ServiceProvider
 
         // Verification mails sent from a panel link back to that panel.
         Auth\EmailVerificationUrls::register();
+
+        // A starter kit's own layout loads AlfaKit's page through `@vite`: before the next
+        // build that fails with a bare "Unable to locate file in Vite manifest".
+        $this->callAfterResolving(ExceptionHandler::class, static function (ExceptionHandler $handler): void {
+            if (method_exists($handler, 'map')) {
+                $handler->map(ViteException::class, static fn (ViteException $exception): ViteException => Support\ViteBuildHint::explain($exception));
+                $handler->map(ViewException::class, static fn (ViewException $exception): Throwable => $exception->getPrevious() instanceof ViteException ? Support\ViteBuildHint::explain($exception->getPrevious()) : $exception);
+            }
+        });
 
         // Iconify sets listed in `alfakit.icons.iconify` (`alfakit:icons mdi`); nothing is read until an icon is used.
         if (is_array($iconify = config('alfakit.icons.iconify')) && $iconify !== []) {

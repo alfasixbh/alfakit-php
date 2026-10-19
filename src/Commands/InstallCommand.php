@@ -7,6 +7,7 @@ namespace AlfaSix\Alfakit\Commands;
 use AlfaSix\Alfakit\Commands\Concerns\CanGenerateFiles;
 use AlfaSix\Alfakit\Commands\Concerns\InstallsStarterKit;
 use AlfaSix\Alfakit\Commands\Concerns\ShowsBanner;
+use AlfaSix\Alfakit\Commands\Support\AppEnvironment;
 use Illuminate\Console\Command;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Str;
@@ -37,6 +38,9 @@ class InstallCommand extends Command
         {--scaffold : Set up the frontend toolchain of a fresh Laravel app (Inertia, the framework, its Vite plugin, Tailwind, TypeScript)}
         {--no-composer-script : Do not add alfakit:upgrade to the post-autoload-dump composer script}
         {--force : Overwrite existing files}';
+
+    /** Whether this run built the frontend (or a dev server serves it). */
+    protected bool $frontendBuilt = false;
 
     public function handle(Filesystem $filesystem): int
     {
@@ -106,6 +110,7 @@ class InstallCommand extends Command
         // 6. npm package
         if (! $this->option('no-npm')) {
             $this->installNpmPackage($adapter);
+            $this->buildFrontend();
         }
 
         $this->newLine();
@@ -115,7 +120,9 @@ class InstallCommand extends Command
             'Create a user: php artisan make:alfakit-user',
             'Create a resource: php artisan make:alfakit-resource Post --generate',
             'Run the migrations: php artisan migrate',
-            'Build the frontend (npm run build, or keep npm run dev running) and visit /'.$path.'; until then the panel fails with "Unable to locate file in Vite manifest"',
+            $this->frontendBuilt
+                ? 'Visit /'.$path
+                : 'Build the frontend (npm run build, or keep npm run dev running) and visit /'.$path.'; until then the panel fails with "Unable to locate file in Vite manifest"',
         ]);
 
         return self::SUCCESS;
@@ -165,6 +172,7 @@ class InstallCommand extends Command
 
         if (! $this->option('no-npm')) {
             $this->installNpmPackage($adapter);
+            $this->buildFrontend();
         }
 
         $this->newLine();
@@ -499,6 +507,38 @@ class InstallCommand extends Command
         }
 
         $this->components->task('Installed the frontend toolchain');
+    }
+
+    /**
+     * The install adds Vite entries (the panel entry or the starter kit's AlfaKit page), and a
+     * build made before the install does not contain them: pages would fail with "Unable to
+     * locate file in Vite manifest" until the next build. Build now, unless a dev server runs.
+     */
+    protected function buildFrontend(): void
+    {
+        if (AppEnvironment::viteDevServerRunning()) {
+            $this->frontendBuilt = true;
+            $this->components->info('Your Vite dev server is running and serves the new AlfaKit files.');
+
+            return;
+        }
+
+        $command = implode(' ', AppEnvironment::npmBuildCommand());
+
+        if (! confirm("Build the frontend now ({$command})?", true, hint: 'AlfaKit added Vite entries; pages need a new build (or npm run dev).')) {
+            return;
+        }
+
+        $result = AppEnvironment::npmBuild(fn (string $buffer) => $this->output->write($buffer));
+
+        if ($result->successful()) {
+            $this->frontendBuilt = true;
+            $this->components->task("Built the frontend ({$command})");
+
+            return;
+        }
+
+        $this->components->error("The frontend build failed. Fix the errors above and run `{$command}`.");
     }
 
     protected function installNpmPackage(string $adapter): void

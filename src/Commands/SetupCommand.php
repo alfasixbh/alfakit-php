@@ -718,7 +718,9 @@ class SetupCommand extends Command
 
         $steps = array_values(array_unique([
             ...$this->nextSteps,
-            'Build the frontend (npm run build, or keep npm run dev running) and open /'.Str::slug((string) ($this->option('panel') ?: 'admin')),
+            AppEnvironment::frontendIncludesAlfakit()
+                ? 'Open /'.Str::slug((string) ($this->option('panel') ?: 'admin'))
+                : 'Build the frontend (npm run build, or keep npm run dev running) and open /'.Str::slug((string) ($this->option('panel') ?: 'admin')),
             'Create a resource: php artisan make:alfakit-resource Post --generate',
             'Run php artisan alfakit:setup again any time: finished steps are skipped',
         ]));

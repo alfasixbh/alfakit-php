@@ -125,12 +125,17 @@ trait WritesResources
         $class = $this->parentResourceClass($parent, $namespace);
 
         if (! class_exists($class) || ! is_subclass_of($class, Resource::class)) {
-            return $columns;
+            // The parent isn't loadable (yet): go by its name, `PostResource` → `post_id`.
+            $foreignKey = Str::snake(Str::beforeLast(class_basename($class), 'Resource')).'_id';
+
+            return array_values(array_filter($columns, static fn (array $column): bool => $column['name'] !== $foreignKey));
         }
 
         $parentModel = ltrim($class::getModel(), '\\');
+        // The default foreign key (`post_id`), for relationships declared without a return type.
+        $foreignKey = Str::snake(class_basename($parentModel)).'_id';
 
-        return array_values(array_filter($columns, static fn (array $column): bool => $column['related'] === null || ltrim($column['related'], '\\') !== $parentModel));
+        return array_values(array_filter($columns, static fn (array $column): bool => $column['name'] !== $foreignKey && ($column['related'] === null || ltrim($column['related'], '\\') !== $parentModel)));
     }
 
     /**

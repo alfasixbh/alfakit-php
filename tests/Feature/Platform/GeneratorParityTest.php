@@ -16,6 +16,7 @@ use AlfaSix\Alfakit\Tests\Fixtures\Models\Comment;
 use AlfaSix\Alfakit\Tests\Fixtures\Models\Post;
 use AlfaSix\Alfakit\Tests\Fixtures\Models\StrictCategory;
 use AlfaSix\Alfakit\Tests\Fixtures\Models\Team;
+use AlfaSix\Alfakit\Tests\Fixtures\Models\UntypedComment;
 use AlfaSix\Alfakit\Tests\Fixtures\Panel\Resources\PostResource;
 use Illuminate\Filesystem\Filesystem;
 
@@ -363,4 +364,50 @@ it('warns when the model would refuse the generated form fields on save', functi
 
     expect(ModelInspector::guardedAttributes(StrictCategory::class, ['name', 'slug']))->toBe(['slug'])
         ->and(ModelInspector::guardedAttributes(Category::class, ['name', 'slug']))->toBe([]);
+});
+
+it('links a nested resource from its parent with a registered relation manager', function (): void {
+    $this->artisan('make:alfakit-resource', ['model' => Post::class])->assertSuccessful();
+    $this->artisan('make:alfakit-resource', ['model' => Comment::class, '--nested' => 'PostResource', '--view' => true])
+        ->expectsOutputToContain('Registered it in PostResource::getRelations().')
+        ->assertSuccessful();
+
+    $manager = generatedFile('PostResource/RelationManagers/CommentsRelationManager.php');
+    $parent = generatedFile('Resources/PostResource.php');
+
+    expect($manager)
+        ->toContain("protected static string \$relationship = 'comments';")
+        ->toContain('protected static ?string $relatedResource = CommentResource::class;')
+        ->toContain('use App\\Alfakit\\')->toContain('\\Resources\\CommentResource;')
+        ->toContain('ViewAction::make()')
+        ->and($parent)->toContain('PostResource\\RelationManagers\\CommentsRelationManager::class,');
+
+    foreach ([$manager, $parent] as $code) {
+        expect(shell_exec('echo '.escapeshellarg($code).' | php -l 2>&1'))->toContain('No syntax errors');
+    }
+
+    // Generating it again registers nothing twice.
+    $this->artisan('make:alfakit-resource', ['model' => Comment::class, '--nested' => 'PostResource', '--force' => true])->assertSuccessful();
+
+    expect(substr_count(generatedFile('Resources/PostResource.php'), 'CommentsRelationManager::class'))->toBe(1);
+});
+
+it('registers a relation manager in getRelations() next to existing ones', function (): void {
+    $path = sys_get_temp_dir().'/alfakit-relations-'.uniqid().'.php';
+    file_put_contents($path, "<?php\n\nclass PostResource\n{\n    public static function getRelations(): array\n    {\n        return [\n            PostResource\\RelationManagers\\TagsRelationManager::class,\n        ];\n    }\n}\n");
+
+    expect(AlfaSix\Alfakit\Commands\MakeRelationManagerCommand::registerInResource($path, 'PostResource\\RelationManagers\\CommentsRelationManager'))->toBeTrue();
+
+    $code = (string) file_get_contents($path);
+    unlink($path);
+
+    expect($code)->toContain("return [\n            PostResource\\RelationManagers\\CommentsRelationManager::class,\n            PostResource\\RelationManagers\\TagsRelationManager::class,\n        ];")
+        ->and(shell_exec('echo '.escapeshellarg($code).' | php -l 2>&1'))->toContain('No syntax errors');
+});
+
+it('leaves the parent key out of a nested resource whose relationship has no return type', function (): void {
+    $this->artisan('make:alfakit-resource', ['model' => Post::class])->assertSuccessful();
+    $this->artisan('make:alfakit-resource', ['model' => UntypedComment::class, '--generate' => true, '--nested' => 'PostResource'])->assertSuccessful();
+
+    expect(generatedFile('Resources/UntypedCommentResource.php'))->not->toContain("'post_id'")->toContain("'body'");
 });
