@@ -29,7 +29,7 @@ trait InstallsStarterKit
 
         $this->components->info("Installing AlfaKit into the {$kit} starter kit…");
 
-        $changes = (new StarterKitInstaller(base_path(), $kit, $force))->install($panelId, $path, headerWidgets: ! $this->option('no-header-widgets'));
+        $changes = (new StarterKitInstaller(base_path(), $kit, $force))->install($panelId, $path, headerWidgets: ! $this->option('no-header-widgets'), dashboardWidgets: ! $this->option('no-dashboard-widgets'));
 
         foreach ($changes as $change) {
             $label = str_pad(Str::upper($change['status']), 9);
@@ -52,6 +52,7 @@ trait InstallsStarterKit
         $this->components->bulletList([
             'Run the migrations: php artisan migrate',
             'Create a resource: php artisan make:alfakit-resource Post --generate',
+            'Create a widget for your dashboard: php artisan make:alfakit-widget Stats --type=stats',
             $this->frontendBuilt
                 ? 'Visit /'.trim($path, '/')
                 : 'Build the frontend (npm run build, or npm run dev) and visit /'.trim($path, '/').'; until then AlfaKit pages fail with "Unable to locate file in Vite manifest"',

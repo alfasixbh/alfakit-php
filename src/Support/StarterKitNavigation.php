@@ -10,11 +10,15 @@ use Inertia\Inertia;
 /**
  * Shares the navigation of `starterKit()` panels with every Inertia page of the application
  * (`alfakitNavigation`), so the host's sidebar lists the panel's resources and pages on the
- * host's own pages (dashboard, settings) as well as on the panel's.
+ * host's own pages (dashboard, settings) as well as on the panel's, and their dashboard
+ * widgets with the host's dashboard (`alfakitWidgets`).
  */
 final class StarterKitNavigation
 {
     public const PROP = 'alfakitNavigation';
+
+    /** The panels' dashboard widgets on the host's dashboard (`<AlfakitWidgets />`). */
+    public const WIDGETS_PROP = 'alfakitWidgets';
 
     /** Register the shared prop when at least one panel runs in starter kit mode. */
     public static function register(AlfakitManager $manager): void
@@ -23,6 +27,8 @@ final class StarterKitNavigation
             if ($panel->isStarterKit()) {
                 // A closure: resolved once per full page response, skipped by partial reloads.
                 Inertia::share(self::PROP, static fn (): ?array => self::resolve($manager));
+                // Null (and nothing built) except on the pages of `starterKitDashboard()`.
+                Inertia::share(self::WIDGETS_PROP, static fn (): ?array => self::resolveWidgets($manager));
 
                 return;
             }
@@ -58,5 +64,31 @@ final class StarterKitNavigation
         }
 
         return $navigations === [] ? null : $navigations;
+    }
+
+    /**
+     * One entry (`{ id, component }`) per starter kit panel whose widgets the current host
+     * page shows (`starterKitDashboard()`, the `dashboard` route by default). Null on other
+     * pages, for guests and users who may not open the panel, and without widgets.
+     *
+     * @return list<array{id: string, component: array<string, mixed>}>|null
+     */
+    public static function resolveWidgets(AlfakitManager $manager): ?array
+    {
+        if ($manager->getCurrentPanel() !== null) {
+            return null;
+        }
+
+        $entries = [];
+
+        foreach ($manager->getPanels() as $panel) {
+            $component = $panel->getStarterKitDashboardSchema();
+
+            if ($component !== null) {
+                $entries[] = ['id' => $panel->getId(), 'component' => $component];
+            }
+        }
+
+        return $entries === [] ? null : $entries;
     }
 }

@@ -6,6 +6,7 @@ namespace AlfaSix\Alfakit\Commands;
 
 use AlfaSix\Alfakit\Commands\Concerns\GeneratesFrontendComponents;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 use Symfony\Component\Console\Attribute\AsCommand;
 
@@ -53,8 +54,35 @@ class MakeWidgetCommand extends Command
 
         if ($resource !== null) {
             $this->components->info("List it in {$resource}::getWidgets() and return it from a page's getHeaderWidgets() or getFooterWidgets(): Widgets\\{$name}::class. On record pages it receives the \$record.");
+        } elseif (($hint = $this->starterKitDashboardHint($panelId)) !== null) {
+            $this->components->info($hint);
         }
 
         return self::SUCCESS;
+    }
+
+    /**
+     * `starterKit()` panels have no dashboard of their own: their widgets appear on the
+     * host's dashboard through `<AlfakitWidgets />`.
+     */
+    protected function starterKitDashboardHint(?string $panelId): ?string
+    {
+        $panel = $panelId === null ? null : (alfakit()->getPanels()[$panelId] ?? null);
+
+        if ($panel === null || ! $panel->isStarterKit()) {
+            return null;
+        }
+
+        $routes = $panel->getStarterKitDashboardRoutes();
+
+        if ($routes === null) {
+            return 'This panel shows no widgets on your app\'s pages (starterKitDashboard(false)): return the widget from a page\'s getHeaderWidgets() or getFooterWidgets().';
+        }
+
+        $route = $routes[0];
+        $where = ! str_contains($route, '*') && Route::has($route) ? parse_url(route($route), PHP_URL_PATH) : null;
+        $where = is_string($where) && $where !== '' ? $where : "the {$route} route";
+
+        return "It appears on your app's dashboard ({$where}) through <AlfakitWidgets /> (php artisan alfakit:install --starter-kit adds it to the dashboard page). Sort it with \$sort and size it with \$columnSpan.";
     }
 }

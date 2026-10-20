@@ -25,6 +25,8 @@ use Illuminate\Support\Facades\Route;
  *   `alfakitNavigation` prop, for the host's sidebar, with what the drop-in header
  *   components (`<AlfakitSearch />`, `<AlfakitNotifications />`, `<AlfakitTenantSwitcher />`)
  *   need before they load (`widgets`).
+ * - The panel's dashboard widgets are shared with the host's dashboard (`alfakitWidgets`,
+ *   `starterKitDashboard()`), for the drop-in `<AlfakitWidgets />`.
  * - Multi-factor authentication is the host's (Fortify's two-factor settings): Alfakit's
  *   `multiFactorAuthentication()` is ignored, its challenge belongs to Alfakit's login page.
  *
@@ -39,6 +41,9 @@ trait HasStarterKit
     protected string $starterKitRootView = 'app';
 
     protected string $starterKitLoginRoute = 'login';
+
+    /** @var array<string>|null The host routes that show the panel's widgets (`<AlfakitWidgets />`). */
+    protected ?array $starterKitDashboardRoutes = ['dashboard'];
 
     /**
      * Run the panel inside a Laravel starter kit app: the host's authentication, root view and
@@ -62,6 +67,48 @@ trait HasStarterKit
         }
 
         return $this;
+    }
+
+    /**
+     * The host pages that show the panel's dashboard widgets (`<AlfakitWidgets />` on the
+     * starter kit's `/dashboard`), by route name or pattern (`dashboard`, `teams.*`), or
+     * `false` for none. The widgets are shared as the `alfakitWidgets` prop on those pages
+     * only.
+     *
+     * @param  string|array<string>|false  $routes
+     */
+    public function starterKitDashboard(string|array|false $routes = 'dashboard'): static
+    {
+        $this->starterKitDashboardRoutes = $routes === false ? null : array_values((array) $routes);
+
+        return $this;
+    }
+
+    /**
+     * @return array<string>|null
+     */
+    public function getStarterKitDashboardRoutes(): ?array
+    {
+        return $this->starterKitDashboardRoutes === [] ? null : $this->starterKitDashboardRoutes;
+    }
+
+    /**
+     * The panel's dashboard widgets for the current host page (`alfakitWidgets` prop): a
+     * standalone widgets payload bound to the panel, or null on other pages, for guests,
+     * users who may not access the panel, tenancy panels (their widgets are tenant-scoped)
+     * and panels without widgets.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function getStarterKitDashboardSchema(): ?array
+    {
+        $routes = $this->getStarterKitDashboardRoutes();
+
+        if (! $this->isStarterKit || $routes === null || ! request()->routeIs(...$routes)) {
+            return null;
+        }
+
+        return \AlfaSix\Alfakit\Standalone\StarterKitDashboard::payloadFor($this);
     }
 
     /** Alias of `starterKit()`: the panel is embedded in the host application. */

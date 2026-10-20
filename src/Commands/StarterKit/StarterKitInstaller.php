@@ -23,6 +23,9 @@ use Illuminate\Support\Str;
  * - `resources/js/components/app-sidebar-header.tsx` and `app-header.tsx` (`AppSidebarHeader`,
  *   `AppHeader` in Vue and Svelte): `<AlfakitSearch />` and `<AlfakitNotifications />` in the
  *   header of both app layouts, in a marked block (`--no-header-widgets` skips it).
+ * - `resources/js/pages/dashboard.tsx` (`Dashboard.vue`, `Dashboard.svelte`): the row of
+ *   placeholder boxes wrapped in `<AlfakitWidgets>`, so the panel's widgets show on the
+ *   app's dashboard, in a marked block (`--no-dashboard-widgets` skips it).
  * - `resources/css/app.css`: the starter kit stylesheet (`standalone.css`, no shadcn palette,
  *   so the host's tokens stay) and the `@source` of the renderer's compiled components.
  * - `app/Providers/Alfakit/{Id}PanelProvider.php` with `->starterKit()`, registered in
@@ -35,6 +38,9 @@ final class StarterKitInstaller
 
     /** Marks the header components the installer adds (`<AlfakitSearch />`, `<AlfakitNotifications />`). */
     public const HEADER_MARKER = 'alfakit:header';
+
+    /** Marks the dashboard widgets the installer adds to the host's dashboard (`<AlfakitWidgets>`). */
+    public const DASHBOARD_MARKER = 'alfakit:widgets';
 
     /** @var list<array{status: 'created'|'updated'|'unchanged'|'skipped', path: string, note: string}> */
     private array $changes = [];
@@ -66,7 +72,7 @@ final class StarterKitInstaller
     /**
      * The host files of a starter kit the installer reads or writes, relative to the app root.
      *
-     * @return array{layout: string, sidebar: string, sidebarHeader: string, header: string, entry: string, page: string, nav: string, navImport: string, css: string}
+     * @return array{layout: string, sidebar: string, sidebarHeader: string, header: string, dashboard: string, entry: string, page: string, nav: string, navImport: string, css: string}
      */
     public static function files(string $kit): array
     {
@@ -76,6 +82,7 @@ final class StarterKitInstaller
                 'sidebar' => 'resources/js/components/AppSidebar.vue',
                 'sidebarHeader' => 'resources/js/components/AppSidebarHeader.vue',
                 'header' => 'resources/js/components/AppHeader.vue',
+                'dashboard' => 'resources/js/pages/Dashboard.vue',
                 'entry' => 'resources/js/app.ts',
                 'page' => 'resources/js/pages/Alfakit/Page.vue',
                 'nav' => 'resources/js/components/AlfakitNav.vue',
@@ -87,6 +94,7 @@ final class StarterKitInstaller
                 'sidebar' => 'resources/js/components/AppSidebar.svelte',
                 'sidebarHeader' => 'resources/js/components/AppSidebarHeader.svelte',
                 'header' => 'resources/js/components/AppHeader.svelte',
+                'dashboard' => 'resources/js/pages/Dashboard.svelte',
                 'entry' => 'resources/js/app.ts',
                 'page' => 'resources/js/pages/Alfakit/Page.svelte',
                 'nav' => 'resources/js/components/AlfakitNav.svelte',
@@ -98,6 +106,7 @@ final class StarterKitInstaller
                 'sidebar' => 'resources/js/components/app-sidebar.tsx',
                 'sidebarHeader' => 'resources/js/components/app-sidebar-header.tsx',
                 'header' => 'resources/js/components/app-header.tsx',
+                'dashboard' => 'resources/js/pages/dashboard.tsx',
                 'entry' => 'resources/js/app.tsx',
                 'page' => 'resources/js/pages/Alfakit/Page.tsx',
                 'nav' => 'resources/js/components/alfakit-nav.tsx',
@@ -112,7 +121,7 @@ final class StarterKitInstaller
      *
      * @return list<array{status: 'created'|'updated'|'unchanged'|'skipped', path: string, note: string}>
      */
-    public function install(string $panelId = 'admin', ?string $path = null, bool $headerWidgets = true): array
+    public function install(string $panelId = 'admin', ?string $path = null, bool $headerWidgets = true, bool $dashboardWidgets = true): array
     {
         $this->changes = [];
         $files = self::files($this->kit);
@@ -123,6 +132,10 @@ final class StarterKitInstaller
         if ($headerWidgets) {
             $this->patchFile($files['sidebarHeader'], fn (string $contents): ?string => self::addWidgetsToHeader($contents, $this->kit, sidebarLayout: true), 'added <AlfakitSearch /> and <AlfakitNotifications /> to the header');
             $this->patchFile($files['header'], fn (string $contents): ?string => self::addWidgetsToHeader($contents, $this->kit, sidebarLayout: false), 'added <AlfakitSearch /> and <AlfakitNotifications /> before the user menu');
+        }
+
+        if ($dashboardWidgets) {
+            $this->patchFile($files['dashboard'], fn (string $contents): ?string => self::addWidgetsToDashboard($contents, $this->kit), 'wrapped the placeholder boxes in <AlfakitWidgets>: the panel\'s widgets show there');
         }
 
         $this->patchFile($files['css'], fn (string $contents): string => self::addStyles($contents, $this->kit), 'imported the Alfakit starter kit styles');
@@ -229,6 +242,53 @@ final class StarterKitInstaller
         }
 
         return self::addImport($updated, "@alfakit/{$kit}", 'import { AlfakitNotifications, AlfakitSearch } from \'@alfakit/'.$kit.'\';');
+    }
+
+    /**
+     * Show the panel's dashboard widgets on the starter kit's dashboard: the row of
+     * placeholder boxes (`grid auto-rows-min gap-4 md:grid-cols-3`) is wrapped in
+     * `<AlfakitWidgets>`, in a marked block, so the widgets take its place and the boxes stay
+     * while the panel has no widgets (or the user may not open it). The import goes with the
+     * host's package imports (in Svelte, the instance script's). Null when the page does not
+     * have the starter kit's shape; unchanged when the block is there.
+     */
+    public static function addWidgetsToDashboard(string $contents, string $kit): ?string
+    {
+        if (str_contains($contents, self::DASHBOARD_MARKER)) {
+            return $contents;
+        }
+
+        $class = $kit === 'react' ? 'className' : 'class';
+        $comment = $kit === 'react'
+            ? '{/* '.self::DASHBOARD_MARKER.': AlfaKit dashboard widgets, the boxes show while there are none (php artisan alfakit:install --starter-kit) */}'
+            : '<!-- '.self::DASHBOARD_MARKER.': AlfaKit dashboard widgets, the boxes show while there are none (php artisan alfakit:install --starter-kit) -->';
+
+        // The placeholder row and its closing tag, at the same indentation.
+        $pattern = '/^([ \t]*)<div '.$class.'="grid auto-rows-min gap-4 md:grid-cols-3">[ \t]*\n(?:.*\n)*?\1<\/div>[ \t]*\n/m';
+
+        if (preg_match($pattern, $contents, $match, PREG_OFFSET_CAPTURE) !== 1) {
+            return null;
+        }
+
+        $indent = $match[1][0];
+        $block = (string) preg_replace('/^(?=[ \t]*\S)/m', '    ', $match[0][0]);
+        $wrapped = $indent.$comment."\n".$indent."<AlfakitWidgets>\n".$block.$indent."</AlfakitWidgets>\n";
+        $updated = substr_replace($contents, $wrapped, $match[0][1], strlen($match[0][0]));
+        $import = "import { AlfakitWidgets } from '@alfakit/{$kit}';";
+
+        if ($kit !== 'svelte') {
+            return self::addImport($updated, "@alfakit/{$kit}", $import);
+        }
+
+        // Svelte: the instance script (not `<script module>`).
+        if (preg_match('/<script(?![^>]*\bmodule\b)[^>]*>\n/', $updated, $script, PREG_OFFSET_CAPTURE) !== 1) {
+            return null;
+        }
+
+        $offset = $script[0][1] + strlen($script[0][0]);
+        $instance = self::addImport(substr($updated, $offset), "@alfakit/{$kit}", $import);
+
+        return $instance === null ? null : substr($updated, 0, $offset).$instance;
     }
 
     /**

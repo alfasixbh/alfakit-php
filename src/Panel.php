@@ -1985,7 +1985,9 @@ class Panel
 
         // Token-based endpoints authorise themselves from the context token, so guest pages
         // (login, registration, password reset) can use them too.
-        $router->prefix($prefix)->name($name)->group(static function (Router $router): void {
+        $withStarterKitWidgets = $this->isStarterKit && ! $this->hasTenancy();
+
+        $router->prefix($prefix)->name($name)->group(static function (Router $router) use ($withStarterKitWidgets): void {
             $router->post('/actions', [ActionController::class, 'execute'])->name('actions.execute');
             // Field actions send the form's state, which can be too large for a query string, so the
             // modal endpoint also takes POST. One route (not a GET and a POST route on the same URI)
@@ -2013,6 +2015,12 @@ class Panel
             $router->post('/dashboard/layout', [Http\Controllers\DashboardLayoutController::class, 'update'])->name('dashboard.layout');
             // Edit pages: what changed since the form was loaded (`detectConflicts()`).
             $router->post('/conflicts', Http\Controllers\ConflictController::class)->name('conflicts');
+
+            // `starterKit()`: lazy and polled widgets of `<AlfakitWidgets />` on host pages
+            // (`Standalone\StarterKitDashboard`), fetched by the panel's context token.
+            if ($withStarterKitWidgets) {
+                $router->get('/standalone/components', [Http\Controllers\StandaloneController::class, 'components'])->name('standalone.components');
+            }
         });
 
         // Global search queries resources, which are tenant-scoped, so on tenancy panels it

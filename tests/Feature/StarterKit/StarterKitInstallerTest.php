@@ -43,6 +43,7 @@ it('wires Alfakit into the starter kit, idempotently', function (string $kit, st
         $sidebar => 'updated',
         StarterKitInstaller::files($kit)['sidebarHeader'] => 'updated',
         StarterKitInstaller::files($kit)['header'] => 'updated',
+        StarterKitInstaller::files($kit)['dashboard'] => 'updated',
         'resources/css/app.css' => 'updated',
         StarterKitInstaller::files($kit)['entry'] => 'unchanged',
         'app/Providers/Alfakit/AdminPanelProvider.php' => 'created',
@@ -82,6 +83,24 @@ it('wires Alfakit into the starter kit, idempotently', function (string $kit, st
 
     expect(strpos($header, '<AlfakitNotifications />'))->toBeLessThan(strpos($header, '<DropdownMenu>'));
 
+    // The dashboard's placeholder row is wrapped in <AlfakitWidgets>, in a marked block: the
+    // panel's widgets show there, the boxes while there are none.
+    $dashboard = (string) file_get_contents($app.'/'.StarterKitInstaller::files($kit)['dashboard']);
+    $class = $kit === 'react' ? 'className' : 'class';
+
+    expect($dashboard)->toContain(StarterKitInstaller::DASHBOARD_MARKER)
+        ->toContain("import { AlfakitWidgets } from '@alfakit/{$kit}';\n")
+        ->and(substr_count($dashboard, '<AlfakitWidgets>'))->toBe(1)
+        ->and(substr_count($dashboard, '</AlfakitWidgets>'))->toBe(1)
+        ->and(substr_count($dashboard, 'PlaceholderPattern'))->toBe(substr_count((string) file_get_contents(dirname(__DIR__, 2).'/Fixtures/StarterKits/'.$kit.'/'.StarterKitInstaller::files($kit)['dashboard']), 'PlaceholderPattern'))
+        ->and(strpos($dashboard, '<AlfakitWidgets>'))->toBeLessThan(strpos($dashboard, '<div '.$class.'="grid auto-rows-min gap-4 md:grid-cols-3">'))
+        ->and(strpos($dashboard, '</AlfakitWidgets>'))->toBeLessThan(strpos($dashboard, 'min-h-'));
+
+    if ($kit === 'svelte') {
+        // In the instance script, next to the page's own imports.
+        expect(strpos($dashboard, 'import { AlfakitWidgets }'))->toBeGreaterThan(strpos($dashboard, '<script lang="ts">'));
+    }
+
     // The starter kit stylesheet (no palette, so the host's tokens stay) after Tailwind.
     $css = (string) file_get_contents($app.'/resources/css/app.css');
 
@@ -97,13 +116,13 @@ it('wires Alfakit into the starter kit, idempotently', function (string $kit, st
         ->and(file_get_contents($app.'/bootstrap/providers.php'))->toContain('use App\\Providers\\Alfakit\\AdminPanelProvider;')->toContain('    AdminPanelProvider::class,');
 
     // A second run changes nothing.
-    $snapshot = collect([$page, $nav, $sidebar, StarterKitInstaller::files($kit)['sidebarHeader'], StarterKitInstaller::files($kit)['header'], 'resources/css/app.css', 'bootstrap/providers.php'])
+    $snapshot = collect([$page, $nav, $sidebar, StarterKitInstaller::files($kit)['sidebarHeader'], StarterKitInstaller::files($kit)['header'], StarterKitInstaller::files($kit)['dashboard'], 'resources/css/app.css', 'bootstrap/providers.php'])
         ->mapWithKeys(fn (string $file): array => [$file => file_get_contents($app.'/'.$file)]);
 
     $again = (new StarterKitInstaller($app, $kit))->install('admin', 'admin');
 
     expect(collect($again)->pluck('status')->unique()->values()->all())->toBe(['unchanged'])
-        ->and($snapshot->map(fn (string $contents, string $file): bool => file_get_contents($app.'/'.$file) === $contents)->filter()->count())->toBe(7);
+        ->and($snapshot->map(fn (string $contents, string $file): bool => file_get_contents($app.'/'.$file) === $contents)->filter()->count())->toBe(8);
 
     (new Filesystem)->deleteDirectory($app);
 })->with('starter kits');
@@ -134,6 +153,26 @@ it('leaves the headers alone with --no-header-widgets', function (): void {
     (new Filesystem)->deleteDirectory($app);
 });
 
+it('leaves the dashboard alone with --no-dashboard-widgets or an unknown shape', function (): void {
+    $app = starterKitApp('vue');
+    $dashboard = (string) file_get_contents($app.'/resources/js/pages/Dashboard.vue');
+
+    $changes = collect((new StarterKitInstaller($app, 'vue'))->install('admin', 'admin', dashboardWidgets: false))->keyBy('path');
+
+    expect($changes)->not->toHaveKey('resources/js/pages/Dashboard.vue')
+        ->and(file_get_contents($app.'/resources/js/pages/Dashboard.vue'))->toBe($dashboard)
+        ->and(StarterKitInstaller::addWidgetsToDashboard('<template><MyCharts /></template>', 'vue'))->toBeNull();
+
+    file_put_contents($app.'/resources/js/pages/Dashboard.vue', '<template><MyCharts /></template>');
+
+    $changes = collect((new StarterKitInstaller($app, 'vue', force: true))->install('admin', 'admin'))->keyBy('path');
+
+    expect($changes['resources/js/pages/Dashboard.vue']['status'])->toBe('skipped')
+        ->and($changes['resources/js/pages/Dashboard.vue']['note'])->toContain('yourself');
+
+    (new Filesystem)->deleteDirectory($app);
+});
+
 it('runs from alfakit:install --starter-kit', function (): void {
     $app = starterKitApp('vue');
     file_put_contents($app.'/package.json', json_encode(['dependencies' => ['@inertiajs/vue3' => '^3.0']]));
@@ -145,15 +184,17 @@ it('runs from alfakit:install --starter-kit', function (): void {
 
     expect(file_get_contents($app.'/app/Providers/Alfakit/AdminPanelProvider.php'))->toContain("->path('app')")
         ->and(file_get_contents($app.'/resources/js/components/AppSidebar.vue'))->toContain('<AlfakitNav />')
-        ->and(file_get_contents($app.'/resources/js/components/AppSidebarHeader.vue'))->toContain('<AlfakitSearch />');
+        ->and(file_get_contents($app.'/resources/js/components/AppSidebarHeader.vue'))->toContain('<AlfakitSearch />')
+        ->and(file_get_contents($app.'/resources/js/pages/Dashboard.vue'))->toContain('<AlfakitWidgets>');
 
     $vue = starterKitApp('vue');
     file_put_contents($vue.'/package.json', json_encode(['dependencies' => ['@inertiajs/vue3' => '^3.0']]));
     $this->app->setBasePath($vue);
 
-    $this->artisan('alfakit:install', ['--starter-kit' => true, '--no-npm' => true, '--no-composer-script' => true, '--no-header-widgets' => true])->assertSuccessful();
+    $this->artisan('alfakit:install', ['--starter-kit' => true, '--no-npm' => true, '--no-composer-script' => true, '--no-header-widgets' => true, '--no-dashboard-widgets' => true])->assertSuccessful();
 
-    expect(file_get_contents($vue.'/resources/js/components/AppSidebarHeader.vue'))->not->toContain('AlfakitSearch');
+    expect(file_get_contents($vue.'/resources/js/components/AppSidebarHeader.vue'))->not->toContain('AlfakitSearch')
+        ->and(file_get_contents($vue.'/resources/js/pages/Dashboard.vue'))->not->toContain('AlfakitWidgets');
 
     (new Filesystem)->deleteDirectory($app);
     (new Filesystem)->deleteDirectory($vue);

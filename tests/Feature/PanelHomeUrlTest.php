@@ -47,4 +47,3 @@ it('never sends a panel without a dashboard to a nested resource', function (): 
         ->and(ArticleCommentResource::shouldRegisterNavigation())->toBeFalse()
         ->and(ArticleResource::shouldRegisterNavigation())->toBeTrue();
 });
-
