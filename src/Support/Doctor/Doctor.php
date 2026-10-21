@@ -30,7 +30,7 @@ use Throwable;
  */
 class Doctor
 {
-    public const MIN_PHP = '8.3.0';
+    public const MIN_PHP = '8.4.0';
 
     public const MIN_LARAVEL = '13.0.0';
 
@@ -124,7 +124,7 @@ class Doctor
 
         yield version_compare($php, self::MIN_PHP, '>=')
             ? DoctorCheck::ok('Environment', 'PHP', $php)
-            : DoctorCheck::error('Environment', 'PHP', "{$php} is older than ".self::MIN_PHP, 'Upgrade PHP to 8.3 or newer.');
+            : DoctorCheck::error('Environment', 'PHP', "{$php} is older than ".self::MIN_PHP, 'Upgrade PHP to 8.4 or newer.');
 
         yield $this->env->hasExtension('intl')
             ? DoctorCheck::ok('Environment', 'ext-intl', 'loaded')
