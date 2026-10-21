@@ -10,6 +10,7 @@ use Composer\InstalledVersions;
 use Illuminate\Contracts\Process\ProcessResult;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\ServiceProvider;
+use ReflectionClass;
 
 /**
  * What the setup commands need to know about, and do to, the application: installed
@@ -19,6 +20,20 @@ use Illuminate\Support\ServiceProvider;
  */
 final class AppEnvironment
 {
+    /** The starter kit's `resources/js/pages/Alfakit/Page.*` (written by `alfakit:install --starter-kit`). */
+    public static function starterKitPageEntry(): ?string
+    {
+        foreach (['tsx', 'jsx', 'ts', 'js', 'vue', 'svelte'] as $extension) {
+            $page = resource_path("js/pages/Alfakit/Page.{$extension}");
+
+            if (file_exists($page)) {
+                return $page;
+            }
+        }
+
+        return null;
+    }
+
     /**
      * Whether a Composer package is installed, read from `vendor/composer/installed.json`
      * on every call (a `composer require` earlier in the same command counts).
@@ -100,6 +115,42 @@ final class AppEnvironment
         }
 
         return null;
+    }
+
+    /**
+     * Why the app has no Inertia frontend of its own for `$adapter` (the adapter package is not
+     * in package.json, or the root view of its Inertia middleware is missing), or null when it
+     * has one. The standalone install and the auth kit render the app's own Inertia pages.
+     */
+    public static function missingInertiaFrontend(string $adapter): ?string
+    {
+        $package = ['react' => '@inertiajs/react', 'vue' => '@inertiajs/vue3', 'svelte' => '@inertiajs/svelte'][$adapter] ?? '@inertiajs/'.$adapter;
+
+        if (! self::hasNpmPackage($package)) {
+            return "{$package} is not in package.json";
+        }
+
+        $view = resource_path('views/'.str_replace('.', '/', self::inertiaRootView()).'.blade.php');
+
+        if (! is_file($view)) {
+            return 'no Inertia root view: '.str_replace(base_path().'/', '', $view).' is missing';
+        }
+
+        return null;
+    }
+
+    /**
+     * The root view of the app's Inertia middleware (`php artisan inertia:middleware`), `app` by default.
+     */
+    private static function inertiaRootView(string $middleware = 'App\\Http\\Middleware\\HandleInertiaRequests'): string
+    {
+        if (! class_exists($middleware)) {
+            return 'app';
+        }
+
+        $rootView = (new ReflectionClass($middleware))->getDefaultProperties()['rootView'] ?? 'app';
+
+        return is_string($rootView) && $rootView !== '' ? $rootView : 'app';
     }
 
     public static function hasFortify(): bool
@@ -301,14 +352,25 @@ final class AppEnvironment
         $migrations = rtrim(database_path('migrations'), '/');
         $names = [];
 
+        $isMigrationsDirectory = static fn (string $path): bool => ($path = rtrim($path, '/')) === $migrations || str_ends_with($path, '/database/migrations');
+
         foreach ($paths as $from => $to) {
-            if (rtrim((string) $to, '/') !== $migrations || ! is_dir($from)) {
-                return false;
+            // A directory of migrations (plugins), or single files (core's `publishesMigrations()` tags).
+            if (is_dir($from) && $isMigrationsDirectory((string) $to)) {
+                foreach (glob(rtrim($from, '/').'/*.php') ?: [] as $file) {
+                    $names[] = (string) preg_replace('/^\d{4}_\d{2}_\d{2}_\d{6}_/', '', basename($file));
+                }
+
+                continue;
             }
 
-            foreach (glob(rtrim($from, '/').'/*.php') ?: [] as $file) {
-                $names[] = (string) preg_replace('/^\d{4}_\d{2}_\d{2}_\d{6}_/', '', basename($file));
+            if (is_file($from) && str_ends_with($from, '.php') && $isMigrationsDirectory(dirname((string) $to))) {
+                $names[] = (string) preg_replace('/^\d{4}_\d{2}_\d{2}_\d{6}_/', '', basename($from));
+
+                continue;
             }
+
+            return false;
         }
 
         if ($names === []) {

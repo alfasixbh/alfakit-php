@@ -174,9 +174,7 @@ class ToggleButtons extends Field
      */
     protected function getSelectableOptionValues(): array
     {
-        $disabled = array_map('strval', Arr::wrap($this->evaluate($this->disabledOptions) ?? []));
-
-        return array_values(array_diff(array_map('strval', array_keys($this->getFlatOptions())), $disabled));
+        return $this->getEnabledOptionValues();
     }
 
     protected function getTypeValidationRules(): array

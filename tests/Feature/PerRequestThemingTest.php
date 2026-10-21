@@ -117,3 +117,15 @@ it('evaluates a theme closure once per request and again on the next one', funct
 it('validates closure results when they are evaluated', function (): void {
     alfakit()->getPanel('admin')->design(inputs: fn () => 'glossy')->getDesign();
 })->throws(InvalidArgumentException::class, 'is not a valid inputs');
+
+it('takes closures for every documented theme setter, including the fonts', function (): void {
+    $panel = alfakit()->getPanel('admin')
+        ->sidebarVariant(fn (): string => 'flush')
+        ->density(fn (): string => 'compact')
+        ->radius(fn (): string => '0.25rem')
+        ->font(fn (): string => 'Inter')
+        ->headingFont(fn (): string => 'Fraunces');
+
+    expect($panel->getHeadingFont())->toBe('Fraunces')
+        ->and($panel->getDensity())->toBe(Density::Compact);
+});

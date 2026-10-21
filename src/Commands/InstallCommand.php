@@ -71,8 +71,13 @@ class InstallCommand extends Command
         }
 
         if ($this->option('import-export')) {
-            $this->callSilently('vendor:publish', ['--tag' => 'alfakit-import-export-migrations', '--force' => $force]);
-            $this->components->task('Published the import/export migrations (run php artisan migrate)');
+            // Publishing again would add a second copy under a new date ("table imports already exists").
+            if (AppEnvironment::migrationsAlreadyPublished(['vendor:publish', '--tag=alfakit-import-export-migrations'])) {
+                $this->components->twoColumnDetail('Import/export migrations', '<fg=gray>already published</>');
+            } else {
+                $this->callSilently('vendor:publish', ['--tag' => 'alfakit-import-export-migrations', '--force' => $force]);
+                $this->components->task('Published the import/export migrations (run php artisan migrate)');
+            }
         }
 
         if ($this->option('standalone')) {
@@ -116,7 +121,12 @@ class InstallCommand extends Command
 
         $this->newLine();
         $this->components->info('Alfakit is installed.');
-        $this->components->bulletList([
+        // With --no-panel no provider was written (the panel comes from elsewhere, e.g. the
+        // Filament migration), so there is no panel or path to point at.
+        $this->components->bulletList($this->option('no-panel') ? [
+            'Run the migrations: php artisan migrate',
+            $this->frontendBuilt ? 'The frontend is built' : 'Build the frontend: npm run build (or keep npm run dev running)',
+        ] : [
             'Register your panel in bootstrap/providers.php if it was not added automatically: App\\Providers\\Alfakit\\'.Str::studly($panelId).'PanelProvider',
             'Create a user: php artisan make:alfakit-user',
             'Create a resource: php artisan make:alfakit-resource Post --generate',
@@ -150,7 +160,23 @@ class InstallCommand extends Command
      */
     protected function installStandalone(Filesystem $filesystem, string $adapter, bool $force): int
     {
+        // Standalone components render inside the app's own Inertia pages: without an Inertia
+        // frontend the example page can't render and the stylesheet can't build.
+        if (($missing = AppEnvironment::missingInertiaFrontend($adapter)) !== null) {
+            $this->components->error("Standalone components render in your own Inertia pages, and this app has no Inertia frontend ({$missing}).");
+            $this->components->bulletList([
+                "Start from a Laravel starter kit (laravel new --{$adapter}), which brings Inertia and the shadcn tokens the components use, then run this again",
+                'Or install a panel, which sets up its own frontend: php artisan alfakit:install --scaffold',
+            ]);
+
+            return self::FAILURE;
+        }
+
         $css = resource_path('css/app.css');
+
+        if ($filesystem->exists($css) && ! str_contains($filesystem->get($css), '--muted-foreground')) {
+            $this->components->warn('resources/css/app.css defines no shadcn tokens (--background, --primary, --muted-foreground…). Standalone components use your app\'s tokens: add them (npx shadcn@latest init) or the stylesheet will not build.');
+        }
 
         if ($filesystem->exists($css)) {
             $contents = $filesystem->get($css);
@@ -312,6 +338,11 @@ class InstallCommand extends Command
         if ($filesystem->exists($packageJson)) {
             $package = json_decode($filesystem->get($packageJson), true);
 
+            if (is_array($package) && ! isset($package['dependencies']['@inertiajs/vite']) && ! isset($package['devDependencies']['@inertiajs/vite'])) {
+                $this->installInertiaVite();
+                $package = json_decode($filesystem->get($packageJson), true);
+            }
+
             if (is_array($package) && ! isset($package['scripts']['build:ssr'])) {
                 $package['scripts'] = [...($package['scripts'] ?? []), 'build:ssr' => 'vite build && vite build --ssr'];
                 $filesystem->put($packageJson, json_encode($package, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES).PHP_EOL);
@@ -324,6 +355,26 @@ class InstallCommand extends Command
             'Start the SSR server: php artisan inertia:start-ssr (keep it running, e.g. with Supervisor)',
             'SSR is enabled by config/inertia.php (ssr.enabled, INERTIA_SSR_ENABLED)',
         ]);
+    }
+
+    /** The vite.config now imports @inertiajs/vite: install it before the build runs. */
+    protected function installInertiaVite(): void
+    {
+        $manager = MakeThemeCommand::detectPackageManager();
+        $command = $manager === 'npm' ? ['npm', 'install', '--save-dev', '@inertiajs/vite'] : [$manager, 'add', '-D', '@inertiajs/vite'];
+
+        if ($this->option('no-npm')) {
+            $this->components->warn('Skipped npm. Install: '.implode(' ', $command));
+
+            return;
+        }
+
+        $process = new Process($command, base_path(), timeout: 600);
+        $process->run(fn (string $type, string $buffer) => $this->output->write($buffer));
+
+        $process->isSuccessful()
+            ? $this->components->task('Installed @inertiajs/vite')
+            : $this->components->error('Failed to install @inertiajs/vite. Run `'.implode(' ', $command).'` manually.');
     }
 
     /**
@@ -352,6 +403,17 @@ class InstallCommand extends Command
         // inertia() → inertia({ ssr: '…' }); an inertia({...}) call with options is left alone.
         if (preg_match('/\binertia\(\s*\)/', $updated) === 1) {
             $updated = (string) preg_replace('/\binertia\(\s*\)/', "inertia({ ssr: '{$entry}' })", $updated, 1);
+        } elseif (! str_contains($updated, '@inertiajs/vite')) {
+            // No @inertiajs/vite yet (a `--scaffold` app): add it, so `npm run dev` renders server side too.
+            $updated = (string) preg_replace('/(plugins:\s*\[)/', "$1\n        inertia({ ssr: '{$entry}' }),", $updated, 1);
+            $import = "import inertia from '@inertiajs/vite';";
+
+            if (preg_match_all('/^import [^;\n]+;?[ \t]*$/m', $updated, $matches, PREG_OFFSET_CAPTURE) > 0) {
+                $last = end($matches[0]);
+                $updated = substr_replace($updated, "\n{$import}", (int) $last[1] + strlen($last[0]), 0);
+            } else {
+                $updated = "{$import}\n{$updated}";
+            }
         }
 
         return $updated;
@@ -411,16 +473,17 @@ class InstallCommand extends Command
     }
 
     /**
-     * The npm packages `--scaffold` installs for an adapter.
+     * The npm packages `--scaffold` installs for an adapter (`tw-animate-css` because the
+     * generated `resources/css/alfakit.css` imports it, as the starter kits' `app.css` does).
      *
      * @return array{dependencies: list<string>, devDependencies: list<string>}
      */
     public static function scaffoldPackages(string $adapter): array
     {
         return match ($adapter) {
-            'vue' => ['dependencies' => ['@inertiajs/vue3', 'vue'], 'devDependencies' => ['@vitejs/plugin-vue', 'tailwindcss', '@tailwindcss/vite', 'typescript', 'vue-tsc']],
-            'svelte' => ['dependencies' => ['@inertiajs/svelte', 'svelte'], 'devDependencies' => ['@sveltejs/vite-plugin-svelte', 'tailwindcss', '@tailwindcss/vite', 'typescript']],
-            default => ['dependencies' => ['@inertiajs/react', 'react', 'react-dom'], 'devDependencies' => ['@vitejs/plugin-react', '@types/react', '@types/react-dom', 'tailwindcss', '@tailwindcss/vite', 'typescript']],
+            'vue' => ['dependencies' => ['@inertiajs/vue3', 'vue'], 'devDependencies' => ['@vitejs/plugin-vue', 'tailwindcss', '@tailwindcss/vite', 'tw-animate-css', 'typescript', 'vue-tsc']],
+            'svelte' => ['dependencies' => ['@inertiajs/svelte', 'svelte'], 'devDependencies' => ['@sveltejs/vite-plugin-svelte', 'tailwindcss', '@tailwindcss/vite', 'tw-animate-css', 'typescript']],
+            default => ['dependencies' => ['@inertiajs/react', 'react', 'react-dom'], 'devDependencies' => ['@vitejs/plugin-react', '@types/react', '@types/react-dom', 'tailwindcss', '@tailwindcss/vite', 'tw-animate-css', 'typescript']],
         };
     }
 

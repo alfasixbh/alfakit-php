@@ -162,6 +162,14 @@ class MakeResourceCommand extends Command
                 'name' => Str::startsWith($modelClass, 'App\\Models\\') ? Str::after($modelClass, 'App\\Models\\') : $modelClass,
                 '--migration' => $wantsMigration,
             ]));
+
+            // Composer remembers classes it failed to find, so load the new file directly:
+            // the rest of the command (and --generate) needs the model.
+            $file = $this->laravel->basePath(lcfirst(str_replace('\\', '/', $modelClass)).'.php');
+
+            if (! class_exists($modelClass, false) && is_file($file)) {
+                require_once $file;
+            }
         } else {
             if ($wantsModel) {
                 $this->components->info("{$modelClass} already exists, skipping the model.");

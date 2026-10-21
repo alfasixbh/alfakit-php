@@ -224,3 +224,56 @@ it('ignores leave requests without an impersonation', function (): void {
 
     $this->assertAuthenticatedAs($member);
 });
+
+it('sends an impersonated user who may not open the first page to a page they can open, and offers Leave on host pages', function (): void {
+    Illuminate\Support\Facades\Route::middleware('web')->get('/login', fn () => 'login')->name('login');
+    Illuminate\Support\Facades\Route::middleware('web')->get('/dashboard', fn () => Inertia\Inertia::render('dashboard'))->name('dashboard');
+    app('router')->getRoutes()->refreshNameLookups();
+    // Only admins may list users: the panel's only navigation item.
+    Gate::policy(MfaUser::class, ImpersonationTestUserPolicy::class);
+    Panels::register('kitimp', fn (Panel $panel): Panel => $panel->starterKit()->resources([UserResource::class]));
+    AlfaSix\Alfakit\Support\StarterKitNavigation::register(alfakit());
+    $admin = accountUser(['role' => 'admin']);
+    $member = accountUser(['role' => 'member']);
+    $this->actingAs($admin);
+
+    // The admin's panel home is the users list.
+    $this->get('/kitimp')->assertRedirect('http://localhost/kitimp/users');
+
+    $token = inertiaProps(inertiaGet($this, '/kitimp/users'))['page']['token'];
+    inertiaPost($this, '/kitimp/_alfakit/actions', ['token' => $token, 'component' => 'table', 'action' => 'impersonate', 'record' => $member->id])
+        ->assertRedirect('http://localhost/dashboard');
+
+    $this->assertAuthenticatedAs($member);
+
+    // The member may open no panel page: the starter kit's dashboard, never a 403.
+    $this->get('/kitimp')->assertRedirect('http://localhost/dashboard');
+
+    // On the host's own pages the header components get the banner with Leave.
+    $banner = inertiaProps(inertiaGet($this, '/dashboard'))['alfakitNavigation'][0]['widgets']['impersonation'];
+
+    expect($banner['label'])->toContain($member->name)
+        ->and($banner['leaveUrl'])->toBe('http://localhost/kitimp/impersonation/leave');
+
+    $this->post('/kitimp/impersonation/leave')->assertRedirect();
+    $this->assertAuthenticatedAs($admin);
+    expect(inertiaProps(inertiaGet($this, '/dashboard'))['alfakitNavigation'][0]['widgets'])->not->toHaveKey('impersonation');
+});
+
+class ImpersonationTestUserPolicy
+{
+    public function viewAny(MfaUser $user): bool
+    {
+        return $user->getAttribute('role') === 'admin';
+    }
+
+    public function view(MfaUser $user, MfaUser $model): bool
+    {
+        return $user->getAttribute('role') === 'admin';
+    }
+
+    public function update(MfaUser $user, MfaUser $model): bool
+    {
+        return $user->getAttribute('role') === 'admin';
+    }
+}

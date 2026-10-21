@@ -18,6 +18,7 @@
     id={field.id}
     name={component.name}
     dir="auto"
+    data-slot="input"
     value={field.value ?? ''}
     placeholder={component.placeholder}
     disabled={field.disabled}

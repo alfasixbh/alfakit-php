@@ -16,6 +16,7 @@ export default function {{ component }}({ component }: FieldProps) {
         id={id}
         name={component.name}
         dir="auto"
+        data-slot="input"
         value={value ?? ''}
         placeholder={component.placeholder}
         disabled={disabled}

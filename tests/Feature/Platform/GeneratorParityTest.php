@@ -326,6 +326,13 @@ it('adds the framework Vite plugin when scaffolding', function (): void {
         ->and(InstallCommand::addVitePlugin($config, 'svelte'))->toContain("import { svelte } from '@sveltejs/vite-plugin-svelte';")
         ->and(InstallCommand::addVitePlugin('export default {}', 'vue'))->toBeNull()
         ->and(InstallCommand::scaffoldPackages('vue')['dependencies'])->toContain('@inertiajs/vue3');
+
+    // The generated resources/css/alfakit.css imports tw-animate-css: a fresh app must get it.
+    foreach (['react', 'vue', 'svelte'] as $adapter) {
+        expect(InstallCommand::scaffoldPackages($adapter)['devDependencies'])->toContain('tw-animate-css');
+    }
+
+    expect(file_get_contents(dirname(__DIR__, 3).'/stubs/frontend/alfakit.css.stub'))->toContain("@import 'tw-animate-css';");
 });
 
 it('only sends plain CSS colours from ColorColumn and ColorEntry', function (): void {

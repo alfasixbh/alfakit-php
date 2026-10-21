@@ -16,9 +16,11 @@ use Illuminate\Console\Command;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Str;
 use Symfony\Component\Console\Attribute\AsCommand;
+use Throwable;
 
 use function Laravel\Prompts\confirm;
 use function Laravel\Prompts\multiselect;
+use function Laravel\Prompts\password;
 use function Laravel\Prompts\select;
 use function Laravel\Prompts\text;
 
@@ -64,6 +66,9 @@ class SetupCommand extends Command
     /** @var array<int, string> */
     protected array $nextSteps = [];
 
+    /** How AlfaKit is installed in this run (`panel`, `starter-kit` or `standalone`). */
+    protected ?string $mode = null;
+
     protected bool $needsMigrations = false;
 
     /** @var array<string, string> Default calls per plugin slug, from the chosen bundles. */
@@ -73,6 +78,7 @@ class SetupCommand extends Command
     {
         $this->summary = [];
         $this->nextSteps = [];
+        $this->mode = null;
         $this->needsMigrations = false;
 
         $this->pluginDefaults = [];
@@ -88,11 +94,13 @@ class SetupCommand extends Command
         $this->components->info('AlfaKit setup');
 
         $detected = $this->detect();
-        $mode = $this->chooseMode($detected);
+        $mode = $this->chooseMode($detected, $panelId);
 
         if ($mode === null) {
             return self::FAILURE;
         }
+
+        $this->mode = $mode;
 
         if (! $this->install($mode, $panelId, $detected['adapter'])) {
             $this->renderSummary();
@@ -119,7 +127,7 @@ class SetupCommand extends Command
                 $this->needsMigrations = true;
             }
         } else {
-            $this->record('Users resource', 'skipped');
+            $this->record('Users resource', 'skipped', $hasPanel ? '' : 'no panel in standalone mode');
         }
 
         $this->setUpAi();
@@ -166,32 +174,92 @@ class SetupCommand extends Command
     protected function createAdminUser(string $panelId): void
     {
         $email = $this->option('admin-email');
+        $name = $this->option('admin-name');
+        $password = $this->option('admin-password');
+
+        // Re-running the wizard on an app that has users: nothing to create or suggest.
+        if ((! is_string($email) || $email === '') && $this->anyUserExists()) {
+            $this->record('Admin user', 'already', 'the app has users');
+
+            return;
+        }
+
+        // Interactively, ask here: the user is created in a fresh process (below), which can't prompt.
+        if ((! is_string($email) || $email === '') && $this->input->isInteractive() && confirm('Create an admin user to sign in with?', true, hint: 'Asks for a name, email address and password (php artisan make:alfakit-user).')) {
+            $name = text('Name', 'Admin', 'Admin', required: true);
+            $email = text('Email address', required: true, validate: fn (string $value): ?string => filter_var($value, FILTER_VALIDATE_EMAIL) ? null : 'Invalid email address.');
+            $password = password('Password', required: true);
+        }
 
         if (is_string($email) && $email !== '') {
-            if (! is_string($this->option('admin-password')) || $this->option('admin-password') === '') {
+            if (! is_string($password) || $password === '') {
                 $this->record('Admin user', 'failed', '--admin-password is required with --admin-email');
 
                 return;
             }
 
-            $this->runStep('Admin user', 'make:alfakit-user', [
+            // Re-running the wizard: the user is already there, so this step is done.
+            if ($this->userExists($email)) {
+                $this->record('Admin user', 'already', $email);
+
+                return;
+            }
+
+            $arguments = [
                 '--panel' => $panelId,
-                '--name' => $this->option('admin-name') ?: 'Admin',
+                '--name' => is_string($name) && $name !== '' ? $name : 'Admin',
                 '--email' => $email,
-                '--password' => $this->option('admin-password'),
-            ]);
+                '--password' => $password,
+            ];
 
-            return;
-        }
+            // A panel provider written by this run isn't booted in this process yet:
+            // create the user in a fresh process, which loads it from bootstrap/providers.php.
+            if (! alfakit()->hasPanel($panelId)) {
+                $this->newLine();
+                $this->components->info('Admin user');
 
-        if ($this->input->isInteractive() && confirm('Create an admin user to sign in with?', true, hint: 'Asks for a name, email address and password (php artisan make:alfakit-user).')) {
-            $this->runStep('Admin user', 'make:alfakit-user', ['--panel' => $panelId]);
+                $result = AppEnvironment::artisan(['make:alfakit-user', ...collect($arguments)->map(fn (mixed $value, string $key): string => $key.'='.$value)->values()->all(), '--no-interaction'], fn (string $buffer) => $this->output->write($buffer));
+                $this->record('Admin user', $result->successful() ? 'done' : 'failed');
+
+                return;
+            }
+
+            $this->runStep('Admin user', 'make:alfakit-user', $arguments);
 
             return;
         }
 
         $this->record('Admin user', 'skipped');
         $this->nextSteps[] = 'Create a user to sign in with: php artisan make:alfakit-user';
+    }
+
+    /**
+     * Whether the app has any user yet (false when the users table doesn't exist).
+     */
+    protected function anyUserExists(): bool
+    {
+        $model = config('auth.providers.'.config('auth.guards.'.config('auth.defaults.guard', 'web').'.provider', 'users').'.model');
+
+        try {
+            return is_string($model) && class_exists($model) && $model::query()->exists();
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * Whether the app's user model already has a user with this email address. The model
+     * comes from the default auth provider, the one `make:alfakit-user` creates users with.
+     */
+    protected function userExists(string $email): bool
+    {
+        $model = config('auth.providers.'.config('auth.guards.'.config('auth.defaults.guard', 'web').'.provider', 'users').'.model');
+
+        try {
+            return is_string($model) && class_exists($model) && $model::query()->where('email', $email)->exists();
+        } catch (Throwable) {
+            return false;
+        }
     }
 
     // ------------------------------------------------------------------ Detection and install
@@ -228,9 +296,9 @@ class SetupCommand extends Command
     /**
      * @param  array{adapter: ?string, starterKit: ?string, fortify: bool, inertia: bool, installed: bool}  $detected
      */
-    protected function chooseMode(array $detected): ?string
+    protected function chooseMode(array $detected, string $panelId): ?string
     {
-        $default = $detected['starterKit'] !== null ? 'starter-kit' : 'panel';
+        $default = $this->installedMode($panelId) ?? ($detected['starterKit'] !== null ? 'starter-kit' : 'panel');
         $mode = $this->option('mode');
 
         if (is_string($mode) && $mode !== '') {
@@ -307,6 +375,21 @@ class SetupCommand extends Command
         }
 
         return is_file(PanelProviderEditor::path($panelId));
+    }
+
+    /**
+     * The mode an earlier run installed, read from the panel provider: a re-run without
+     * `--mode` keeps it instead of guessing from the starter kit again.
+     */
+    protected function installedMode(string $panelId): ?string
+    {
+        $path = PanelProviderEditor::path($panelId);
+
+        if (! is_file($path)) {
+            return null;
+        }
+
+        return str_contains((string) file_get_contents($path), '->starterKit(') ? 'starter-kit' : 'panel';
     }
 
     protected function installSupportsStarterKit(): bool
@@ -440,8 +523,10 @@ class SetupCommand extends Command
         } elseif ($this->input->isInteractive()) {
             $options = array_diff_key(PluginCatalog::options(), $roles ? ['shield' => true] : []);
 
-            /** @var array<int, string> $plugins */
-            $plugins = multiselect('Which first-party plugins do you want?', $options, default: [], scroll: 10, hint: 'None are selected: pick only what you need now, add more later with php artisan alfakit:add.');
+            // Opt in first, so "no plugins" is an obvious answer rather than an empty list.
+            $plugins = confirm('Add first-party plugins now?', false, hint: 'Optional: AlfaKit works without them. Add any later with php artisan alfakit:add.')
+                ? multiselect('Which first-party plugins do you want?', $options, default: [], scroll: 10, hint: 'Space to tick, Enter to confirm. Nothing ticked installs none.')
+                : [];
         } else {
             $plugins = [];
         }
@@ -716,12 +801,19 @@ class SetupCommand extends Command
             $this->components->twoColumnDetail($entry['step'], $status.($entry['detail'] !== '' ? " <fg=gray>({$entry['detail']})</>" : ''));
         }
 
-        $steps = array_values(array_unique([
-            ...$this->nextSteps,
+        // Standalone mode has no panel to open and no resources: its pages are the app's own.
+        $panelSteps = $this->mode === 'standalone' ? [
+            'Put a component on one of your pages: php artisan make:alfakit-page Orders --standalone',
+        ] : [
             AppEnvironment::frontendIncludesAlfakit()
                 ? 'Open /'.Str::slug((string) ($this->option('panel') ?: 'admin'))
                 : 'Build the frontend (npm run build, or keep npm run dev running) and open /'.Str::slug((string) ($this->option('panel') ?: 'admin')),
             'Create a resource: php artisan make:alfakit-resource Post --generate',
+        ];
+
+        $steps = array_values(array_unique([
+            ...$this->nextSteps,
+            ...$panelSteps,
             'Run php artisan alfakit:setup again any time: finished steps are skipped',
         ]));
 

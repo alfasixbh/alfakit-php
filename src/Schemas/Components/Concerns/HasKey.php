@@ -21,8 +21,9 @@ trait HasKey
     }
 
     /**
-     * A stable identifier for the component within its container. Fields default to their
-     * state path; layout components get a deterministic key based on type + position.
+     * A stable identifier for the component within its container. Fields (and layout
+     * components with a `statePath()` of their own) default to their state path; other
+     * layout components get a deterministic key based on type + position.
      */
     public function getKey(): string
     {
@@ -32,7 +33,10 @@ trait HasKey
             return (string) $key;
         }
 
-        if (method_exists($this, 'getStatePath') && filled($statePath = $this->getStatePath())) {
+        // Only a path of its own: a layout component (a Section in a `statePath()` group, a
+        // repeater item or a builder block) shares its container's path with its siblings,
+        // which gave them all the same key (React: "two children with the same key").
+        if (method_exists($this, 'getStatePath') && filled($statePath = $this->getStatePath()) && ! $this->sharesContainerStatePath($statePath)) {
             return $statePath;
         }
 
@@ -48,6 +52,12 @@ trait HasKey
         }
 
         return $generated;
+    }
+
+    protected function sharesContainerStatePath(string $statePath): bool
+    {
+        return method_exists($this, 'hasContainer') && $this->hasContainer()
+            && $statePath === $this->getContainer()->getStatePath();
     }
 
     /**

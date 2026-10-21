@@ -201,6 +201,16 @@ it('serves table action modals and executes record and bulk actions', function (
         ->assertOk()
         ->assertJsonPath('form', null);
 
+    // A bulk action's modal (named like the record action) is resolved from the selection.
+    $this->getJson('/admin/_alfakit/actions/modal?'.http_build_query(['token' => $token, 'component' => 'table', 'action' => 'delete', 'bulk' => 1, 'records' => [$a->id, $b->id]]))
+        ->assertOk()
+        ->assertJsonPath('heading', __('alfakit::actions.delete.bulk.heading'))
+        ->assertJsonPath('requiresConfirmation', true);
+
+    $this->getJson('/admin/_alfakit/actions/modal?'.http_build_query(['token' => $token, 'component' => 'table', 'action' => 'delete', 'bulk' => 1, 'allRecords' => 1, 'tableQuery' => '?search=A']))
+        ->assertOk()
+        ->assertJsonPath('heading', __('alfakit::actions.delete.bulk.heading'));
+
     inertiaPost($this, '/admin/_alfakit/actions', ['token' => $token, 'component' => 'table', 'action' => 'delete', 'record' => $a->id])
         ->assertRedirect();
 

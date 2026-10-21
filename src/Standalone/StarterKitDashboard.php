@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AlfaSix\Alfakit\Standalone;
 
 use AlfaSix\Alfakit\Contracts\CanAccessPanel;
+use AlfaSix\Alfakit\Http\Middleware\SetPanelLocale;
 use AlfaSix\Alfakit\Pages\Dashboard;
 use AlfaSix\Alfakit\Panel;
 
@@ -54,9 +55,13 @@ class StarterKitDashboard extends Widgets
         }
 
         try {
-            $component = static::make(['panelId' => $panel->getId()]);
+            // The widgets speak the panel's language (their lazy and polling requests run on
+            // the panel's routes), while the host's dashboard keeps its own.
+            return SetPanelLocale::using($panel, static function () use ($panel): ?array {
+                $component = static::make(['panelId' => $panel->getId()]);
 
-            return $component->getAllWidgetInstances() === [] ? null : $component->toPayload();
+                return $component->getAllWidgetInstances() === [] ? null : $component->toPayload();
+            });
         } finally {
             if ($previous !== $panel) {
                 $manager->setCurrentPanel($previous);

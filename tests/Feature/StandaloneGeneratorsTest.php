@@ -81,6 +81,8 @@ it('adds the standalone stylesheet after the Tailwind import', function (): void
 it('installs for use outside panels: styles, an example form and page, no panel', function (): void {
     file_put_contents($this->sandbox.'/resources/css/app.css', "@import 'tailwindcss';\n");
     file_put_contents($this->sandbox.'/package.json', json_encode(['dependencies' => ['@inertiajs/vue3' => '^3.0']]));
+    (new Filesystem)->ensureDirectoryExists($this->sandbox.'/resources/views');
+    file_put_contents($this->sandbox.'/resources/views/app.blade.php', '@inertia');
 
     $this->artisan('alfakit:install', ['--standalone' => true, '--no-npm' => true])->assertSuccessful();
 
@@ -88,4 +90,64 @@ it('installs for use outside panels: styles, an example form and page, no panel'
         ->and(file_exists($this->sandbox.'/app/Alfakit/Standalone/ContactForm.php'))->toBeTrue()
         ->and(file_get_contents($this->sandbox.'/resources/js/pages/Contact.vue'))->toContain('<AlfakitComponent :component="form" />')
         ->and(file_exists($this->sandbox.'/app/Providers/Alfakit/AdminPanelProvider.php'))->toBeFalse();
+});
+
+it('refuses a standalone install in an app without an Inertia frontend, and writes nothing', function (): void {
+    file_put_contents($this->sandbox.'/resources/css/app.css', "@import 'tailwindcss';\n");
+    file_put_contents($this->sandbox.'/package.json', json_encode(['devDependencies' => ['vite' => '^7.0', 'tailwindcss' => '^4.0']]));
+
+    $this->artisan('alfakit:install', ['--standalone' => true, '--adapter' => 'react', '--no-npm' => true])
+        ->expectsOutputToContain('no Inertia frontend')
+        ->expectsOutputToContain('laravel new --react')
+        ->assertFailed();
+
+    expect(file_get_contents($this->sandbox.'/resources/css/app.css'))->toBe("@import 'tailwindcss';\n")
+        ->and(file_exists($this->sandbox.'/app/Alfakit/Standalone/ContactForm.php'))->toBeFalse()
+        ->and(file_exists($this->sandbox.'/resources/js/pages/contact.tsx'))->toBeFalse();
+});
+
+it('warns when the stylesheet has no shadcn tokens for standalone components', function (): void {
+    file_put_contents($this->sandbox.'/resources/css/app.css', "@import 'tailwindcss';\n");
+    file_put_contents($this->sandbox.'/package.json', json_encode(['dependencies' => ['@inertiajs/vue3' => '^3.0']]));
+    (new Filesystem)->ensureDirectoryExists($this->sandbox.'/resources/views');
+    file_put_contents($this->sandbox.'/resources/views/app.blade.php', '@inertia');
+
+    $this->artisan('alfakit:install', ['--standalone' => true, '--no-npm' => true])
+        ->expectsOutputToContain('defines no shadcn tokens')
+        ->assertSuccessful();
+});
+
+it('does not publish the import/export migrations a second time when the app already has them', function (): void {
+    file_put_contents($this->sandbox.'/resources/css/app.css', "@import 'tailwindcss';\n");
+    file_put_contents($this->sandbox.'/package.json', json_encode(['dependencies' => ['@inertiajs/vue3' => '^3.0']]));
+    (new Filesystem)->ensureDirectoryExists($this->sandbox.'/resources/views');
+    file_put_contents($this->sandbox.'/resources/views/app.blade.php', '@inertia');
+    (new Filesystem)->ensureDirectoryExists($this->sandbox.'/database/migrations');
+    // Published by an earlier `alfakit:install --import-export` (under its own date).
+    file_put_contents($this->sandbox.'/database/migrations/2026_01_01_000000_create_alfakit_import_export_tables.php', '<?php');
+
+    // The publish destination was fixed when the provider booted (the Testbench app's migrations).
+    $target = dirname((string) array_values(Illuminate\Support\ServiceProvider::pathsToPublish(null, 'alfakit-import-export-migrations'))[0]);
+    $before = glob($target.'/*_create_alfakit_import_export_tables.php') ?: [];
+
+    try {
+        $this->artisan('alfakit:install', ['--standalone' => true, '--import-export' => true, '--no-npm' => true])
+            ->expectsOutputToContain('already published')
+            ->assertSuccessful();
+
+        expect(glob($target.'/*_create_alfakit_import_export_tables.php') ?: [])->toBe($before);
+    } finally {
+        array_map('unlink', array_diff(glob($target.'/*_create_alfakit_import_export_tables.php') ?: [], $before));
+    }
+});
+
+it('does not point at a panel it did not create with --no-panel', function (): void {
+    file_put_contents($this->sandbox.'/package.json', json_encode(['dependencies' => ['@inertiajs/react' => '^3.0']]));
+
+    $this->artisan('alfakit:install', ['--adapter' => 'react', '--panel' => 'other', '--no-panel' => true, '--no-npm' => true])
+        ->doesntExpectOutputToContain('OtherPanelProvider')
+        ->doesntExpectOutputToContain('visit /other')
+        ->assertSuccessful();
+
+    expect(file_exists($this->sandbox.'/app/Providers/Alfakit/OtherPanelProvider.php'))->toBeFalse();
 });

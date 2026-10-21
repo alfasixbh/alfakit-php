@@ -6,11 +6,13 @@ namespace AlfaSix\Alfakit\Commands;
 
 use AlfaSix\Alfakit\Commands\Concerns\CanGenerateFiles;
 use AlfaSix\Alfakit\Commands\Concerns\GuessesModelColumns;
-use AlfaSix\Alfakit\Schemas\ModelSchema;
+use AlfaSix\Alfakit\Commands\Support\ModelInspector;
+use AlfaSix\Alfakit\Commands\Support\ResourceCodeBuilder;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 use Symfony\Component\Console\Attribute\AsCommand;
+use Throwable;
 
 use function Laravel\Prompts\text;
 
@@ -32,17 +34,19 @@ class MakeSchemaCommand extends Command
         $path = $this->getGenerationPath()."/Schemas/{$name}.php";
 
         $components = $this->defaultComponents();
+        $imports = [];
         $model = $this->option('model');
 
         if (is_string($model) && $model !== '') {
             [$modelClass] = $this->resolveModelClass($model);
-            $components = $this->componentsFromModel($modelClass) ?? $components;
+            [$components, $imports] = $this->componentsFromModel($modelClass) ?? [$components, []];
         }
 
         $written = $this->writeStub('schema', $path, [
             'namespace' => $namespace,
             'class' => $name,
             'components' => $components,
+            'imports' => implode('', array_map(static fn (string $class): string => "use {$class};\n", $imports)),
         ], (bool) $this->option('force'));
 
         if ($written) {
@@ -62,10 +66,13 @@ class MakeSchemaCommand extends Command
     }
 
     /**
-     * The inferred fields as code (`Schema::fromModel()` does the same at runtime), or null
+     * The fields the resource generator infers for the model (relationship selects, enum
+     * options, numeric inputs, rich editors…), as code with the classes to import, or null
      * when the model or its table cannot be read.
+     *
+     * @return array{0: string, 1: list<string>}|null
      */
-    protected function componentsFromModel(string $modelClass): ?string
+    protected function componentsFromModel(string $modelClass): ?array
     {
         if (! class_exists($modelClass) || ! is_subclass_of($modelClass, Model::class)) {
             $this->components->warn("Model {$modelClass} not found; add the fields yourself.");
@@ -73,23 +80,20 @@ class MakeSchemaCommand extends Command
             return null;
         }
 
-        $fields = ModelSchema::fields($modelClass);
+        try {
+            $builder = new ResourceCodeBuilder(ModelInspector::inspect($modelClass)['columns']);
+            // The builder indents for a resource's `form()`; a fragment's array sits one level up.
+            $code = (string) preg_replace('/^    /m', '', $builder->formFields($builder->defaultFormColumns()));
+        } catch (Throwable) {
+            $code = '';
+        }
 
-        if ($fields === []) {
+        if ($code === '') {
             $this->components->warn("Could not read the table of {$modelClass}; add the fields yourself.");
 
             return null;
         }
 
-        $lines = [];
-
-        foreach ($fields as $field) {
-            $class = class_basename($field);
-            $call = $field->isRequired() ? '->required()' : '';
-
-            $lines[] = "            \\AlfaSix\\Alfakit\\Forms\\Components\\{$class}::make('{$field->getName()}'){$call},";
-        }
-
-        return implode("\n", $lines);
+        return [$code, $builder->imports()];
     }
 }

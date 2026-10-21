@@ -31,6 +31,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
+use LogicException;
 use ReflectionMethod;
 use ReflectionProperty;
 use UnitEnum;
@@ -446,7 +447,20 @@ abstract class Resource
     public static function scopeEloquentQueryToTenant(Builder $query, Model $tenant): Builder
     {
         $relationshipName = static::getTenantOwnershipRelationshipName();
-        $relationship = $query->getModel()->{$relationshipName}();
+        $model = $query->getModel();
+
+        // A missing relationship would otherwise reach Eloquent's `__call()` (a local scope
+        // of the same name, a query method) with a confusing error.
+        $relationship = $model->isRelation($relationshipName) ? $model->{$relationshipName}() : null;
+
+        if (! $relationship instanceof \Illuminate\Database\Eloquent\Relations\Relation) {
+            throw new LogicException(sprintf(
+                '%s is scoped to the panel tenant, but %s has no [%s] relationship. Add it, set $tenantOwnershipRelationshipName on the resource, or opt out with protected static bool $isScopedToTenant = false;',
+                static::class,
+                $model::class,
+                $relationshipName,
+            ));
+        }
 
         if ($relationship instanceof \Illuminate\Database\Eloquent\Relations\BelongsTo) {
             return $query->where($relationship->getQualifiedForeignKeyName(), $tenant->getKey());

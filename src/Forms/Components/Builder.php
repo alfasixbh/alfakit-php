@@ -640,6 +640,8 @@ class Builder extends Repeater
                 'schema' => $this->getBlockSchema($name, self::TEMPLATE_INDEX)->toSchema(),
                 'state' => $this->getBlockTemplateState($name),
                 ...($this->hasBlockPreviews() && ($component = $block->getPreviewComponent()) !== null ? ['previewComponent' => $component] : []),
+                // Items show a server-made summary: collapsing one refreshes it (`summary()`).
+                ...($block->hasSummary() ? ['summary' => true] : []),
             ];
         }
 

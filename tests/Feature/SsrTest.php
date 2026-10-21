@@ -51,6 +51,30 @@ it('points the Vite config at the SSR entry', function (): void {
         ->and(InstallCommand::addViteSsrEntry('export default {}', 'resources/js/alfakit/ssr.tsx'))->toBeNull();
 });
 
+it('adds @inertiajs/vite to a Vite config that has no inertia() plugin yet (a --scaffold app)', function (): void {
+    $config = <<<'JS'
+        import { defineConfig } from 'vite';
+        import laravel from 'laravel-vite-plugin';
+
+        export default defineConfig({
+            plugins: [
+                laravel({
+                    input: ['resources/css/alfakit.css', 'resources/js/alfakit/app.tsx'],
+                    refresh: true,
+                }),
+            ],
+        });
+        JS;
+
+    $updated = (string) InstallCommand::addViteSsrEntry($config, 'resources/js/alfakit/ssr.tsx');
+
+    expect($updated)
+        ->toContain("import laravel from 'laravel-vite-plugin';\nimport inertia from '@inertiajs/vite';")
+        ->toContain("plugins: [\n        inertia({ ssr: 'resources/js/alfakit/ssr.tsx' }),")
+        ->toContain("ssr: 'resources/js/alfakit/ssr.tsx',\n")
+        ->and(InstallCommand::addViteSsrEntry($updated, 'resources/js/alfakit/ssr.tsx'))->toBe($updated);
+});
+
 it('ships an SSR entry stub for every adapter', function (string $adapter, string $inertia): void {
     $stub = file_get_contents(dirname(__DIR__, 2)."/stubs/frontend/{$adapter}/ssr.stub");
 

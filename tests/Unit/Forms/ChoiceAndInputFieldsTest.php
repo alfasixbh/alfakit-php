@@ -2,8 +2,11 @@
 
 declare(strict_types=1);
 
+use AlfaSix\Alfakit\Forms\Components\CheckboxList;
 use AlfaSix\Alfakit\Forms\Components\CodeEditor;
 use AlfaSix\Alfakit\Forms\Components\CodeEditor\Enums\Language;
+use AlfaSix\Alfakit\Forms\Components\Radio;
+use AlfaSix\Alfakit\Forms\Components\Select;
 use AlfaSix\Alfakit\Forms\Components\Slider;
 use AlfaSix\Alfakit\Forms\Components\ToggleButtons;
 use Illuminate\Validation\ValidationException;
@@ -59,6 +62,49 @@ it('validates toggle button values, including disabled options and multiple valu
     $schema = schema([$multiple()])->fill()->applyClientState(['tags' => ['b']]);
 
     expect($schema->validate())->toBe(['tags' => ['b']]);
+});
+
+it('asks a disableOptionWhen() closure per option when it takes $value or $label, as in Filament', function (): void {
+    $options = ['draft' => 'Draft', 'published' => 'Published', 'archived' => 'Archived'];
+    $byValue = ToggleButtons::make('status')->options($options)->disableOptionWhen(fn (string $value): bool => $value === 'archived');
+    $byLabel = Select::make('status')->options($options)->disableOptionWhen(fn (string $label): bool => $label === 'Draft');
+    $list = Radio::make('status')->options($options)->disableOptionWhen(fn (): array => ['draft', 'archived']);
+
+    expect($byValue->getDisabledOptionValues())->toBe(['archived'])
+        ->and(collect($byValue->toSchema()['options'])->firstWhere('value', 'archived'))->toHaveKey('disabled', true)
+        ->and($byLabel->getDisabledOptionValues())->toBe(['draft'])
+        ->and($list->getDisabledOptionValues())->toBe(['draft', 'archived']);
+});
+
+it('refuses disabled options on submit for selects, radios and checkbox lists', function (): void {
+    $options = ['a' => 'A', 'b' => 'B', 'c' => 'C'];
+
+    expect(fieldErrors(Select::make('pick')->options($options)->disableOptionWhen(['c']), ['pick' => 'c']))->toHaveKey('pick')
+        ->and(fieldErrors(Select::make('pick')->options($options)->disableOptionWhen(['c']), ['pick' => 'b']))->toBe([])
+        ->and(fieldErrors(Radio::make('pick')->options($options)->disableOptionWhen(fn (string $value): bool => $value === 'c'), ['pick' => 'c']))->toHaveKey('pick')
+        ->and(fieldErrors(CheckboxList::make('picks')->options($options)->disableOptionWhen(['c']), ['picks' => ['a', 'c']]))->toHaveKey('picks.1')
+        ->and(fieldErrors(CheckboxList::make('picks')->options($options)->disableOptionWhen(['c']), ['picks' => ['a', 'b']]))->toBe([]);
+});
+
+it('keeps a disabled option valid for the record that already holds it', function (): void {
+    $record = new AlfaSix\Alfakit\Tests\Fixtures\Models\Post(['status' => 'c']);
+    $record->exists = true;
+    $record->syncOriginal();
+    $field = fn () => Select::make('status')->options(['a' => 'A', 'b' => 'B', 'c' => 'C'])->disableOptionWhen(['c']);
+
+    $errors = function (array $state) use ($record, $field): array {
+        try {
+            schema([$field()], $record, operation: 'edit')->fill()->applyClientState($state)->validate();
+        } catch (ValidationException $exception) {
+            return $exception->errors();
+        }
+
+        return [];
+    };
+
+    expect($errors(['status' => 'c']))->toBe([])
+        ->and(collect($field()->toSchema()['options'])->firstWhere('value', 'c'))->toHaveKey('disabled', true)
+        ->and(fieldErrors($field(), ['status' => 'c']))->toHaveKey('status');
 });
 
 it('stores boolean toggle buttons as booleans', function (): void {

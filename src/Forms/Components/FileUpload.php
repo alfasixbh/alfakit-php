@@ -1244,7 +1244,7 @@ class FileUpload extends Field
         // The extension was derived from the detected type when the file was uploaded.
         $extension = $this->getUploadExtension($upload);
 
-        $fileName = $this->resolveStoredFileName($originalName, $extension);
+        $fileName = $this->resolveStoredFileName($originalName, $extension, $upload);
         $directory = trim((string) $this->getDirectory(), '/');
         $targetPath = ($directory !== '' ? $directory.'/' : '').$fileName;
 
@@ -1333,12 +1333,19 @@ class FileUpload extends Field
         return (string) ob_get_clean();
     }
 
-    protected function resolveStoredFileName(string $originalName, string $extension): string
+    /**
+     * The stored file's name. `getUploadedFileNameForStorageUsing()` closures receive
+     * `$file` (also `$upload`: the upload, with `getClientOriginalName()` as in Filament),
+     * `$originalName` and `$extension` (the extension of the detected type).
+     */
+    protected function resolveStoredFileName(string $originalName, string $extension, ?TemporaryUpload $upload = null): string
     {
         if ($this->getUploadedFileNameForStorageUsing !== null) {
             return (string) $this->evaluate($this->getUploadedFileNameForStorageUsing, [
                 'originalName' => $originalName,
                 'extension' => $extension,
+                'file' => $upload,
+                'upload' => $upload,
             ]);
         }
 

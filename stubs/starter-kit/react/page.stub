@@ -2,7 +2,14 @@ import { createStarterKitPage } from '@alfakit/react';
 import AppLayout from '@/layouts/app-layout';
 
 /*
- * AlfaKit pages (`Alfakit/Page`) render inside the app's own layout. Register custom field,
- * column or page components here: createStarterKitPage({ layout: AppLayout, components: {} }).
+ * AlfaKit pages (`Alfakit/Page`) render inside the app's own layout. Components in
+ * resources/js/alfakit/{fields,columns,entries,widgets,pages,components,blocks} register
+ * themselves under their file name (fields/ColorWheel.tsx renders the `ColorWheel` field
+ * type). Register anything else, or override a file, under `components`.
  */
-export default createStarterKitPage({ layout: AppLayout });
+export default createStarterKitPage({
+    layout: AppLayout,
+    discover: import.meta.glob(
+        '../../alfakit/{fields,columns,entries,widgets,pages,components,blocks}/**/*.tsx',
+    ),
+});

@@ -357,10 +357,11 @@ class CheckboxList extends Field
             return $rules;
         }
 
-        $options = array_keys($this->getFlatOptions());
+        // Disabled options are refused like unknown ones.
+        $flat = $this->getFlatOptions();
 
-        if ($options !== []) {
-            $rules[$this->getStatePath().'.*'] = [Rule::in($options)];
+        if ($flat !== []) {
+            $rules[$this->getStatePath().'.*'] = [Rule::in($this->getEnabledOptionValues($flat))];
         }
 
         return $rules;

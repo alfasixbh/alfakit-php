@@ -1,6 +1,6 @@
 ---
 name: alfakit-plugins
-description: Install and configure AlfaKit's first-party plugins — Shield (roles and permissions), Billing, Media Library, Settings, Tags, Activity log, Backup, Health, Calendar, Tree, Comments, Kanban, Forms (public form builder), CMS, API (REST + OpenAPI), Webhooks, Ops, Feature flags (Pennant), Translation manager, AI (actions, copilot, MCP), Teams, Workflows (state machines and approvals), Invoices, File manager and Helpdesk. Use when a task needs one of them instead of building it by hand.
+description: Install and configure AlfaKit's first-party plugins — Shield (roles and permissions), Billing, Media Library, Settings, Tags, Activity log, Backup, Health, Calendar, Tree, Comments, Kanban, Forms (public form builder), CMS, API (REST + OpenAPI), Webhooks, Ops, Feature flags (Pennant), Translation manager, AI (actions, copilot, MCP), Teams, Workflows (state machines and approvals), Invoices, File manager, Helpdesk, Analytics and Mail templates. Use when a task needs one of them instead of building it by hand.
 ---
 
 # AlfaKit first-party plugins
@@ -70,6 +70,8 @@ php artisan alfakit-shield:super-admin --user=1 --panel=admin
 
 ```php
 use AlfaSix\Alfakit\Contracts\CanAccessPanel;
+use AlfaSix\Alfakit\Pages\Page;
+use AlfaSix\Alfakit\Resources\Resource;
 use AlfaSix\AlfakitShield\Contracts\HasShieldPermissions;
 use AlfaSix\AlfakitShield\ShieldPlugin;
 use AlfaSix\AlfakitShield\Traits\HasPageShield;
@@ -339,7 +341,7 @@ class MeetingsCalendar extends CalendarWidget
 - Register it like any widget (`->widgets([MeetingsCalendar::class])`); it spans full width.
 - Plugin: `timezone()`, `locale()`, `firstDay()`, `editable()`, `selectable()`, `config([...])`. Widget: `$views`, `$initialView`, `config()`, `getTimezone()`, `isEditable()`, `isSelectable()`.
 - `Event`: `title()`, `start()`, `end()`, `allDay()`, `url($url, $shouldOpenInNewTab)`, `backgroundColor()`, `borderColor()`, `textColor()`, `editable()`, `groupId()`, `classNames()`, `extendedProps()`.
-- Actions: `getHeaderActions()` (default `[$this->createAction()]`), `getEventClickAction()` (default view modal), `getModalActions()`, `getDateSelectAction()` (receives `$arguments['start']`, `['end']`, `['allDay']`); prebuilt `createAction($name)`, `editAction()`, `viewAction()`, `deleteAction()`; give a second action of one kind its own name.
+- Actions: `getHeaderActions()` (default `[$this->createAction()]`), `getEventClickAction()` (default view modal; `editAction()` / `deleteAction()` work too, offered by `viewAny` and checked for the clicked event), `getModalActions()`, `getDateSelectAction()` (receives `$arguments['start']`, `['end']`, `['allDay']`); prebuilt `createAction($name)`, `editAction()`, `viewAction()`, `deleteAction()`; give a second action of one kind its own name.
 - `onEventDrop(array $event, array $oldEvent, ?Model $record): bool` / `onEventResize(...)` return `true` when saved (unlike Filament, `false` reverts). `config()` accepts JSON only; callbacks and controlled options are dropped.
 
 ## Tree
@@ -351,6 +353,7 @@ use AlfaSix\Alfakit\Forms\Components\TextInput;
 use AlfaSix\AlfakitTree\Concerns\HasTreeStructure;
 use AlfaSix\AlfakitTree\Pages\TreePage;
 use AlfaSix\AlfakitTree\Widgets\TreeWidget;
+use App\Models\MenuItem;
 
 class Category extends Model
 {
@@ -417,11 +420,8 @@ $panel->plugin(CommentsPlugin::make()->mentionableSearchColumns(['name', 'email'
 // Resource infolist (or a form: CommentsEntry::make()->hiddenOn('create'))
 Section::make('Comments')->schema([CommentsEntry::make()->oldestFirst()]);
 
-// Page header and table rows
-protected function getHeaderActions(): array
-{
-    return [CommentsAction::make()];
-}
+// Page header actions (return them from getHeaderActions()) and table rows
+$headerActions = [CommentsAction::make()];
 
 $table->recordActions([CommentsTableAction::make()]);
 ```
@@ -545,6 +545,7 @@ class EditPage extends BaseEditPage
 `php artisan alfakit:add api`. A resource is exposed only when listed or when it implements `ExposesApi`; the API runs the resource's own table (sort, search, filters), form (validation, hooks) and policies. No Sanctum needed (own hashed tokens, "API tokens" page).
 
 ```php
+use AlfaSix\Alfakit\Resources\Resource;
 use AlfaSix\AlfakitApi\ApiPlugin;
 use AlfaSix\AlfakitApi\Contracts\ExposesApi;
 use AlfaSix\AlfakitApi\ResourceApi;
@@ -630,6 +631,7 @@ $panel->plugin(
 `php artisan alfakit:add feature-flags` (requires `laravel/pennant`; publish Pennant's own migration with `vendor:publish --tag=pennant-migrations` if you don't have the `features` table). Features stay plain Pennant features; the panel adds a kill switch, stable percentage rollouts, schedules (`alfakit-feature-flags:apply-schedules`, auto-scheduled), targeting and an audit trail.
 
 ```php
+use AlfaSix\Alfakit\Pages\Page;
 use AlfaSix\AlfakitFeatureFlags\Concerns\FeatureFlagged;
 use AlfaSix\AlfakitFeatureFlags\FeatureFlagsPlugin;
 use AlfaSix\AlfakitFeatureFlags\Support\FeatureFlags;
@@ -695,7 +697,7 @@ $panel->plugin(
         ->provider('openai', 'gpt-4.1-mini')
         ->provider('anthropic', 'claude-sonnet-4-5', feature: AiFeature::Copilot)
         ->authorize(fn (User $user): bool => $user->can('use-ai'))
-        ->copilot()                       // topbar chat (mod+j), off by default; tenancy pages without a tenant (profile, registration) leave it out
+        ->copilot()                       // topbar chat (mod+j), off by default; tenancy pages without a tenant (profile, registration) leave it out; starter kits: <AlfakitCopilot /> in the app header
         ->mcp()                           // /{panel}/mcp, off by default
         ->streaming()                     // stream AiAction / aiAssist / copilot answers (SSE, Stop button)
         ->redact(['email', 'phone']),
@@ -897,6 +899,25 @@ Analytics::shareUrl($site, now()->addWeek());            // signed link (site mu
 - Command: `alfakit-analytics:aggregate [--days=3] [--from= --to=] [--site=key] [--no-prune]` (scheduled hourly).
 - Frontend: registry key `analytics:breakdown` (widget type `AnalyticsBreakdown`), `data-slot="analytics-breakdown"` / `"analytics-row"`; translations under `analytics.*` via the plugin's frontendTranslations.
 - Never send personal data in event properties.
+
+## Mail templates
+
+`php artisan alfakit:add mail-templates` (or `composer require alfasix/alfakit-mail-templates`, `vendor:publish --tag=alfakit-mail-templates-migrations`, `--tag=alfakit-record-versions-migrations` for the history, `migrate`).
+
+```php
+use AlfaSix\AlfakitMailTemplates\MailTemplatesPlugin;
+
+$panel->plugin(
+    MailTemplatesPlugin::make()
+        ->authorize(fn (User $user): bool => $user->is_admin) // else the manageAlfakitMailTemplates gate
+        ->locales(['en', 'ar'])                                // default: the panel's locales
+        ->navigationGroup('Settings'),
+);
+```
+
+- Admins edit the subject and body per email and language (`alfakit_mail_templates`: key, locale, subject, body) with the email's merge tags; preview (light/dark, RTL), send test (to themselves only), reset to default, history (record versions). Bodies are sanitised on save and send; unknown merge tags fail validation.
+- Every editable email of AlfaKit and its plugins is listed; your own: a mailable with `UsesEditableTemplate` registered with `Mails::register(MailDefinition::make('orders.shipped')->editable(mergeTags: [...]))` (see the development skill, Emails). A `pt_BR` email also uses a `pt` template; a subject-only template keeps the email's own content.
+- Options: `authorize()`, `gate()`, `locales()`, `navigationGroup()`, `navigationSort()`, `navigationIcon()` (default `mail`), `usingResource()`.
 
 ## Security and authorisation
 

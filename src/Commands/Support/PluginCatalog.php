@@ -311,6 +311,10 @@ final class PluginCatalog
             'ai' => ['notes' => ['Configure a provider: php artisan alfakit:ai-setup']],
             'api' => ['notes' => ['Expose resources: ApiPlugin::make()->resources([PostResource::class]) (or implement ExposesApi on a resource); nothing is exposed until then.']],
             'cms' => ['notes' => ['Link the public disk: php artisan storage:link']],
+            // The plugin makes the panel a team workspace: without the trait no user has a team.
+            'teams' => ['notes' => [
+                'Give users teams: add AlfaSix\\AlfakitTeams\\Concerns\\HasTeams to your User model and implement AlfaSix\\Alfakit\\Contracts\\HasTenants and HasDefaultTenant (with Shield\'s HasRoles: use HasTeams { HasTeams::teams insteadof HasRoles; }); the panel answers 404 until then.',
+            ]],
             default => [],
         };
     }

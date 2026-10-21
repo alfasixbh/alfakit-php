@@ -7,6 +7,7 @@ namespace AlfaSix\Alfakit\Auth\Impersonation;
 use AlfaSix\Alfakit\Contracts\CanAccessPanel;
 use AlfaSix\Alfakit\Contracts\CanBeImpersonated;
 use AlfaSix\Alfakit\Contracts\CanImpersonate;
+use AlfaSix\Alfakit\Contracts\HasTenants;
 use AlfaSix\Alfakit\Panel;
 use Closure;
 use Illuminate\Contracts\Auth\Authenticatable;
@@ -14,6 +15,7 @@ use Illuminate\Contracts\Auth\UserProvider;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Route;
 
 /**
  * Signing in as another user and back. The real user is remembered in the server-side
@@ -86,7 +88,34 @@ final class Impersonation
         // A new session id for the new identity; the impersonation record is kept.
         session()->migrate(true);
 
-        return redirect()->to($redirectUrl ?? $panel->getUrl());
+        return redirect()->to($redirectUrl ?? self::homeOf($panel, $target));
+    }
+
+    /**
+     * Where the impersonated user lands by default: the panel home in a tenant they belong
+     * to (the current one when they can open it, else their default tenant), never a tenant
+     * of the impersonator's that would answer 404.
+     */
+    private static function homeOf(Panel $panel, Authenticatable $target): string
+    {
+        if (! $panel->hasTenancy()) {
+            return $panel->getUrl();
+        }
+
+        $current = $panel->getTenant();
+        $tenant = $current !== null && $target instanceof HasTenants && $target->canAccessTenant($current)
+            ? $current
+            : $panel->getDefaultTenant($target);
+
+        if ($tenant !== null) {
+            return $panel->getUrl($tenant);
+        }
+
+        if ($panel->hasTenantRegistration()) {
+            return $panel->route('tenant.registration');
+        }
+
+        return $panel->isStarterKit() && Route::has('dashboard') ? route('dashboard') : url($panel->getPath());
     }
 
     /**

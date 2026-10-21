@@ -279,6 +279,19 @@ it('signs private attachments in the renderer, scoped to the tenant directory', 
         ->and(RichContentRenderer::make('<img src="'.$mine.'">')->fileAttachments('attachments', 'posts', 'public')->toHtml())->not->toContain('signature');
 });
 
+it('signs attachments on a local disk without a public url (Laravel\'s default `local` disk) like the editor', function (): void {
+    config(['filesystems.disks.privatelocal' => ['driver' => 'local', 'root' => storage_path('app/private'), 'serve' => true]]);
+    Storage::fake('privatelocal');
+    Storage::disk('privatelocal')->buildTemporaryUrlsUsing(fn (string $path): string => '/storage/'.$path.'?signature=1');
+
+    $html = RichContentRenderer::make('<img src="/storage/posts/01J0000000000000000000000Z.png">')
+        ->fileAttachments('privatelocal', 'posts')
+        ->toHtml();
+
+    expect($html)->toContain('01J0000000000000000000000Z.png?signature=1')
+        ->and(RichEditor::make('content')->fileAttachmentsDisk('privatelocal')->getFileAttachmentsVisibility())->toBe('private');
+});
+
 // ---------------------------------------------------------------- Fakers
 
 it('fakes rich content as storage HTML, JSON, Markdown and text', function (): void {

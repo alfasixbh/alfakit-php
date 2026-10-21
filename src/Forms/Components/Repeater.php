@@ -827,6 +827,20 @@ class Repeater extends Field
         return $relationship instanceof BelongsToMany ? $relationship->newPivot() : $relationship->getRelated();
     }
 
+    /**
+     * A clone (this repeater inside a builder block or another repeater's item) builds its
+     * own item schemas: the ones cached by the original were built for its path, so a new
+     * block's repeater wrote its items to `content.items.N` instead of `content.B.data.items.N`.
+     */
+    public function __clone(): void
+    {
+        parent::__clone();
+
+        $this->itemSchemas = [];
+        $this->relatedRecords = null;
+        $this->boundItemKeys = [];
+    }
+
     public function flushChildSchema(): static
     {
         $this->itemSchemas = [];

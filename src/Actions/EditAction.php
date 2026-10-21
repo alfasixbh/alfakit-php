@@ -37,9 +37,17 @@ class EditAction extends Action
 
         $this->url(fn (?Model $record): ?string => $this->hasForm() || $record === null ? null : $this->getResourceUrl('edit', $record));
 
-        $this->authorize(fn (?Model $record): bool => $this->resourceAuthorizes('update', $record));
+        // `offeredBeforeRecord()` (a calendar event's click action): before its record is
+        // known it is offered to users who may view the records, and `update` is checked when
+        // the record is resolved (the modal opens or the action runs).
+        $this->authorize(fn (?Model $record): bool => $record === null && $this->isOfferedBeforeRecord
+            ? $this->resourceAuthorizes('viewAny')
+            : $this->resourceAuthorizes('update', $record));
 
-        $this->action(function (array $data, Model $record, EditAction $action): Model {
+        $this->action(function (array $data, ?Model $record, EditAction $action): Model {
+            // Offered without a record (see above), it only ever runs on one.
+            abort_if($record === null, 404);
+
             $data = $action->mutateDataUsing !== null ? $action->evaluate($action->mutateDataUsing, ['data' => $data]) : $data;
 
             return DB::transaction(function () use ($record, $data, $action): Model {

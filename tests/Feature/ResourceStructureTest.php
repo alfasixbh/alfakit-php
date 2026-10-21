@@ -391,3 +391,17 @@ it('tells you how to create a model that does not exist yet', function (): void 
     app(Illuminate\Filesystem\Filesystem::class)->deleteDirectory("{$directory}/GizmoResource");
     @unlink("{$directory}/GizmoResource.php");
 });
+
+it('does not warn about a missing model it has just created with --model', function (): void {
+    $directory = app_path('Alfakit/Admin/Resources');
+
+    $this->artisan('make:alfakit-resource', ['model' => 'Doohickey', '--model' => true, '--panel' => 'admin', '--force' => true])
+        ->doesntExpectOutputToContain('not found')
+        ->assertSuccessful();
+
+    expect(class_exists('App\\Models\\Doohickey', false))->toBeTrue();
+
+    app(Illuminate\Filesystem\Filesystem::class)->deleteDirectory("{$directory}/DoohickeyResource");
+    @unlink("{$directory}/DoohickeyResource.php");
+    @unlink(app_path('Models/Doohickey.php'));
+});

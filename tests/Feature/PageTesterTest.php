@@ -15,6 +15,7 @@ use AlfaSix\Alfakit\Tests\Fixtures\Panel\Resources\PostResource\Pages\ListPosts;
 use AlfaSix\Alfakit\Tests\Fixtures\Testing\HelperActionsPage;
 use AlfaSix\Alfakit\Tests\Fixtures\Testing\HelpersPanelProvider;
 use Illuminate\Support\Facades\Gate;
+use Inertia\Inertia;
 use PHPUnit\Framework\AssertionFailedError;
 
 class PageTesterTestPostPolicy
@@ -305,4 +306,32 @@ it('runs the delete header action of an edit page', function (): void {
 
 it('loads guest-denied and forbidden pages without throwing', function (): void {
     alfakit()->testPage(ListPosts::class)->assertStatus(302);
+});
+
+it('gives raw requests the asset version a built app expects', function (): void {
+    $manifest = public_path('build/manifest.json');
+    $existed = file_exists($manifest);
+
+    if (! $existed) {
+        @mkdir(dirname($manifest), 0777, true);
+        file_put_contents($manifest, '{"resources/js/app.ts":{"file":"assets/app.js"}}');
+    }
+
+    try {
+        $this->actingAs(testerUser());
+
+        // Before any request Inertia doesn't know the version yet; an empty one answers 409.
+        $this->get('/admin/posts', ['X-Inertia' => 'true', 'X-Inertia-Version' => ''])->assertStatus(409);
+
+        Inertia::version('');
+
+        $headers = PageTester::inertiaHeaders();
+
+        expect($headers['X-Inertia-Version'])->not->toBe('');
+        $this->get('/admin/posts', $headers)->assertOk()->assertJsonPath('component', 'Alfakit/Page');
+    } finally {
+        if (! $existed) {
+            @unlink($manifest);
+        }
+    }
 });

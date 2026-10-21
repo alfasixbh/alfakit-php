@@ -31,6 +31,9 @@ function setupSandbox(object $test, array $packages = []): string
     file_put_contents("{$sandbox}/bootstrap/providers.php", "<?php\n\nreturn [\n    App\\Providers\\AppServiceProvider::class,\n];\n");
     file_put_contents("{$sandbox}/.env", "APP_NAME=Demo\n");
     file_put_contents("{$sandbox}/package.json", json_encode(['dependencies' => ['@inertiajs/react' => '^2.0', 'react' => '^19.0']]));
+    // An Inertia app: the adapter package and the root view (standalone installs need both).
+    $files->ensureDirectoryExists("{$sandbox}/resources/views");
+    file_put_contents("{$sandbox}/resources/views/app.blade.php", '@inertia');
     file_put_contents("{$sandbox}/vendor/composer/installed.json", json_encode(['packages' => array_map(static fn (string $name): array => ['name' => $name], ['inertiajs/inertia-laravel', ...$packages])]));
     file_put_contents("{$sandbox}/app/Models/User.php", <<<'PHP'
         <?php
@@ -130,6 +133,17 @@ it('runs every step from flags without interaction, then skips them on a second 
         ->and(substr_count($again, '->colors('))->toBe(1);
 });
 
+it('keeps the installed panel mode when re-run on a starter kit without --mode', function (): void {
+    $sandbox = setupSandbox($this);
+    (new Filesystem)->copyDirectory(dirname(__DIR__).'/Fixtures/StarterKits/react/resources', $sandbox.'/resources');
+    $this->artisan('make:alfakit-panel', ['id' => 'admin'])->assertSuccessful();
+
+    expect(Illuminate\Support\Facades\Artisan::call('alfakit:setup', ['--no-install' => true, '--no-interaction' => true]))->toBe(0)
+        ->and(Illuminate\Support\Facades\Artisan::output())
+        ->toContain('Install (panel)')
+        ->not->toContain('Install (starter-kit)');
+});
+
 it('installs roles through Shield: composer, the plugin, its installer and HasRoles on the user model', function (): void {
     $sandbox = setupSandbox($this);
     $this->artisan('make:alfakit-panel', ['id' => 'admin'])->assertSuccessful();
@@ -177,7 +191,7 @@ it('walks through the questions interactively', function (): void {
         ->expectsConfirmation('Generate a users resource (invitations, impersonation, suspend/ban, sessions)?', 'no')
         ->expectsConfirmation('Set up AI providers (laravel/ai API keys)?', 'no')
         ->expectsConfirmation('Set up realtime notifications (Laravel Reverb)?', 'no')
-        ->expectsChoice('Which first-party plugins do you want?', [], PluginCatalog::options())
+        ->expectsConfirmation('Add first-party plugins now?', 'no')
         ->expectsQuestion('Primary brand colour', 'oklch(0.62 0.19 41)')
         ->expectsQuestion('Brand logo', '')
         ->expectsQuestion('Font family', '')
@@ -390,4 +404,121 @@ it('creates the admin user to sign in with from the flags', function (): void {
         ->assertFailed();
 
     expect(User::query()->where('email', 'other@example.com')->exists())->toBeFalse();
+});
+
+it('creates the admin user in a fresh process when the panel was only just written', function (): void {
+    setupSandbox($this);
+    config(['auth.providers.users.model' => User::class]);
+    Process::fake();
+
+    // The `backoffice` panel's provider is written by this run, so this process never booted it.
+    expect(alfakit()->hasPanel('backoffice'))->toBeFalse();
+
+    $this->artisan('alfakit:setup', [
+        '--mode' => 'panel',
+        '--panel' => 'backoffice',
+        '--adapter' => 'react',
+        '--admin-email' => 'owner@example.com',
+        '--admin-password' => 'secret-password',
+        '--no-install' => true,
+        '--no-interaction' => true,
+    ])->doesntExpectOutputToContain('is not registered')->assertSuccessful();
+
+    Process::assertRan(fn (PendingProcess $process): bool => is_array($process->command)
+        && array_slice($process->command, 1, 2) === ['artisan', 'make:alfakit-user']
+        && in_array('--panel=backoffice', $process->command, true)
+        && in_array('--email=owner@example.com', $process->command, true)
+        && in_array('--password=secret-password', $process->command, true));
+});
+
+it('asks for the admin user interactively and creates it', function (): void {
+    setupSandbox($this);
+    config(['auth.providers.users.model' => User::class]);
+
+    $this->artisan('alfakit:setup', ['--adapter' => 'react', '--no-install' => true])
+        ->expectsChoice('How do you want to use AlfaKit?', 'panel', [
+            'panel' => 'Admin panel (its own login, layout and navigation)',
+            'starter-kit' => 'Inside my Laravel starter kit (its auth, layout and sidebar)',
+            'standalone' => 'Components in my own Inertia pages (no panel)',
+        ])
+        ->expectsConfirmation('Add roles and permissions (Shield plugin)?', 'no')
+        ->expectsConfirmation('Generate a users resource (invitations, impersonation, suspend/ban, sessions)?', 'no')
+        ->expectsConfirmation('Set up AI providers (laravel/ai API keys)?', 'no')
+        ->expectsConfirmation('Set up realtime notifications (Laravel Reverb)?', 'no')
+        ->expectsConfirmation('Add first-party plugins now?', 'no')
+        ->expectsQuestion('Primary brand colour', '#2563eb')
+        ->expectsQuestion('Brand logo', '')
+        ->expectsQuestion('Font family', '')
+        ->expectsConfirmation('Add demo data (a seeder with an admin and sample users)?', 'no')
+        ->expectsConfirmation('Run the database migrations now?', 'no')
+        ->expectsConfirmation('Create an admin user to sign in with?', 'yes')
+        ->expectsQuestion('Name', 'Owner')
+        ->expectsQuestion('Email address', 'owner-interactive@example.com')
+        ->expectsQuestion('Password', 'secret-password')
+        ->assertSuccessful();
+
+    $user = User::query()->where('email', 'owner-interactive@example.com')->first();
+
+    expect($user)->not->toBeNull()
+        ->and($user->name)->toBe('Owner')
+        ->and(Hash::check('secret-password', $user->password))->toBeTrue();
+});
+
+it('points standalone installs at their own pages, not at a panel', function (): void {
+    setupSandbox($this);
+
+    $this->artisan('alfakit:setup', ['--mode' => 'standalone', '--adapter' => 'react', '--users' => true, '--no-install' => true, '--no-interaction' => true])
+        ->expectsOutputToContain('no panel in standalone mode')
+        ->expectsOutputToContain('make:alfakit-page Orders --standalone')
+        ->doesntExpectOutputToContain('make:alfakit-resource Post --generate')
+        ->doesntExpectOutputToContain('and open /admin')
+        ->assertSuccessful();
+});
+
+it('skips the admin user when the wizard runs again with the same email', function (): void {
+    setupSandbox($this);
+    config(['auth.providers.users.model' => User::class]);
+    $flags = ['--mode' => 'panel', '--adapter' => 'react', '--admin-email' => 'again@example.com', '--admin-password' => 'secret-password', '--no-install' => true, '--no-interaction' => true];
+
+    $this->artisan('alfakit:setup', $flags)->assertSuccessful();
+    $this->artisan('alfakit:setup', $flags)->expectsOutputToContain('already set up')->assertSuccessful();
+
+    expect(User::query()->where('email', 'again@example.com')->count())->toBe(1);
+});
+
+it('neither asks for nor suggests an admin user on a re-run when the app has users', function (): void {
+    setupSandbox($this);
+    config(['auth.providers.users.model' => User::class]);
+    $flags = ['--mode' => 'panel', '--adapter' => 'react', '--no-install' => true, '--no-interaction' => true];
+
+    $this->artisan('alfakit:setup', $flags)->expectsOutputToContain('Create a user to sign in with')->assertSuccessful();
+
+    User::query()->create(['name' => 'Ann', 'email' => 'ann@example.com', 'password' => 'secret']);
+
+    $this->artisan('alfakit:setup', $flags)->doesntExpectOutputToContain('Create a user to sign in with')->assertSuccessful();
+});
+
+it('shows the plugin list only after opting in, and installs what is ticked', function (): void {
+    setupSandbox($this);
+
+    $this->artisan('alfakit:setup', ['--adapter' => 'react', '--no-install' => true])
+        ->expectsChoice('How do you want to use AlfaKit?', 'panel', [
+            'panel' => 'Admin panel (its own login, layout and navigation)',
+            'starter-kit' => 'Inside my Laravel starter kit (its auth, layout and sidebar)',
+            'standalone' => 'Components in my own Inertia pages (no panel)',
+        ])
+        ->expectsConfirmation('Add roles and permissions (Shield plugin)?', 'no')
+        ->expectsConfirmation('Generate a users resource (invitations, impersonation, suspend/ban, sessions)?', 'no')
+        ->expectsConfirmation('Set up AI providers (laravel/ai API keys)?', 'no')
+        ->expectsConfirmation('Set up realtime notifications (Laravel Reverb)?', 'no')
+        ->expectsConfirmation('Add first-party plugins now?', 'yes')
+        ->expectsChoice('Which first-party plugins do you want?', ['comments'], PluginCatalog::options())
+        ->expectsQuestion('Primary brand colour', '#2563eb')
+        ->expectsQuestion('Brand logo', '')
+        ->expectsQuestion('Font family', '')
+        ->expectsConfirmation('Add demo data (a seeder with an admin and sample users)?', 'no')
+        ->expectsConfirmation('Run the database migrations now?', 'no')
+        ->expectsConfirmation('Create an admin user to sign in with?', 'no')
+        ->expectsOutputToContain('composer require alfasix/alfakit-comments')
+        ->assertSuccessful();
 });

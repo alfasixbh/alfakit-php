@@ -209,3 +209,33 @@ it('labels the tenant menu links with the registration and profile pages\' own l
         ->and($tenancy['registrationLabel'])->toBe('Create team')
         ->and($tenancy['profileLabel'] ?? null)->toBeNull();
 });
+
+class SharedOwnerProjectsRelationManager extends AlfaSix\Alfakit\Resources\RelationManagers\RelationManager
+{
+    protected static string $relationship = 'projects';
+
+    public function table(AlfaSix\Alfakit\Tables\Table $table): AlfaSix\Alfakit\Tables\Table
+    {
+        return $table->columns([AlfaSix\Alfakit\Tables\Columns\TextColumn::make('name')]);
+    }
+}
+
+it('keeps relation manager records in the current tenant when the owner record is not the tenant\'s', function (): void {
+    [$user, $alpha, $beta] = tenantUser();
+    $this->actingAs($user);
+    alfakit()->setCurrentPanel(alfakit()->getPanel('app'));
+    alfakit()->setTenant($alpha);
+
+    // A shared owner (the demo's global category listing every store's products), here the
+    // Beta team viewed while working in Alpha: Beta's projects must not be listed.
+    $page = app(AlfaSix\Alfakit\Tests\Fixtures\Tenancy\ListProjects::class);
+    $manager = SharedOwnerProjectsRelationManager::make($beta, $page);
+    $names = $manager->getTable()->getQuery()->pluck('name')->all();
+
+    expect($names)->toBe([]);
+
+    alfakit()->setTenant($beta);
+    expect(SharedOwnerProjectsRelationManager::make($beta, $page)->getTable()->getQuery()->pluck('name')->all())->toBe(['Beta project']);
+
+    alfakit()->setTenant(null);
+});

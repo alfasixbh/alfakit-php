@@ -13,6 +13,7 @@ use AlfaSix\Alfakit\Schemas\Schema;
 use AlfaSix\Alfakit\Support\Icons;
 use AlfaSix\Alfakit\Support\Labels;
 use AlfaSix\Alfakit\Support\ModelLabel;
+use AlfaSix\Alfakit\Support\TenantScope;
 use AlfaSix\Alfakit\Tables\Table;
 use AlfaSix\Alfakit\Tables\TableState;
 use Illuminate\Database\Eloquent\Model;
@@ -423,6 +424,13 @@ abstract class RelationManager implements HasResource
     {
         $relationship = $this->getRelationship();
         $query = $relationship->getQuery();
+        $tenant = alfakit()->getTenant();
+
+        // Tenant-owned related records stay in the current tenant, also when the owner record
+        // is shared (a global category listing every store's products).
+        if ($tenant !== null && ! $relationship->getRelated() instanceof $tenant) {
+            TenantScope::apply($query);
+        }
 
         if (! $relationship instanceof BelongsToMany) {
             return $query;

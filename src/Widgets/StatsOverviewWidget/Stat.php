@@ -162,9 +162,11 @@ class Stat
         $label = $this->evaluate($this->label);
         $value = $this->evaluate($this->value);
 
-        return Serializable::compact([
+        return [
             'label' => $label instanceof Htmlable ? $label->toHtml() : (string) $label,
+            // Always sent, also when null: the renderers show the placeholder for null / ''.
             'value' => is_scalar($value) || $value === null ? $value : (string) $value,
+        ] + Serializable::compact([
             'placeholder' => $value === null || $value === '' ? $this->getPlaceholder() : null,
             'description' => $this->evaluate($this->description),
             'descriptionIcon' => Icons::resolve($this->evaluate($this->descriptionIcon)),

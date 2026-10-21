@@ -42,7 +42,8 @@ final class SchemaContext
     {
         $lifetime = (int) config('alfakit.token_lifetime', 1440);
 
-        return $lifetime > 0 && $this->issuedAt !== null && $this->issuedAt + $lifetime * 60 < time();
+        // now() rather than time(), so tests can travel past the lifetime ($this->travel(2)->days()).
+        return $lifetime > 0 && $this->issuedAt !== null && $this->issuedAt + $lifetime * 60 < now()->getTimestamp();
     }
 
     public function toToken(): string
@@ -53,7 +54,7 @@ final class SchemaContext
             'parameters' => $this->parameters,
             'component' => $this->component,
             'user' => $this->user ?? self::currentUser(),
-            'issued_at' => $this->issuedAt ?? time(),
+            'issued_at' => $this->issuedAt ?? now()->getTimestamp(),
         ], JSON_THROW_ON_ERROR));
     }
 

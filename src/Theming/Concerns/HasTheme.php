@@ -81,7 +81,7 @@ trait HasTheme
      */
     protected array $resolvedThemeValues = [];
 
-    protected ?string $headingFont = null;
+    protected string|Closure|null $headingFont = null;
 
     protected FontProvider|string|null $headingFontProvider = null;
 

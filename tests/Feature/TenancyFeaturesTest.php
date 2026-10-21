@@ -212,3 +212,52 @@ it('broadcasts notifications and database refreshes', function (): void {
 
     NotificationFacade::assertSentTo($user, BroadcastNotification::class, fn (BroadcastNotification $notification): bool => $notification->broadcastType() === BroadcastNotification::DATABASE_NOTIFICATIONS_SENT);
 });
+
+it('explains a missing ownership relationship instead of calling a scope of the same name', function (): void {
+    Panels::register('ownership', fn (Panel $panel): Panel => $panel->login()->tenant(Team::class, ownershipRelationship: 'team')->resources([TenancyTestMemberResource::class]));
+    alfakit()->setCurrentPanel(alfakit()->getPanel('ownership'));
+    [$user, $alpha, $beta] = teamsFixture();
+    $outsider = TenantUser::query()->create(['name' => 'Bob', 'email' => 'bob'.uniqid().'@example.com', 'password' => 'secret']);
+    $outsider->teams()->attach($beta->id);
+
+    expect(fn () => TenancyTestUserResource::scopeEloquentQueryToTenant(TenantUser::query(), $alpha))
+        ->toThrow(LogicException::class, 'has no [team] relationship')
+        // Through the members relationship (BelongsToMany) only the tenant's users remain.
+        ->and(TenancyTestMemberResource::scopeEloquentQueryToTenant(TenantUser::query(), $alpha)->pluck('id')->all())->toBe([$user->id]);
+});
+
+class TenancyTestUserResource extends AlfaSix\Alfakit\Resources\Resource
+{
+    protected static ?string $model = TenantUser::class;
+}
+
+class TenancyTestMemberResource extends AlfaSix\Alfakit\Resources\Resource
+{
+    protected static ?string $model = TenantUser::class;
+
+    protected static ?string $tenantOwnershipRelationshipName = 'teams';
+}
+
+it('sends an impersonated user to one of their own tenants, not the impersonator\'s', function (): void {
+    $panel = Panels::register('imptenants', fn (Panel $panel): Panel => $panel->login()->tenant(Team::class)->resources([ProjectResource::class])->pages([Dashboard::class]));
+    [$admin, $alpha, $beta] = teamsFixture();
+    $member = TenancyImpersonatableUser::query()->create(['name' => 'Mia', 'email' => 'mia'.uniqid().'@example.com', 'password' => 'secret']);
+    $member->teams()->attach($beta->id);
+    $impersonator = TenancyImpersonatableUser::query()->findOrFail($admin->getKey());
+    $this->actingAs($impersonator);
+
+    // The admin is working in Alpha, which the member doesn't belong to.
+    alfakit()->setCurrentPanel($panel);
+    alfakit()->setTenant($alpha);
+
+    expect(AlfaSix\Alfakit\Auth\Impersonation\Impersonation::start($panel, $member)->getTargetUrl())
+        ->toBe('http://localhost/imptenants/'.$beta->getKey());
+});
+
+class TenancyImpersonatableUser extends TenantUser implements AlfaSix\Alfakit\Contracts\CanImpersonate
+{
+    public function canImpersonate(): bool
+    {
+        return true;
+    }
+}

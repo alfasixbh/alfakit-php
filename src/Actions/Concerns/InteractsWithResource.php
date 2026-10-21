@@ -10,6 +10,21 @@ use Illuminate\Database\Eloquent\Model;
 
 trait InteractsWithResource
 {
+    protected bool $isOfferedBeforeRecord = false;
+
+    /**
+     * The action is shown before its record is known and gets it when it opens (a calendar
+     * event's click action): until then it is authorised like the resource's records
+     * (`viewAny`), and the record's own ability is checked when it opens or runs. Record
+     * actions (edit, delete) without this stay hidden without a record.
+     */
+    public function offeredBeforeRecord(bool $condition = true): static
+    {
+        $this->isOfferedBeforeRecord = $condition;
+
+        return $this;
+    }
+
     /**
      * @return class-string<resource>|null
      */

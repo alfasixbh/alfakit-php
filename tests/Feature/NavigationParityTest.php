@@ -65,3 +65,40 @@ it('groups tenant menu items with nested arrays, like the user menu', function (
         ['Plans', 0],
     ]);
 });
+
+class NavigationParityReportsPage extends Page
+{
+    protected static ?string $routePath = '/reports/{period}';
+
+    public string $period = '';
+
+    public function mount(mixed ...$parameters): void
+    {
+        $this->period = (string) ($parameters[0] ?? '');
+    }
+
+    public function getSubheading(): ?string
+    {
+        return "Period: {$this->period}";
+    }
+}
+
+it('leaves a page whose route needs parameters out of the navigation instead of crashing every page', function (): void {
+    Panels::register('routeparams', fn (Panel $panel): Panel => $panel
+        ->login()
+        ->pages([Dashboard::class, NavigationParityReportsPage::class]));
+
+    $this->actingAs(TenantUser::query()->create(['name' => 'Ada', 'email' => 'ada'.uniqid().'@example.com', 'password' => 'secret']));
+
+    $dashboard = inertiaGet($this, '/routeparams');
+    $dashboard->assertOk();
+    $labels = collect(inertiaProps($dashboard)['alfakit']['navigation'] ?? [])->flatten()->filter(fn ($v) => is_string($v))->all();
+
+    expect(NavigationParityReportsPage::hasRequiredRouteParameters())->toBeTrue()
+        ->and(Dashboard::hasRequiredRouteParameters())->toBeFalse()
+        ->and(implode(' ', $labels))->not->toContain('Navigation parity reports page');
+
+    $page = inertiaGet($this, '/routeparams/reports/month');
+    $page->assertOk();
+    expect(json_encode(inertiaProps($page)))->toContain('Period: month');
+});

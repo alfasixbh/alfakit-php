@@ -33,11 +33,17 @@ class DeleteAction extends Action
         $this->modalSubmitActionLabel(__('alfakit::actions.delete.modal.submit'));
         $this->successNotificationTitle(__('alfakit::actions.delete.notification'));
 
-        $this->authorize(fn (?Model $record): bool => $this->resourceAuthorizes('delete', $record));
+        // `offeredBeforeRecord()` (a calendar event's click action): before its record is
+        // known it is offered to users who may view the records, and `delete` is checked when
+        // the record is resolved (the modal opens or the action runs).
+        $this->authorize(fn (?Model $record): bool => $record === null && $this->isOfferedBeforeRecord
+            ? $this->resourceAuthorizes('viewAny')
+            : $this->resourceAuthorizes('delete', $record));
 
         $this->hidden(fn (?Model $record): bool => $record !== null && in_array(SoftDeletes::class, class_uses_recursive($record), true) && $record->trashed());
 
-        $this->action(fn (Model $record): ?bool => $record->delete());
+        // Offered without a record (see above), it only ever runs on one.
+        $this->action(fn (?Model $record): ?bool => $record === null ? abort(404) : $record->delete());
 
         $this->successRedirectUrl(function (?Model $record): ?string {
             $context = $this->getContext();

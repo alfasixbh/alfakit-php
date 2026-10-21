@@ -53,6 +53,21 @@ it('shares what the header components render before they load on host pages', fu
         ->and($widgets)->not->toHaveKey('tenancy');
 });
 
+it('shares plugins\' header component data (starterKitWidget) without overriding the built-in ones', function (): void {
+    widgetsPanel('kitp', fn (Panel $panel): Panel => $panel->resources([PostResource::class])
+        ->starterKitWidget('copilot', fn ($user): array => ['label' => 'Open AI copilot for '.$user->name, 'keyBindings' => ['mod+j']])
+        ->starterKitWidget('hidden', fn (): ?array => null)
+        ->starterKitWidget('search', fn (): array => ['keyBindings' => []]));
+
+    $this->actingAs(User::query()->create(['name' => 'Ann', 'email' => 'ann'.uniqid().'@example.com', 'password' => 'secret']));
+
+    $widgets = inertiaProps(inertiaGet($this, '/dashboard'))['alfakitNavigation'][0]['widgets'];
+
+    expect($widgets['copilot'])->toBe(['label' => 'Open AI copilot for Ann', 'keyBindings' => ['mod+j']])
+        ->and($widgets)->not->toHaveKey('hidden')
+        ->and($widgets['search']['keyBindings'])->toBe(['mod+k']);
+});
+
 it('leaves out the bell without database notifications', function (): void {
     widgetsPanel('kitx', fn (Panel $panel): Panel => $panel->resources([PostResource::class]));
 

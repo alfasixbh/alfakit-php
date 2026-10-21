@@ -45,9 +45,10 @@ class Radio extends Field
 
     protected function getTypeValidationRules(): array
     {
-        $options = array_keys($this->getFlatOptions());
+        // Disabled options are refused like unknown ones.
+        $flat = $this->getFlatOptions();
 
-        return $options === [] ? [] : [Rule::in($options)];
+        return $flat === [] ? [] : [Rule::in($this->getEnabledOptionValues($flat))];
     }
 
     /**

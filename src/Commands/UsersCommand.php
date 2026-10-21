@@ -11,7 +11,10 @@ use AlfaSix\Alfakit\Commands\Support\PanelProviderEditor;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Filesystem\Filesystem;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use ReflectionClass;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Throwable;
 
@@ -37,9 +40,13 @@ class UsersCommand extends Command
     /** @var array<int, string> */
     protected array $written = [];
 
+    /** Whether the account columns migration still has to run. */
+    protected bool $migrationPending = true;
+
     public function handle(Filesystem $files): int
     {
         $this->written = [];
+        $this->migrationPending = true;
         $panelId = $this->resolvePanelId();
         $modelClass = ltrim((string) ($this->option('model') ?: $this->defaultModel($panelId)), '\\');
         $model = class_basename($modelClass);
@@ -84,20 +91,40 @@ class UsersCommand extends Command
 
         if (! $this->option('no-provider')) {
             $this->updatePanelProvider($files, $panelId, $namespace);
+            $this->guardStarterKitPages($files, $panelId, $namespace);
         }
 
         $this->newLine();
         $this->components->info($this->written === [] ? 'The users resource is already generated.' : 'The users resource is ready.');
         $this->components->bulletList(array_values(array_filter([
-            $this->option('no-migrations') ? null : 'Run the migration: php artisan migrate',
+            $this->option('no-migrations') || ! $this->migrationPending ? null : 'Run the migration: php artisan migrate',
             "Let admins impersonate: implement AlfaSix\\Alfakit\\Contracts\\CanImpersonate on {$model} (canImpersonate(): bool)",
             'Invitations are e-mailed: configure MAIL_MAILER (and a queue worker if you queue notifications)',
             config('session.driver') === 'database' ? null : 'Sessions list and revoke need SESSION_DRIVER=database',
-            $roles ? "Roles need Spatie\\Permission\\Traits\\HasRoles on {$model}" : null,
+            $roles && ! $this->usesHasRoles($modelClass) ? "Roles need Spatie\\Permission\\Traits\\HasRoles on {$model}" : null,
             'Authorise who manages users with a UserPolicy (php artisan make:policy UserPolicy --model='.$model.')',
         ])));
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Whether the user model uses spatie/laravel-permission's `HasRoles`, read from its file:
+     * `alfakit:setup` adds the trait in the same process, after the class was loaded.
+     */
+    protected function usesHasRoles(string $modelClass): bool
+    {
+        if (! class_exists($modelClass)) {
+            return false;
+        }
+
+        if (in_array('Spatie\\Permission\\Traits\\HasRoles', class_uses_recursive($modelClass), true)) {
+            return true;
+        }
+
+        $file = (new ReflectionClass($modelClass))->getFileName();
+
+        return is_string($file) && preg_match('/^[ \t]+use\s+[^;]*\bHasRoles\b/m', (string) @file_get_contents($file)) === 1;
     }
 
     protected function resolvePanelId(): string
@@ -209,6 +236,8 @@ class UsersCommand extends Command
         $table = $replacements['table'];
         $name = "add_alfakit_account_columns_to_{$table}_table";
         $existing = $files->glob(database_path("migrations/*_{$name}.php")) ?: [];
+        // A migration that already ran (`--force` rewrites it in place) has nothing to run.
+        $this->migrationPending = $existing === [] || ! self::migrationRan($existing[0]);
 
         if ($existing !== [] && ! $force) {
             $this->components->twoColumnDetail('database/migrations/…_'.$name.'.php', '<fg=yellow>exists, skipped</>');
@@ -217,6 +246,21 @@ class UsersCommand extends Command
         }
 
         $this->generate($files, 'users/migration', $existing[0] ?? database_path('migrations/'.date('Y_m_d_His')."_{$name}.php"), $replacements, true);
+    }
+
+    /**
+     * Whether the migration file is recorded in the migrations table.
+     */
+    protected static function migrationRan(string $path): bool
+    {
+        try {
+            $table = (string) config('database.migrations.table', 'migrations');
+
+            return Schema::hasTable($table)
+                && DB::table($table)->where('migration', pathinfo($path, PATHINFO_FILENAME))->exists();
+        } catch (Throwable) {
+            return false;
+        }
     }
 
     /**
@@ -276,5 +320,52 @@ class UsersCommand extends Command
         if ($failed) {
             $this->components->warn("Could not edit {$relative} automatically. Add ->authMiddleware([EnsureAccountIsActive::class, RequirePasswordChange::class]), ->pages([ChangePassword::class]) and ->routes(fn (Router \$router, Panel \$panel) => AcceptInvitation::registerRoute(\$router, \$panel)) to the panel.");
         }
+    }
+
+    /**
+     * Starter kit panels: users sign in on the host's own login page and use its own pages,
+     * which the panel's `authMiddleware()` never sees. Append `EnsureAccountIsActive` to the
+     * host's `web` middleware group, so suspended and banned users are signed out there too.
+     * Read from the provider file: during `alfakit:setup` the panel it just wrote is not booted.
+     */
+    protected function guardStarterKitPages(Filesystem $files, string $panelId, string $namespace): void
+    {
+        $provider = PanelProviderEditor::path($panelId);
+
+        if (! $files->exists($provider) || preg_match('/->(?:starterKit|embedded)\(/', $files->get($provider)) !== 1) {
+            return;
+        }
+
+        $path = base_path('bootstrap/app.php');
+        $class = "{$namespace}\\Users\\Middleware\\EnsureAccountIsActive";
+        $snippet = '$middleware->web(append: [EnsureAccountIsActive::class]) in bootstrap/app.php (use '.$class.')';
+        $contents = $files->exists($path) ? $files->get($path) : null;
+
+        if ($contents !== null && str_contains($contents, 'EnsureAccountIsActive::class')) {
+            return;
+        }
+
+        $updated = $contents === null ? null : preg_replace_callback(
+            '/(\$middleware->web\(append:\s*\[)(.*?)(\n?)([ \t]*)\]\)/s',
+            static function (array $match): string {
+                $items = rtrim($match[2]);
+                $indent = preg_match('/\n([ \t]+)\S/', $match[2], $line) === 1 ? $line[1] : $match[4].'    ';
+                $separator = $items === '' || str_ends_with($items, ',') ? '' : ',';
+
+                return $match[1].$items.$separator."\n{$indent}EnsureAccountIsActive::class,\n".$match[4].'])';
+            },
+            $contents,
+            1,
+            $count,
+        );
+
+        if ($updated === null || $count !== 1) {
+            $this->components->warn("Starter kit: add {$snippet}, so suspended and banned users are signed out of the app's own pages too.");
+
+            return;
+        }
+
+        $files->put($path, PanelProviderEditor::addImport($updated, $class));
+        $this->components->twoColumnDetail('bootstrap/app.php', '<fg=green>EnsureAccountIsActive on the web group</>');
     }
 }

@@ -112,3 +112,20 @@ it('hides edit and delete actions that have no record, without errors', function
         ->and(DeleteAction::make()->model(Post::class)->isVisible())->toBeFalse()
         ->and(RecordlessTestPostPolicy::$calls)->toBe([]);
 });
+
+it('offers edit and delete actions before their record by viewAny when told to (a calendar event click)', function (): void {
+    expect(EditAction::make()->model(Post::class)->offeredBeforeRecord()->isVisible())->toBeTrue()
+        ->and(DeleteAction::make()->model(Post::class)->offeredBeforeRecord()->isVisible())->toBeTrue()
+        ->and(RecordlessTestPostPolicy::$calls)->toBe(['viewAny', 'viewAny']);
+
+    RecordlessTestPostPolicy::$viewAny = false;
+
+    expect(EditAction::make()->model(Post::class)->offeredBeforeRecord()->isVisible())->toBeFalse();
+
+    // With its record, the record's ability decides.
+    $post = Post::query()->create(['title' => 'Hello', 'slug' => 'hello']);
+    RecordlessTestPostPolicy::$calls = [];
+
+    expect(EditAction::make()->model(Post::class)->offeredBeforeRecord()->record($post)->isVisible())->toBeTrue()
+        ->and(RecordlessTestPostPolicy::$calls)->toBe(['update']);
+});

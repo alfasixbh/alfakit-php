@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AlfaSix\Alfakit\Commands\Concerns;
 
+use AlfaSix\Alfakit\Commands\Support\AppEnvironment;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Str;
 
@@ -108,7 +109,11 @@ trait GeneratesFrontendComponents
             $this->registerInEntry($adapter, $key, $identifier, $import, $section, $entry);
         }
 
-        $this->components->info('Skip this step next time: add `discover: '.$this->discoveryGlob($adapter).'` to createAlfakit() in resources/js/alfakit/app.* (and createAlfakitServer() in ssr.*), and every file in fields/, columns/, entries/, widgets/, pages/, components/ and blocks/ registers itself.');
+        $hasAppEntry = collect(['tsx', 'ts', 'jsx', 'js'])->contains(static fn (string $extension): bool => file_exists(resource_path("js/alfakit/app.{$extension}")));
+
+        if ($hasAppEntry || AppEnvironment::starterKitPageEntry() === null) {
+            $this->components->info('Skip this step next time: add `discover: '.$this->discoveryGlob($adapter).'` to createAlfakit() in resources/js/alfakit/app.* (and createAlfakitServer() in ssr.*), and every file in fields/, columns/, entries/, widgets/, pages/, components/ and blocks/ registers itself.');
+        }
 
         return true;
     }
@@ -121,7 +126,10 @@ trait GeneratesFrontendComponents
         return "import.meta.glob('./{fields,columns,entries,widgets,pages,components,blocks}/**/*.{$extension}')";
     }
 
-    /** Whether `resources/js/alfakit/app.*` passes `discover: import.meta.glob(…)`. */
+    /**
+     * Whether `resources/js/alfakit/app.*` (or, in a starter kit app, the host page
+     * `resources/js/pages/Alfakit/Page.*`) passes `discover: import.meta.glob(…)`.
+     */
     protected function discoversComponents(): bool
     {
         foreach (['tsx', 'ts', 'jsx', 'js'] as $extension) {
@@ -132,7 +140,15 @@ trait GeneratesFrontendComponents
             }
         }
 
-        return false;
+        $page = AppEnvironment::starterKitPageEntry();
+
+        return $page !== null && preg_match('/\bdiscover\s*:\s*import\.meta\.glob\(/', (string) file_get_contents($page)) === 1;
+    }
+
+    /** The `import.meta.glob()` of the starter kit page (relative to `resources/js/pages/Alfakit`). */
+    public static function starterKitDiscoveryGlob(string $adapter): string
+    {
+        return str_replace("'./{", "'../../alfakit/{", static::discoveryGlob($adapter));
     }
 
     /**
@@ -149,7 +165,16 @@ trait GeneratesFrontendComponents
             ->first(static fn (string $path): bool => file_exists($path));
 
         if ($entry === null) {
-            if ($entryName === 'app') {
+            $page = AppEnvironment::starterKitPageEntry();
+
+            if ($entryName === 'app' && $page !== null) {
+                // Starter kit mode: the host page creates Alfakit's pages, there is no app entry.
+                $file = Str::after($page, base_path().'/');
+                $starterKitImport = '../../alfakit/'.Str::after($import, './');
+                $factory = $adapter === 'svelte' ? 'createStarterKitLayout' : 'createStarterKitPage';
+
+                $this->components->warn("{$file} doesn't auto-register components. Add `discover: ".static::starterKitDiscoveryGlob($adapter)."` to {$factory}() there, or register this one yourself:\n\nimport {$component} from '{$starterKitImport}'\n\n{$factory}({ layout: AppLayout, {$section}: { '{$key}': {$component} } })");
+            } elseif ($entryName === 'app') {
                 $this->components->warn("No resources/js/alfakit/app entry found. Register the component yourself:\n\n{$snippet}");
             }
 

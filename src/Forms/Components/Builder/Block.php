@@ -77,6 +77,11 @@ class Block extends Component
         return $this;
     }
 
+    public function hasSummary(): bool
+    {
+        return $this->summary !== null;
+    }
+
     /**
      * The summary of an item with `$data`, or null.
      *

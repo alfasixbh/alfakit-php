@@ -44,6 +44,17 @@ class AuthCommand extends Command
             return self::FAILURE;
         }
 
+        // The pages are Inertia pages of the app: without its Inertia frontend (root view,
+        // createInertiaApp) every auth kit URL would answer 500.
+        if (($missing = AppEnvironment::missingInertiaFrontend($adapter)) !== null) {
+            $this->components->error("The auth kit renders in your app's own Inertia pages, and this app has no Inertia frontend ({$missing}).");
+            $this->components->bulletList([
+                "Start from a Laravel starter kit (laravel new --{$adapter}), or set up Inertia (its middleware, the app root view and createInertiaApp), then run this again",
+            ]);
+
+            return self::FAILURE;
+        }
+
         $force = (bool) $this->option('force');
         $fortify = $this->shouldUseFortify();
         $mfa = (bool) $this->option('mfa');

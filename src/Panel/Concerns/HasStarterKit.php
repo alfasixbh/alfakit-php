@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace AlfaSix\Alfakit\Panel\Concerns;
 
+use AlfaSix\Alfakit\Auth\Impersonation\Impersonation;
 use AlfaSix\Alfakit\Contracts\CanAccessPanel;
+use AlfaSix\Alfakit\Http\Middleware\SetPanelLocale;
 use AlfaSix\Alfakit\Navigation\NavigationGroup;
 use AlfaSix\Alfakit\Notifications\DatabaseNotificationScope;
 use AlfaSix\Alfakit\Support\Serializable;
+use Closure;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Route;
@@ -23,8 +26,8 @@ use Illuminate\Support\Facades\Route;
  *   document's theme, so the host's shadcn tokens and dark mode apply.
  * - The panel navigation is shared with every Inertia page of the application as the
  *   `alfakitNavigation` prop, for the host's sidebar, with what the drop-in header
- *   components (`<AlfakitSearch />`, `<AlfakitNotifications />`, `<AlfakitTenantSwitcher />`)
- *   need before they load (`widgets`).
+ *   components (`<AlfakitSearch />`, `<AlfakitNotifications />`, `<AlfakitTenantSwitcher />`,
+ *   and plugins' own such as `<AlfakitCopilot />`) need before they load (`widgets`).
  * - The panel's dashboard widgets are shared with the host's dashboard (`alfakitWidgets`,
  *   `starterKitDashboard()`), for the drop-in `<AlfakitWidgets />`.
  * - Multi-factor authentication is the host's (Fortify's two-factor settings): Alfakit's
@@ -44,6 +47,9 @@ trait HasStarterKit
 
     /** @var array<string>|null The host routes that show the panel's widgets (`<AlfakitWidgets />`). */
     protected ?array $starterKitDashboardRoutes = ['dashboard'];
+
+    /** @var array<string, Closure> Plugins' header components (`starterKitWidget()`), by name. */
+    protected array $starterKitWidgets = [];
 
     /**
      * Run the panel inside a Laravel starter kit app: the host's authentication, root view and
@@ -111,6 +117,24 @@ trait HasStarterKit
         return \AlfaSix\Alfakit\Standalone\StarterKitDashboard::payloadFor($this);
     }
 
+    /**
+     * Data of a plugin's own drop-in header component, shared with every page of the host
+     * application in `alfakitNavigation.widgets.{name}` (what it renders before its code
+     * loads). The closure receives `$user` and `$tenant` (null on the host's own pages of a
+     * tenancy panel) and returns the data, or null to render nothing. The AI plugin uses
+     * it for `<AlfakitCopilot />`:
+     *
+     * ```php
+     * $panel->starterKitWidget('copilot', fn (): ?array => ['label' => 'Open AI copilot', 'keyBindings' => ['mod+j']]);
+     * ```
+     */
+    public function starterKitWidget(string $name, Closure $data): static
+    {
+        $this->starterKitWidgets[$name] = $data;
+
+        return $this;
+    }
+
     /** Alias of `starterKit()`: the panel is embedded in the host application. */
     public function embedded(bool $condition = true, string $rootView = 'app', string $loginRoute = 'login'): static
     {
@@ -169,18 +193,24 @@ trait HasStarterKit
         }
 
         try {
-            $tenant = $this->hasTenancy() ? $this->getTenant() : null;
+            $build = function () use ($user): array {
+                $tenant = $this->hasTenancy() ? $this->getTenant() : null;
 
-            return Serializable::compact([
-                'id' => $this->getId(),
-                'url' => $this->safeUrl() ?? url($this->getPath()),
-                'brandName' => $this->getBrandName(),
-                'groups' => $this->hasTenancy() && $tenant === null ? [] : array_values(array_map(
-                    static fn (NavigationGroup $group): array => $group->toSchema(),
-                    $this->applyNavigationGroupOptions($this->getNavigation()),
-                )),
-                'widgets' => $this->getStarterKitWidgetsSchema($user, $tenant),
-            ]);
+                return Serializable::compact([
+                    'id' => $this->getId(),
+                    'url' => $this->safeUrl() ?? url($this->getPath()),
+                    'brandName' => $this->getBrandName(),
+                    'groups' => $this->hasTenancy() && $tenant === null ? [] : array_values(array_map(
+                        static fn (NavigationGroup $group): array => $group->toSchema(),
+                        $this->applyNavigationGroupOptions($this->getNavigation()),
+                    )),
+                    'widgets' => $this->getStarterKitWidgetsSchema($user, $tenant),
+                ]);
+            };
+
+            // On the host's own pages the labels follow the panel's language (as on its pages
+            // and in the header components), while the host page keeps its own.
+            return $previous === $this ? $build() : SetPanelLocale::using($this, $build);
         } finally {
             if ($previous !== $this) {
                 $manager->setCurrentPanel($previous);
@@ -239,6 +269,13 @@ trait HasStarterKit
                 'registrationLabel' => $this->getTenantRegistrationUrl() === null ? null : $this->getTenantRegistrationLabel(),
                 'searchable' => $this->isTenantMenuSearchable(count($tenants)) ? true : null,
             ]) : null,
+            // While impersonating: the banner with **Leave** on the host's own pages too.
+            'impersonation' => Impersonation::toSchema($this),
+            // Plugins' header components (`starterKitWidget()`); the built-in ones win.
+            ...array_diff_key(
+                array_map(fn (Closure $data): mixed => $data($user, $tenant), $this->starterKitWidgets),
+                array_flip(['endpoint', 'search', 'notifications', 'tenancy', 'impersonation']),
+            ),
         ]);
     }
 }

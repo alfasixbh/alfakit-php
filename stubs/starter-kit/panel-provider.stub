@@ -29,6 +29,9 @@ class {{ class }} extends PanelProvider
             // Like the starter kit's dashboard: signed in with a verified email address.
             ->authMiddleware([
                 'verified',
-            ]);
+            ])
+            // The bell of <AlfakitNotifications /> in the app header: export download links,
+            // mentions, approvals. The installer creates the notifications table.
+            ->databaseNotifications();
     }
 }

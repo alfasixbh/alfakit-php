@@ -150,10 +150,15 @@ class MigrateFromFilamentCommand extends Command
             return true;
         }
 
-        $report->action("Installed the AlfaKit frontend for {$adapter}: `config/alfakit.php`, `resources/js/alfakit/app.*`, `resources/css/alfakit.css`, the Vite inputs".($this->option('no-npm') ? '' : " and the `@alfakit/{$adapter}` npm package").' (`alfakit:install --no-panel`).');
+        // A Filament app is Blade + Livewire: with an explicit --adapter and no Inertia app yet,
+        // install the toolchain (Inertia, the framework and its Vite plugin, Tailwind) too.
+        $scaffold = ! $discovery->hasInertia;
+        $flags = '--no-panel'.($scaffold ? ' --scaffold' : '').($this->option('no-npm') ? ' --no-npm' : '');
+
+        $report->action("Installed the AlfaKit frontend for {$adapter}: `config/alfakit.php`, `resources/js/alfakit/app.*`, `resources/css/alfakit.css`, the Vite inputs".($scaffold ? ', the Inertia and '.$adapter.' toolchain' : '').($this->option('no-npm') ? '' : " and the `@alfakit/{$adapter}` npm package")." (`alfakit:install {$flags}`).");
 
         if ($dryRun) {
-            $this->components->task("Would run alfakit:install --adapter={$adapter} --no-panel".($this->option('no-npm') ? ' --no-npm' : ''));
+            $this->components->task("Would run alfakit:install --adapter={$adapter} {$flags}");
 
             return true;
         }
@@ -161,6 +166,7 @@ class MigrateFromFilamentCommand extends Command
         $this->call('alfakit:install', array_filter([
             '--adapter' => $adapter,
             '--no-panel' => true,
+            '--scaffold' => $scaffold,
             '--no-npm' => (bool) $this->option('no-npm'),
             '--no-interaction' => true,
         ]));

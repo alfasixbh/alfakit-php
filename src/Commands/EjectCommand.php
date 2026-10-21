@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AlfaSix\Alfakit\Commands;
 
+use AlfaSix\Alfakit\Commands\Support\AppEnvironment;
 use Illuminate\Console\Command;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Str;
@@ -516,7 +517,15 @@ class EjectCommand extends Command
             ->first(fn (string $path): bool => $this->files->exists($path));
 
         if ($entry === null) {
-            if ($entryName === 'app') {
+            $page = AppEnvironment::starterKitPageEntry();
+
+            if ($entryName === 'app' && $page !== null) {
+                // Starter kit mode: the host page creates Alfakit's pages, there is no app entry.
+                $factory = str_ends_with($page, '.svelte') ? 'createStarterKitLayout' : 'createStarterKitPage';
+                $import = str_replace(["'./", '"./'], ["'../../alfakit/", '"../../alfakit/'], $statement);
+
+                $this->components->warn('Register the component in '.Str::after($page, base_path().'/').":\n\n{$import}\n\n{$factory}({ layout: AppLayout, components: { '{$key}': {$component} } })");
+            } elseif ($entryName === 'app') {
                 $this->components->warn("No resources/js/alfakit/app entry found. Register the component yourself:\n\n{$statement}\n\ncreateAlfakit({ components: { '{$key}': {$component} } })");
             }
 

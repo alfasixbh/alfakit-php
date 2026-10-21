@@ -322,3 +322,11 @@ it('keeps the current owner when a version is restored in a scopeToUser() panel'
     expect($post->title)->toBe('Draft')
         ->and($post->author_id)->toBe($dan->getKey());
 });
+
+it('explains that there is nothing to prune before the versions table exists', function (): void {
+    Illuminate\Support\Facades\Schema::dropIfExists((new RecordVersion)->getTable());
+
+    $this->artisan('alfakit:prune-versions', ['--days' => 30])
+        ->expectsOutputToContain('Nothing to prune')
+        ->assertSuccessful();
+});

@@ -147,6 +147,19 @@ it('generates every file, with valid PHP, and skips them on a second run', funct
         ->and(glob("{$sandbox}/database/migrations/*_add_alfakit_account_columns_to_users_table.php"))->toHaveCount(1);
 });
 
+it('asks to run the migration only while it has not run, also after --force rewrote it', function (): void {
+    ['sandbox' => $sandbox] = generateUsersResource($this);
+    $run = fn (array $options = []) => $this->artisan('alfakit:users', ['--model' => UsersCommandTestUser::class, '--panel' => 'people', '--no-provider' => true, ...$options]);
+    $migration = pathinfo((glob("{$sandbox}/database/migrations/*_add_alfakit_account_columns_to_users_table.php") ?: [''])[0], PATHINFO_FILENAME);
+
+    $run(['--force' => true])->expectsOutputToContain('Run the migration')->assertSuccessful();
+
+    DB::table('migrations')->insert(['migration' => $migration, 'batch' => 1]);
+
+    $run(['--force' => true])->doesntExpectOutputToContain('Run the migration')->assertSuccessful();
+    $run()->doesntExpectOutputToContain('Run the migration')->assertSuccessful();
+});
+
 it('adds roles when asked and leaves the migration out with --no-migrations', function (): void {
     $sandbox = usersSandbox($this);
     config(['alfakit.file_generation.path' => $sandbox.'/app/Alfakit', 'alfakit.file_generation.namespace' => 'App\\Alfakit']);
@@ -166,6 +179,26 @@ it('adds roles when asked and leaves the migration out with --no-migrations', fu
 
     // Imports stay sorted for Pint (App\Alfakit before App\Models).
     expect(strpos($resource, 'use App\\Alfakit\\Admin\\Users\\UserAccounts;'))->toBeLessThan(strpos($resource, 'use App\\Models\\User;'));
+});
+
+it('asks for HasRoles only while the user model doesn\'t use it, also when the trait was added after the class loaded', function (): void {
+    $sandbox = usersSandbox($this);
+    config(['alfakit.file_generation.path' => $sandbox.'/app/Alfakit', 'alfakit.file_generation.namespace' => 'App\\Alfakit']);
+    $class = 'UsersRolesModel'.bin2hex(random_bytes(4));
+    $file = $sandbox.'/'.$class.'.php';
+    file_put_contents($file, "<?php\n\nclass {$class} extends Illuminate\\Database\\Eloquent\\Model\n{\n}\n");
+    require $file;
+
+    $this->artisan('alfakit:users', ['--model' => $class, '--panel' => 'admin', '--roles' => true, '--no-migrations' => true, '--no-provider' => true])
+        ->expectsOutputToContain('Roles need Spatie\\Permission\\Traits\\HasRoles')
+        ->assertSuccessful();
+
+    // `alfakit:setup --roles` adds the trait to the file of an already loaded class.
+    file_put_contents($file, "<?php\n\nuse Spatie\\Permission\\Traits\\HasRoles;\n\nclass {$class} extends Illuminate\\Database\\Eloquent\\Model\n{\n    use HasRoles;\n}\n");
+
+    $this->artisan('alfakit:users', ['--model' => $class, '--panel' => 'admin', '--roles' => true, '--no-migrations' => true, '--no-provider' => true, '--force' => true])
+        ->doesntExpectOutputToContain('Roles need')
+        ->assertSuccessful();
 });
 
 it('registers middleware, the change-password page and the invitation route on the panel provider', function (): void {
@@ -415,3 +448,88 @@ class UsersCommandTestPolicy
         return false;
     }
 }
+
+it('signs suspended users out of the own pages of a starter kit app too', function (): void {
+    $sandbox = usersSandbox($this);
+    config(['alfakit.file_generation.path' => $sandbox.'/app/Alfakit', 'alfakit.file_generation.namespace' => 'App\\Alfakit']);
+    $this->artisan('make:alfakit-panel', ['id' => 'admin'])->assertSuccessful();
+    $provider = PanelProviderEditor::path('admin');
+    file_put_contents($provider, str_replace("->id('admin')", "->id('admin')\n            ->starterKit()", (string) file_get_contents($provider)));
+    // The starter kits' bootstrap/app.php.
+    file_put_contents($sandbox.'/bootstrap/app.php', <<<'PHP'
+        <?php
+
+        use App\Http\Middleware\HandleInertiaRequests;
+        use Illuminate\Foundation\Application;
+        use Illuminate\Foundation\Configuration\Middleware;
+
+        return Application::configure(basePath: dirname(__DIR__))
+            ->withMiddleware(function (Middleware $middleware): void {
+                $middleware->web(append: [
+                    HandleInertiaRequests::class,
+                ]);
+            })->create();
+        PHP);
+
+    $this->artisan('alfakit:users', ['--model' => 'App\\Models\\User', '--panel' => 'admin'])->assertSuccessful();
+    $this->artisan('alfakit:users', ['--model' => 'App\\Models\\User', '--panel' => 'admin'])->assertSuccessful();
+
+    $bootstrap = (string) file_get_contents($sandbox.'/bootstrap/app.php');
+
+    expect($bootstrap)
+        ->toContain("\$middleware->web(append: [\n            HandleInertiaRequests::class,\n            EnsureAccountIsActive::class,\n        ]);")
+        ->toContain('use App\\Alfakit\\Admin\\Users\\Middleware\\EnsureAccountIsActive;')
+        ->and(substr_count($bootstrap, 'EnsureAccountIsActive::class'))->toBe(1)
+        ->and(shell_exec('php -l '.escapeshellarg($sandbox.'/bootstrap/app.php')))->toContain('No syntax errors');
+
+    // A bootstrap file it does not recognise is left alone, with the line to add.
+    file_put_contents($sandbox.'/bootstrap/app.php', "<?php\n\nreturn require 'custom.php';\n");
+    $this->artisan('alfakit:users', ['--model' => 'App\\Models\\User', '--panel' => 'admin'])
+        ->expectsOutputToContain('EnsureAccountIsActive::class')
+        ->assertSuccessful();
+    expect(file_get_contents($sandbox.'/bootstrap/app.php'))->toBe("<?php\n\nreturn require 'custom.php';\n");
+});
+
+it('signs a suspended user out of any page with a message for the sign-in page, and answers background requests with 401', function (): void {
+    ['namespace' => $namespace] = generateUsersResource($this);
+    $middleware = $namespace.'\\Users\\Middleware\\EnsureAccountIsActive';
+    // A starter kit app's own page, behind the middleware on the web group.
+    Illuminate\Support\Facades\Route::middleware(['web', $middleware])->get('/host-dashboard', fn () => 'dashboard');
+    $user = usersCommandUser(['suspended_at' => now()]);
+
+    $this->actingAs($user)->get('/host-dashboard')
+        ->assertRedirectContains('/login')
+        ->assertSessionHas('status', __('alfakit::users.blocked.suspended'));
+    expect(auth()->check())->toBeFalse();
+
+    $this->actingAs($user)->getJson('/host-dashboard')->assertUnauthorized();
+    expect(auth()->check())->toBeFalse();
+
+    $active = usersCommandUser();
+    $this->actingAs($active)->get('/host-dashboard')->assertOk();
+});
+
+it('lists every account on tenancy panels: users are not owned by a tenant', function (): void {
+    ['namespace' => $namespace] = generateUsersResource($this);
+
+    expect(($namespace.'\\Resources\\UserResource')::isScopedToTenant())->toBeFalse();
+});
+
+it('sends users that must change their password to the page under their tenant on tenancy panels', function (): void {
+    ['namespace' => $namespace] = generateUsersResource($this);
+    $team = AlfaSix\Alfakit\Tests\Fixtures\Models\Team::query()->create(['name' => 'Alpha', 'slug' => 'alpha']);
+    Panels::register('tenantpeople', fn (Panel $panel): Panel => $panel
+        ->login()
+        ->tenant(AlfaSix\Alfakit\Tests\Fixtures\Models\Team::class, slugAttribute: 'slug')
+        ->resources([AlfaSix\Alfakit\Tests\Fixtures\Tenancy\ProjectResource::class])
+        ->pages([$namespace.'\\Users\\Pages\\ChangePassword'])
+        ->authMiddleware([$namespace.'\\Users\\Middleware\\RequirePasswordChange']));
+    $user = UsersCommandTenantUser::query()->create(['name' => 'Tia', 'email' => uniqid().'@example.com', 'password' => 'password']);
+    $user->forceFill(['password_change_required' => true])->save();
+    $user->teams()->attach($team->id);
+    $this->actingAs($user);
+
+    inertiaGet($this, '/tenantpeople/alpha/projects')->assertRedirect('http://localhost/tenantpeople/alpha/change-password');
+});
+
+class UsersCommandTenantUser extends AlfaSix\Alfakit\Tests\Fixtures\Models\TenantUser {}

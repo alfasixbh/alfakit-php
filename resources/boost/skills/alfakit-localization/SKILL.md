@@ -22,6 +22,7 @@ $panel
 - `languageSwitcher()` (also `AlfaSix\Alfakit\Support\Enums\LanguageSwitcherPosition::Topbar`) puts the language menu in the user menu, a top bar languages button next to the theme switcher, both, or nowhere in the panel. Auth pages always keep their button; `localeSwitcher(false)` turns every menu off. Languages are listed by their own name (`Locale::make('ja')->getLabel()` is `日本語`). The frontend reads `localization.switcherPosition`; renderers place the button with `showsLanguageSwitcher(localization, 'topbar' | 'user-menu' | 'auth')` from `@alfakit/core`, as `data-slot="language-switcher"`, replaceable through the `panel:language-switcher` registry key. On phones (below `sm`) the top bar button of `'topbar'` / `'both'` moves into the user menu (`collapsesLanguageSwitcher(localization, hasUserMenu)`; the button is wrapped in `data-slot="topbar-language"`), unless there is no user menu (guests, `userMenu(false)`).
 
 - Built-in strings in 12 languages: `composer require alfasix/alfakit-translations`.
+- Validation messages are Laravel's (`lang/{locale}/validation.php`), not AlfaKit's: add them for each language (e.g. `composer require laravel-lang/common --dev` and `php artisan lang:add ar`).
 - Read the user's language by implementing `Illuminate\Contracts\Translation\HasLocalePreference` on the user model.
 - The order is: switcher choice in this session, then the user preference, cookie, `Accept-Language`, and finally the default.
 - Any other language: `php artisan alfakit:lang:add sw`, translate `lang/vendor/alfakit/sw/*.php`, then add `'sw'` to `locales()`.
@@ -40,7 +41,7 @@ $panel
 
 ## RTL
 
-RTL is automatic for RTL languages, including any script subtag such as `pa_Arab`. The layout, sidebar, icons, charts and inputs all mirror. Custom components must use logical Tailwind classes (`ms`, `ps`, `start`, `end`, `text-start`, `border-s`) and `rtl:rotate-180` on arrows. Bundle a font that covers the script, such as Noto Sans Arabic or Vazirmatn.
+RTL is automatic for RTL languages, including any script subtag such as `pa_Arab`. The layout, sidebar, icons, charts and inputs all mirror. In starter-kit mode (`->starterKit()`) AlfaKit leaves `<html lang dir>` to the host app: only AlfaKit's content (its root element `data-slot="starter-kit-root"`, its modals and popovers) and the widgets on the host `/dashboard` mirror, so the kit's own sidebar and pages keep their layout. Navigation and dashboard widgets shared with host pages are built in the panel's language. Custom components must use logical Tailwind classes (`ms`, `ps`, `start`, `end`, `text-start`, `border-s`) and `rtl:rotate-180` on arrows. Bundle a font that covers the script, such as Noto Sans Arabic or Vazirmatn.
 
 ## Money
 

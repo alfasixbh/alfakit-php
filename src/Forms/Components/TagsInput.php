@@ -156,6 +156,21 @@ class TagsInput extends Field
         return $rules;
     }
 
+    /**
+     * A refused tag (`labels.1`) is named like the field ("The Labels field …"), not by its
+     * path; the renderers show the message on the field.
+     */
+    public function getValidationAttributesByPath(): array
+    {
+        $attributes = parent::getValidationAttributesByPath();
+
+        if ($this->nestedRecursiveRules !== []) {
+            $attributes[$this->getStatePath().'.*'] = $this->getValidationAttribute();
+        }
+
+        return $attributes;
+    }
+
     protected function getSchemaProps(): array
     {
         return [

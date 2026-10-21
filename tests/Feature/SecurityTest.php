@@ -171,6 +171,22 @@ it('expires old context tokens', function (): void {
     $this->postJson('/admin/_alfakit/actions', ['token' => $token, 'action' => 'create'])->assertStatus(419);
 });
 
+it('expires tokens by the app clock, so tests can travel past the lifetime', function (): void {
+    config(['alfakit.token_lifetime' => 1]);
+    $user = securityUser();
+    $this->actingAs($user);
+    alfakit()->setCurrentPanel(alfakit()->getPanel('admin'));
+
+    $token = (new SchemaContext('admin', ListPosts::class))->toToken();
+
+    expect(SchemaContext::fromToken($token)->isExpired())->toBeFalse();
+
+    $this->travel(2)->minutes();
+
+    expect(SchemaContext::fromToken($token)->isExpired())->toBeTrue();
+    $this->postJson('/admin/_alfakit/actions', ['token' => $token, 'action' => 'create'])->assertStatus(419);
+});
+
 // ---------------------------------------------------------------- Profile
 
 it('requires the current password to change the email address', function (): void {

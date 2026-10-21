@@ -20,6 +20,7 @@ const { value, setValue, blur, error, id, disabled, aria } = useField<string | n
       :id="id"
       :name="props.component.name"
       dir="auto"
+      data-slot="input"
       :value="value ?? ''"
       :placeholder="props.component.placeholder"
       :disabled="disabled"

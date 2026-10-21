@@ -45,15 +45,22 @@ it('generates a fragment class that works inside a schema', function (): void {
         ->assertSuccessful();
 });
 
-it('starts from a model when asked', function (): void {
+it('starts from a model when asked, with the fields the resource generator writes', function (): void {
     $this->artisan('make:alfakit-schema', ['name' => 'PostFields', '--model' => Post::class])->assertSuccessful();
 
     $class = file_get_contents($this->sandbox.'/app/Alfakit/Schemas/PostFields.php');
 
+    // Usable fields: relationship selects with options, not empty `Select::make('category_id')`.
     expect($class)
-        ->toContain("Select::make('category_id')")
-        ->toContain("TextInput::make('title')->required()")
-        ->toContain("Textarea::make('content')")
+        ->toContain("Select::make('category_id')\n                ->relationship('category', 'name')")
+        ->toContain("TextInput::make('title')")
+        ->toContain('->required()')
         ->toContain("Toggle::make('is_published')")
+        ->toContain('use AlfaSix\\Alfakit\\Forms\\Components\\Select;')
+        ->not->toContain('\\AlfaSix\\Alfakit\\Forms\\Components\\Select::make')
         ->not->toContain("make('id')");
+
+    require_once $this->sandbox.'/app/Alfakit/Schemas/PostFields.php';
+
+    expect(App\Alfakit\Schemas\PostFields::make()->getChildComponents())->not->toBeEmpty();
 });

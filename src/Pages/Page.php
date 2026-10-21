@@ -278,6 +278,15 @@ abstract class Page
     }
 
     /**
+     * Whether the page's route path has parameters without a default (`/reports/{period}`).
+     * Such a page gets no navigation item, since its URL can't be built without them.
+     */
+    public static function hasRequiredRouteParameters(): bool
+    {
+        return preg_match('/\{[^}?]+\}/', static::getRoutePath()) === 1;
+    }
+
+    /**
      * The route name relative to the panel prefix. A nested slug (`settings/profile`) becomes
      * dotted segments (`pages.settings.profile`): route names with "/" break tools that turn
      * them into code, such as the starter kits' Wayfinder.
@@ -477,6 +486,12 @@ abstract class Page
     public static function buildNavigationItems(): array
     {
         if (! static::shouldRegisterNavigation() || ! static::isAccessibleToCurrentVisitor() || ! static::canAccess()) {
+            return [];
+        }
+
+        // A page whose route needs parameters (`$routePath = '/reports/{period}'`) has no URL of
+        // its own to link to: link to it yourself, with the parameters.
+        if (static::hasRequiredRouteParameters()) {
             return [];
         }
 

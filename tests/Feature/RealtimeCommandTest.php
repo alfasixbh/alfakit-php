@@ -64,7 +64,11 @@ it('installs reverb, runs the broadcasting installers, writes keys, wires Echo a
         ->and($example)->toContain("REVERB_APP_KEY=\n")->toContain('VITE_REVERB_HOST="${REVERB_HOST}"');
 
     expect(file_get_contents("{$this->sandbox}/resources/js/alfakit/echo.ts"))->toContain("broadcaster: 'reverb'")->toContain("typeof window === 'undefined'")
-        ->and(file_get_contents("{$this->sandbox}/resources/js/alfakit/app.tsx"))->toStartWith("import './echo';\n")
+        // Loaded when AlfaKit first needs Echo, not imported by the entry: laravel-echo and
+        // pusher-js stay out of the entry's chunk (R-19: a blank panel with a second entry).
+        ->and(file_get_contents("{$this->sandbox}/resources/js/alfakit/app.tsx"))
+        ->toContain("createAlfakit({\n    echo: () => import('./echo').then((module) => module.default()),")
+        ->not->toContain("import './echo';")
         ->and(file_get_contents(PanelProviderEditor::path('admin')))->toContain('->realtimeNotifications()');
 });
 
@@ -88,7 +92,27 @@ it('is idempotent and prints commands instead of installing with --no-install', 
 
     expect(file_get_contents("{$this->sandbox}/.env"))->toBe($env)
         ->and(substr_count($provider, '->realtimeNotifications()'))->toBe(1)
-        ->and(substr_count(file_get_contents("{$this->sandbox}/resources/js/alfakit/app.tsx"), "import './echo';"))->toBe(1);
+        ->and(substr_count(file_get_contents("{$this->sandbox}/resources/js/alfakit/app.tsx"), "import('./echo')"))->toBe(1);
+});
+
+it('upgrades a panel entry that imports echo.ts to load it from createAlfakit({ echo })', function (): void {
+    $old = "import './echo';\nimport { createAlfakit } from '@alfakit/svelte';\n\nvoid createAlfakit({\n    discover: {},\n});\n";
+
+    expect(AlfaSix\Alfakit\Commands\RealtimeCommand::loadEchoInPanelEntry($old))
+        ->toBe("import { createAlfakit } from '@alfakit/svelte';\n\nvoid createAlfakit({\n    echo: () => import('./echo').then((module) => module.default()),\n    discover: {},\n});\n")
+        ->and(AlfaSix\Alfakit\Commands\RealtimeCommand::loadEchoInPanelEntry("import './echo';\nboot();\n"))->toBeNull();
+
+    // An echo.ts from an earlier version has no default export: the entry keeps importing it.
+    file_put_contents("{$this->sandbox}/resources/js/alfakit/echo.ts", "export {};\n");
+    file_put_contents("{$this->sandbox}/resources/js/alfakit/app.tsx", $old);
+
+    $this->artisan('alfakit:realtime', ['--no-install' => true])->assertSuccessful();
+
+    expect(file_get_contents("{$this->sandbox}/resources/js/alfakit/app.tsx"))->toBe($old);
+
+    $this->artisan('alfakit:realtime', ['--no-install' => true, '--force' => true])->assertSuccessful();
+
+    expect(file_get_contents("{$this->sandbox}/resources/js/alfakit/app.tsx"))->toContain("import('./echo')")->not->toContain("import './echo';");
 });
 
 it('formats echo.ts and the edited entry with the app formatter', function (): void {
@@ -118,4 +142,22 @@ it('adds the framework Echo package when install:broadcasting configured it in t
 
     Process::assertDidntRun(fn (PendingProcess $process): bool => is_array($process->command) && in_array('reverb:install', $process->command, true));
     Process::assertDidntRun(fn (PendingProcess $process): bool => is_array($process->command) && $process->command[0] === 'composer');
+});
+
+it('keeps the broadcast connection while Reverb is not installed, so the app keeps booting', function (): void {
+    $this->artisan('alfakit:realtime', ['--no-install' => true])
+        ->expectsOutputToContain('kept log')
+        ->expectsOutputToContain('BROADCAST_CONNECTION=reverb in .env')
+        ->assertSuccessful();
+
+    expect(file_get_contents("{$this->sandbox}/.env"))->toContain('BROADCAST_CONNECTION=log')->not->toContain('BROADCAST_CONNECTION=reverb')
+        ->toMatch('/^REVERB_APP_KEY=[a-z0-9]{20}$/m');
+});
+
+it('switches to reverb once laravel/reverb is installed', function (): void {
+    file_put_contents("{$this->sandbox}/vendor/composer/installed.json", json_encode(['packages' => [['name' => 'laravel/reverb']]]));
+
+    $this->artisan('alfakit:realtime', ['--no-install' => true])->assertSuccessful();
+
+    expect(file_get_contents("{$this->sandbox}/.env"))->toContain('BROADCAST_CONNECTION=reverb');
 });

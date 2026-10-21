@@ -33,6 +33,8 @@ class ActionController
     public function modal(Request $request): JsonResponse
     {
         $context = $this->resolveContext($request);
+        // "Select all" bulk modals see the table as the page shows it, like their run.
+        \AlfaSix\Alfakit\Tables\TableQueryString::apply($request);
         $page = $this->resolvePage($context);
         $component = $context->component ?? $request->input('component');
 

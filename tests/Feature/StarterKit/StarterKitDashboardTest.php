@@ -118,3 +118,23 @@ it('tells where a starter kit panel widget appears', function (): void {
 
     (new Illuminate\Filesystem\Filesystem)->deleteDirectory($base);
 });
+
+it('builds the shared widgets and navigation in the panel language while the host page keeps its own', function (): void {
+    starterKitDashboardPanel('kitl', fn (Panel $panel): Panel => $panel->locales(['en', 'ar']));
+    Route::middleware('web')->get('/dashboard-locale', fn () => Inertia::render('dashboard', [
+        'appLocale' => fn (): string => app()->getLocale(),
+    ]))->name('dashboard.locale');
+    app('router')->getRoutes()->refreshNameLookups();
+    alfakit()->getPanel('kitl')->starterKitDashboard(['dashboard', 'dashboard.locale']);
+    $this->actingAs(starterKitDashboardUser());
+
+    $props = inertiaProps($this->withHeaders(['Accept-Language' => 'ar'])->get('/dashboard-locale', ['X-Inertia' => 'true', 'X-Inertia-Version' => '']));
+    $localization = $props['alfakitWidgets'][0]['component']['localization'];
+
+    // Arabic and right to left like the panel's own pages and header components...
+    expect($localization['direction'])->toBe('rtl')
+        ->and($props['alfakitNavigation'][0]['id'])->toBe('kitl')
+        // ...while the host's own page (its props, its translations) stays in the app language.
+        ->and($props['appLocale'])->toBe('en')
+        ->and(app()->getLocale())->toBe('en');
+});

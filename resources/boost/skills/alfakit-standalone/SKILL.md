@@ -66,7 +66,10 @@ Controller: `Inertia::render('contact', ['form' => ContactForm::make()->fill(['e
 ## A table
 
 ```php
+use AlfaSix\Alfakit\Actions\Action;
+use AlfaSix\Alfakit\Actions\BulkAction;
 use AlfaSix\Alfakit\Standalone\Table;
+use AlfaSix\Alfakit\Tables\Columns\TextColumn;
 use AlfaSix\Alfakit\Tables\Table as TableBuilder;
 
 class OrdersTable extends Table
@@ -107,11 +110,11 @@ Sort, search, filters and pagination live in the host page's query string; the c
 
 ## Testing
 
-Read the payload from the page (`get('/contact', ['X-Inertia' => 'true', 'X-Inertia-Version' => ''])->json('props.form')`), then post to `/_alfakit/actions` with `token`, `action` (`submit` for forms; table actions add `'component' => 'table'` and `record` or `bulk`/`records`) and `data`. `OrdersTable::make([...])->toPayload()` works in unit tests.
+Read the payload from the page (`get('/contact', \AlfaSix\Alfakit\Testing\PageTester::inertiaHeaders())->json('props.form')`), then post to `/_alfakit/actions` with `token`, `action` (`submit` for forms; table actions add `'component' => 'table'` and `record` or `bulk`/`records`) and `data`. `OrdersTable::make([...])->toPayload()` works in unit tests.
 
 ## App auth kit (sign-in and account pages for the app's users)
 
-`php artisan alfakit:auth [--adapter=] [--mfa] [--fortify|--no-fortify] [--prefix=account] [--home=/dashboard]` writes `app/Providers/AuthKitServiceProvider.php`, adds `\AlfaSix\Alfakit\AuthKit\AuthKit::routes();` to `routes/web.php` and two Inertia pages (`auth/alfakit.tsx` gets `component` + `authKit`; `settings/alfakit.tsx` gets `sections` + `authKit`; Vue/Svelte `auth/Alfakit`, `settings/Alfakit`). With Fortify installed it always sets `'views' => false` in `config/fortify.php` (the auth kit owns `login`, `verification.notice`, `two-factor.login`…; duplicate names break Wayfinder), and the kit's `verification.verify` takes over Fortify's `/email/verify/{id}/{hash}` URI.
+`php artisan alfakit:auth [--adapter=] [--mfa] [--fortify|--no-fortify] [--prefix=account] [--home=/dashboard]` writes `app/Providers/AuthKitServiceProvider.php`, adds `\AlfaSix\Alfakit\AuthKit\AuthKit::routes();` to `routes/web.php` and two Inertia pages (`auth/alfakit.tsx` gets `component` + `authKit`; `settings/alfakit.tsx` gets `sections` + `authKit`; Vue/Svelte `auth/Alfakit`, `settings/Alfakit`). With Fortify installed it always sets `'views' => false` in `config/fortify.php` (the auth kit owns `login`, `verification.notice`, `two-factor.login`…; duplicate names break Wayfinder), and the kit's `verification.verify` takes over Fortify's `/email/verify/{id}/{hash}` URI. It needs the app's Inertia frontend (`@inertiajs/<adapter>` in package.json) and stops without one, as `alfakit:install --standalone` does.
 
 ```php
 use AlfaSix\Alfakit\Auth\MultiFactor\App\AppAuthentication;
@@ -128,7 +131,7 @@ AuthKit::configure(fn (AuthKitPanel $auth) => $auth           // in a provider's
 AuthKit::routes();                                               // routes/web.php; routes(prefix: 'kit', as: 'kit.')
 ```
 
-- Routes use Laravel's names: `login`, `logout`, `register`, `password.request`, `password.reset`, `verification.notice`, `verification.verify`, `two-factor.login`, `account`; internal endpoints `/_alfakit/auth/*` (`alfakit.auth-kit.internal.*`). With `route:cache` set `->routeOptions(prefix:, as:)` in `configure()`.
+- Routes use Laravel's names: `login`, `logout`, `register`, `password.request`, `password.reset`, `verification.notice`, `verification.verify`, `two-factor.login`, `account`; internal endpoints `/_alfakit/auth/*` (`alfakit.auth-kit.internal.*`). With `route:cache` set `->routeOptions(prefix:, as:)` in `configure()`. To keep a Fortify starter kit's own sign-in and add only the account page: `->routeOptions(prefix: 'account', as: 'account.')->login(false)->registration(false)->passwordReset(false)->emailVerification(false)` and `'views' => true` in `config/fortify.php` (the command sets it to false).
 - `AuthKitPanel` (id `auth-kit`) is a hidden panel: `login(false)`, `registration(false)`, `passwordReset(false)`, `emailVerification(false)`, `profile(false)` (account page), `emailChangeVerification()`, `multiFactorAuthenticationRememberDevice()`, `authGuard()`, `authPasswordBroker()`, `locales([...])` (then it resolves the user's language itself), `components(['login' => MyLogin::class, 'profile' => MyProfile::class])` (keys `login`, `register`, `forgot-password`, `reset-password`, `verify-email`, `two-factor-challenge`, `profile`, `password`, `two-factor`, `sessions`, `delete-account`; classes in `AlfaSix\Alfakit\AuthKit\Pages` and `...\AuthKit\Account`). It never calls `CanAccessPanel`.
-- Tests: `get('/login', ['X-Inertia' => 'true'])->json('props.component.token')`, then post to `/_alfakit/auth/actions` with `action` `authenticate` / `register` / `request` / `reset` / `verify`, or the account sections' `submit`, `logoutOtherSessions`, `deleteAccount`.
+- Tests: `get('/login', PageTester::inertiaHeaders())->json('props.component.token')` (`AlfaSix\Alfakit\Testing\PageTester`; a bare `X-Inertia` header answers 409 once the app has a Vite build), then post to `/_alfakit/auth/actions` with `action` `authenticate` / `register` / `request` / `reset` / `verify`, or the account sections' `submit`, `logoutOtherSessions`, `deleteAccount`.
 - No passkeys (WebAuthn) in AlfaKit yet.

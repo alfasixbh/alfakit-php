@@ -140,6 +140,22 @@ it('stores the original name of a single upload, also inside repeater items', fu
     expect(array_values($lines)[0]['file_name'])->toBe('Invoice 7.pdf');
 });
 
+it('names stored files with a Filament-style getUploadedFileNameForStorageUsing(fn ($file)) closure', function (): void {
+    fuActAs();
+
+    $form = schema([FileUpload::make('avatar')->directory('avatars')
+        ->getUploadedFileNameForStorageUsing(fn ($file): string => 'qa-'.$file->getClientOriginalName())], model: FuDocument::class)->fill();
+    $form->rawState(['avatar' => [fuUpload(UploadedFile::fake()->image('Beach.png'))]]);
+
+    expect($form->validate()['avatar'])->toBe('avatars/qa-Beach.png');
+
+    $form = schema([FileUpload::make('avatar')->directory('avatars')
+        ->getUploadedFileNameForStorageUsing(fn (string $originalName, string $extension): string => "named.{$extension}")], model: FuDocument::class)->fill();
+    $form->rawState(['avatar' => [fuUpload(UploadedFile::fake()->image('Other.png'))]]);
+
+    expect($form->validate()['avatar'])->toBe('avatars/named.png');
+});
+
 it('rejects tampered paths unless allowFilePathUsing allows them', function (): void {
     fuActAs();
     Storage::disk('public')->put('library/terms.pdf', 'terms');

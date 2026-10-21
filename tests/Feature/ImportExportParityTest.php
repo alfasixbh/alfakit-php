@@ -258,5 +258,7 @@ it('shows a stat placeholder for empty values, also configured globally', functi
     expect(Stat::make('Revenue', null)->toSchema()['placeholder'])->toBe('—')
         ->and(Stat::make('Revenue', '')->toSchema()['placeholder'])->toBe('—')
         ->and(Stat::make('Revenue', 0)->toSchema())->not->toHaveKey('placeholder')
-        ->and(Stat::make('Revenue', null)->placeholder(fn (): string => 'n/a')->toSchema()['placeholder'])->toBe('n/a');
+        ->and(Stat::make('Revenue', null)->placeholder(fn (): string => 'n/a')->toSchema()['placeholder'])->toBe('n/a')
+        // The renderers show the placeholder for a null value: the key has to be sent.
+        ->and(Stat::make('Revenue', null)->toSchema())->toHaveKey('value', null);
 });

@@ -52,7 +52,10 @@ it('wires Alfakit into the starter kit, idempotently', function (string $kit, st
 
     // The page renders in the host layout through the renderer's starter kit helper.
     expect(file_get_contents($app.'/'.$page))
-        ->toContain($kit === 'svelte' ? 'createStarterKitLayout({ layout: AppLayout })' : 'createStarterKitPage({ layout: AppLayout })')
+        ->toContain($kit === 'svelte' ? 'createStarterKitLayout({' : 'createStarterKitPage({')
+        ->toContain('layout: AppLayout,')
+        // Custom components in resources/js/alfakit register themselves, as with createAlfakit({ discover }).
+        ->toContain("'../../alfakit/{fields,columns,entries,widgets,pages,components,blocks}/**/*.".['react' => 'tsx', 'vue' => 'vue', 'svelte' => 'svelte'][$kit]."'")
         ->toContain("@alfakit/{$kit}");
 
     // The navigation component uses the host's own sidebar primitives.
@@ -68,15 +71,28 @@ it('wires Alfakit into the starter kit, idempotently', function (string $kit, st
         ->and(substr_count($sidebarContents, '<AlfakitNav />'))->toBe(1)
         ->and(strpos($sidebarContents, '<AlfakitNav />'))->toBeGreaterThan(strpos($sidebarContents, '<NavMain'));
 
-    // Both app layouts' headers gain the search field and the bell in a marked block, the
-    // sidebar layout's at the end of the row, the header layout's before the user menu.
+    // Both app layouts' headers gain the search field, the bell and the AI copilot (nothing
+    // without the AI plugin) in a marked block, the sidebar layout's at the end of the row,
+    // the header layout's before the user menu.
     foreach (['sidebarHeader', 'header'] as $file) {
         $header = (string) file_get_contents($app.'/'.StarterKitInstaller::files($kit)[$file]);
 
         expect($header)->toContain(StarterKitInstaller::HEADER_MARKER)
-            ->toContain("import { AlfakitNotifications, AlfakitSearch } from '@alfakit/{$kit}';")
+            ->toContain("import { AlfakitCopilot, AlfakitNotifications, AlfakitSearch } from '@alfakit/{$kit}';")
             ->and(substr_count($header, '<AlfakitSearch />'))->toBe(1)
-            ->and(substr_count($header, '<AlfakitNotifications />'))->toBe(1);
+            ->and(substr_count($header, '<AlfakitNotifications />'))->toBe(1)
+            ->and(substr_count($header, '<AlfakitCopilot />'))->toBe(1)
+            ->and(strpos($header, '<AlfakitCopilot />'))->toBeGreaterThan(strpos($header, '<AlfakitNotifications />'));
+
+        // A block from before the copilot existed gains it (`alfakit:add ai`, re-runs).
+        $old = (string) preg_replace('/^[ \t]*<AlfakitCopilot \/>\n/m', '', str_replace('AlfakitCopilot, ', '', $header));
+        expect($old)->not->toContain('AlfakitCopilot');
+
+        $upgraded = (string) StarterKitInstaller::addCopilotToHeader($old, $kit);
+
+        expect($upgraded)->toContain("import { AlfakitCopilot, AlfakitNotifications, AlfakitSearch } from '@alfakit/{$kit}';")
+            ->and(substr_count($upgraded, '<AlfakitCopilot />'))->toBe(1)
+            ->and(StarterKitInstaller::addWidgetsToHeader($upgraded, $kit, sidebarLayout: $file === 'sidebarHeader'))->toBe($upgraded);
     }
 
     $header = (string) file_get_contents($app.'/'.StarterKitInstaller::files($kit)['header']);
@@ -112,6 +128,8 @@ it('wires Alfakit into the starter kit, idempotently', function (string $kit, st
     expect($provider)->toContain('->starterKit()')
         ->toContain("->path('admin')")
         ->not->toContain('->login()')
+        // The header's <AlfakitNotifications /> bell needs it (exports, mentions, approvals).
+        ->toContain('->databaseNotifications()')
         // The kits import their providers: so does the panel's, for Pint.
         ->and(file_get_contents($app.'/bootstrap/providers.php'))->toContain('use App\\Providers\\Alfakit\\AdminPanelProvider;')->toContain('    AdminPanelProvider::class,');
 

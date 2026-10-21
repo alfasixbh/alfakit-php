@@ -36,7 +36,7 @@ final class StarterKitInstaller
     /** Marks the lines the installer adds to the host's files (so a second run skips them). */
     public const MARKER = 'alfakit:nav';
 
-    /** Marks the header components the installer adds (`<AlfakitSearch />`, `<AlfakitNotifications />`). */
+    /** Marks the header components the installer adds (`<AlfakitSearch />`, `<AlfakitNotifications />`, `<AlfakitCopilot />`). */
     public const HEADER_MARKER = 'alfakit:header';
 
     /** Marks the dashboard widgets the installer adds to the host's dashboard (`<AlfakitWidgets>`). */
@@ -130,8 +130,8 @@ final class StarterKitInstaller
         $this->writeFile($files['nav'], self::stub("{$this->kit}/nav"), 'the panel navigation for the app sidebar');
         $this->patchFile($files['sidebar'], fn (string $contents): ?string => self::addNavToSidebar($contents, $this->kit), 'added <AlfakitNav /> after <NavMain />');
         if ($headerWidgets) {
-            $this->patchFile($files['sidebarHeader'], fn (string $contents): ?string => self::addWidgetsToHeader($contents, $this->kit, sidebarLayout: true), 'added <AlfakitSearch /> and <AlfakitNotifications /> to the header');
-            $this->patchFile($files['header'], fn (string $contents): ?string => self::addWidgetsToHeader($contents, $this->kit, sidebarLayout: false), 'added <AlfakitSearch /> and <AlfakitNotifications /> before the user menu');
+            $this->patchFile($files['sidebarHeader'], fn (string $contents): ?string => self::addWidgetsToHeader($contents, $this->kit, sidebarLayout: true), 'added <AlfakitSearch />, <AlfakitNotifications /> and <AlfakitCopilot /> to the header');
+            $this->patchFile($files['header'], fn (string $contents): ?string => self::addWidgetsToHeader($contents, $this->kit, sidebarLayout: false), 'added <AlfakitSearch />, <AlfakitNotifications /> and <AlfakitCopilot /> before the user menu');
         }
 
         if ($dashboardWidgets) {
@@ -187,21 +187,22 @@ final class StarterKitInstaller
     }
 
     /**
-     * Add AlfaKit's search field and notifications bell to a header of the starter kit, in a
-     * marked block: at the end of the sidebar layout's header (`app-sidebar-header`), or
-     * before the user menu of the header layout (`app-header`). Their import goes with the
-     * host's package imports. Null when the header does not have the starter kit's shape;
-     * unchanged when the block is there.
+     * Add AlfaKit's search field, notifications bell and AI copilot (which renders nothing
+     * without the AI plugin's `copilot()`) to a header of the starter kit, in a marked block:
+     * at the end of the sidebar layout's header (`app-sidebar-header`), or before the user
+     * menu of the header layout (`app-header`). Their import goes with the host's package
+     * imports. Null when the header does not have the starter kit's shape; a block added by
+     * an earlier version gets the copilot (`addCopilotToHeader()`).
      */
     public static function addWidgetsToHeader(string $contents, string $kit, bool $sidebarLayout): ?string
     {
         if (str_contains($contents, self::HEADER_MARKER)) {
-            return $contents;
+            return self::addCopilotToHeader($contents, $kit) ?? $contents;
         }
 
         $comment = $kit === 'react'
-            ? '{/* '.self::HEADER_MARKER.': AlfaKit search and notifications (php artisan alfakit:install --starter-kit) */}'
-            : '<!-- '.self::HEADER_MARKER.': AlfaKit search and notifications (php artisan alfakit:install --starter-kit) -->';
+            ? '{/* '.self::HEADER_MARKER.': AlfaKit search, notifications and AI copilot (php artisan alfakit:install --starter-kit) */}'
+            : '<!-- '.self::HEADER_MARKER.': AlfaKit search, notifications and AI copilot (php artisan alfakit:install --starter-kit) -->';
         $class = $kit === 'react' ? 'className' : 'class';
 
         if ($sidebarLayout) {
@@ -215,6 +216,7 @@ final class StarterKitInstaller
                         .$indent."<div {$class}=\"ms-auto flex items-center gap-2\">\n"
                         .$indent."    <AlfakitSearch />\n"
                         .$indent."    <AlfakitNotifications />\n"
+                        .$indent."    <AlfakitCopilot />\n"
                         .$indent."</div>\n"
                         .$matches[0];
                 },
@@ -230,6 +232,7 @@ final class StarterKitInstaller
                     .$matches[2].$comment."\n"
                     .$matches[2]."<AlfakitSearch />\n"
                     .$matches[2]."<AlfakitNotifications />\n"
+                    .$matches[2]."<AlfakitCopilot />\n"
                     .$matches[2].'<DropdownMenu>',
                 $contents,
                 1,
@@ -241,7 +244,96 @@ final class StarterKitInstaller
             return null;
         }
 
-        return self::addImport($updated, "@alfakit/{$kit}", 'import { AlfakitNotifications, AlfakitSearch } from \'@alfakit/'.$kit.'\';');
+        return self::addImport($updated, "@alfakit/{$kit}", 'import { AlfakitCopilot, AlfakitNotifications, AlfakitSearch } from \'@alfakit/'.$kit.'\';');
+    }
+
+    /**
+     * Add `<AlfakitCopilot />` after `<AlfakitNotifications />` in a header block an earlier
+     * version of the installer wrote, and to the import of the other header components.
+     * Unchanged when it is there; null when the block has no `<AlfakitNotifications />` (or
+     * the file no AlfaKit import) to place it by.
+     */
+    public static function addCopilotToHeader(string $contents, string $kit): ?string
+    {
+        if (str_contains($contents, '<AlfakitCopilot')) {
+            return $contents;
+        }
+
+        $updated = preg_replace('/^([ \t]*)<AlfakitNotifications\b[^\n]*\/>[ \t]*\n/m', "$0$1<AlfakitCopilot />\n", $contents, 1, $count);
+
+        if ($updated === null || $count !== 1) {
+            return null;
+        }
+
+        $package = preg_quote("@alfakit/{$kit}", '/');
+        $updated = preg_replace_callback(
+            '/^([ \t]*import\s*\{)([^}]*)(\}\s*from\s*[\'"]'.$package.'[\'"])/m',
+            static function (array $matches): string {
+                $names = array_values(array_filter(array_map('trim', explode(',', $matches[2])), static fn (string $name): bool => $name !== ''));
+                $names[] = 'AlfakitCopilot';
+                sort($names);
+
+                return $matches[1].' '.implode(', ', $names).' '.$matches[3];
+            },
+            $updated,
+            1,
+            $imports,
+        );
+
+        if ($updated === null) {
+            return null;
+        }
+
+        return $imports === 1 ? $updated : self::addImport($updated, "@alfakit/{$kit}", "import { AlfakitCopilot } from '@alfakit/{$kit}';");
+    }
+
+    /**
+     * Add `<AlfakitTenantSwitcher />` before `<AlfakitSearch />` in the header block (for
+     * `alfakit:add teams`: a team workspace needs its team menu in the app header; it
+     * follows the tenancy panel by itself, also a second `starterKit()` panel), and to the
+     * import of the other header components. Unchanged when it is there; null when the
+     * block has no `<AlfakitSearch />` to place it by.
+     */
+    public static function addTenantSwitcherToHeader(string $contents, string $kit): ?string
+    {
+        if (str_contains($contents, '<AlfakitTenantSwitcher')) {
+            return $contents;
+        }
+
+        $updated = preg_replace('/^([ \t]*)(<AlfakitSearch\b[^\n]*\/>[ \t]*\n)/m', "$1<AlfakitTenantSwitcher />\n$1$2", $contents, 1, $count);
+
+        if ($updated === null || $count !== 1) {
+            return null;
+        }
+
+        return self::addNamedImport($updated, $kit, 'AlfakitTenantSwitcher');
+    }
+
+    /**
+     * Add a name to the `@alfakit/{kit}` import of the header components (or a new import).
+     */
+    private static function addNamedImport(string $contents, string $kit, string $name): ?string
+    {
+        $package = preg_quote("@alfakit/{$kit}", '/');
+        $updated = preg_replace_callback(
+            '/^([ \t]*import\s*\{)([^}]*)(\}\s*from\s*[\'"]'.$package.'[\'"])/m',
+            static function (array $matches) use ($name): string {
+                $names = array_values(array_filter(array_map('trim', explode(',', $matches[2])), static fn (string $item): bool => $item !== ''));
+                $names[] = $name;
+                sort($names);
+
+                return $matches[1].' '.implode(', ', array_unique($names)).' '.$matches[3];
+            },
+            $contents,
+            1,
+            $imports,
+        );
+
+        if ($updated === null) {
+            return null;
+        }
+
+        return $imports === 1 ? $updated : self::addImport($updated, "@alfakit/{$kit}", "import { {$name} } from '@alfakit/{$kit}';");
     }
 
     /**

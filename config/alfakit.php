@@ -133,6 +133,15 @@ return [
     | The Blade root view used for panel pages and the Vite entry points it
     | loads. `alfakit:install` publishes the entry files for your adapter.
     |
+    | `preload_link_limit`: Laravel's `AddLinkHeadersForPreloadedAssets`
+    | middleware (in the starter kits' `web` group) sends a `Link` header entry
+    | for every JavaScript chunk a page preloads. An AlfaKit page preloads
+    | dozens, and response headers over 4-8 KB are refused by nginx's default
+    | `fastcgi_buffer_size` / `proxy_buffer_size` (502 "upstream sent too big
+    | header"). AlfaKit pages keep the first entries only; the page's
+    | `<link rel="modulepreload">` tags still list every chunk. `null` sends
+    | them all.
+    |
     */
 
     'inertia' => [
@@ -142,6 +151,7 @@ return [
             'js' => env('ALFAKIT_VITE_ENTRY', 'resources/js/alfakit/app.tsx'),
         ],
         'page_component' => 'Alfakit/Page',
+        'preload_link_limit' => 20,
     ],
 
     /*

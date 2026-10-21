@@ -3,11 +3,17 @@
     import AppLayout from '@/layouts/AppLayout.svelte';
 
     /*
-     * AlfaKit pages (`Alfakit/Page`) render inside the app's own layout. Register custom
-     * field, column or page components here:
-     * createStarterKitLayout({ layout: AppLayout, components: {} }).
+     * AlfaKit pages (`Alfakit/Page`) render inside the app's own layout. Components in
+     * resources/js/alfakit/{fields,columns,entries,widgets,pages,components,blocks} register
+     * themselves under their file name (fields/ColorWheel.svelte renders the `ColorWheel`
+     * field type). Register anything else, or override a file, under `components`.
      */
-    export const layout = createStarterKitLayout({ layout: AppLayout });
+    export const layout = createStarterKitLayout({
+        layout: AppLayout,
+        discover: import.meta.glob(
+            '../../alfakit/{fields,columns,entries,widgets,pages,components,blocks}/**/*.svelte',
+        ),
+    });
 </script>
 
 <script lang="ts">

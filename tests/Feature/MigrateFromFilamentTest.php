@@ -431,3 +431,14 @@ it('migrates with the Rector set when a Rector binary is available', function ()
         ->toMatch('/`app\/Alfakit\/Pages\/Settings\.php:\d+` — Custom Blade view/')
         ->toMatch('/`app\/Providers\/Alfakit\/AdminPanelProvider\.php:\d+` — Plugin `BezhanSalleh\\\\FilamentShield\\\\FilamentShieldPlugin` removed/');
 })->group('rector');
+
+it('scaffolds the Inertia toolchain when --adapter is given for a Blade-only Filament app', function (): void {
+    $this->files->delete($this->sandbox.'/package.json');
+    file_put_contents($this->sandbox.'/package.json', json_encode(['devDependencies' => ['vite' => '^8.0', 'tailwindcss' => '^4.0']]));
+
+    runMigration($this, ['--adapter' => 'react', '--dry-run' => true])
+        ->expectsOutputToContain('Would run alfakit:install --adapter=react --no-panel --scaffold')
+        ->assertSuccessful();
+
+    expect($this->files->get($this->sandbox.'/alfakit-migration-report.md'))->toContain('the Inertia and react toolchain');
+});

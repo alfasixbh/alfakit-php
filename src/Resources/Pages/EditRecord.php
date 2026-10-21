@@ -127,7 +127,7 @@ class EditRecord extends Page
 
         $this->callHook('beforeSave', [$data]);
 
-        $data = $this->mutateFormDataBeforeSave($data);
+        $data = $this->keepHiddenAttributesLeftBlank($this->mutateFormDataBeforeSave($data));
 
         DB::transaction(function () use ($data): void {
             $this->record = $this->handleRecordUpdate($this->record, $data);
@@ -346,6 +346,25 @@ class EditRecord extends Page
      */
     protected function mutateFormDataBeforeSave(array $data): array
     {
+        return $data;
+    }
+
+    /**
+     * The model's `$hidden` attributes never reach the browser, so their fields load
+     * blank: a blank value keeps the stored one instead of overwriting it. Type a new
+     * value to change it.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    protected function keepHiddenAttributesLeftBlank(array $data): array
+    {
+        foreach ($this->record->getHidden() as $attribute) {
+            if (array_key_exists($attribute, $data) && ($data[$attribute] === null || $data[$attribute] === '')) {
+                unset($data[$attribute]);
+            }
+        }
+
         return $data;
     }
 

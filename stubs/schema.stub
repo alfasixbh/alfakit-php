@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace {{ namespace }};
 
 use AlfaSix\Alfakit\Forms\Components\TextInput;
-use AlfaSix\Alfakit\Schemas\Components\Component;
+{{ imports }}use AlfaSix\Alfakit\Schemas\Components\Component;
 use AlfaSix\Alfakit\Schemas\Fragment;
 
 /**

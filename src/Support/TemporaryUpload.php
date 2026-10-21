@@ -109,6 +109,22 @@ final class TemporaryUpload
         return (string) ($this->meta['name'] ?? $this->name);
     }
 
+    /**
+     * The name the file had on the user's device, as Laravel's `UploadedFile` (and
+     * Filament's `TemporaryUploadedFile`) name it, so `fn ($file) => $file->getClientOriginalName()`
+     * closures work unchanged.
+     */
+    public function getClientOriginalName(): string
+    {
+        return $this->originalName();
+    }
+
+    /** The original name's extension, as `UploadedFile::getClientOriginalExtension()`. */
+    public function getClientOriginalExtension(): string
+    {
+        return (string) pathinfo($this->originalName(), PATHINFO_EXTENSION);
+    }
+
     public function extension(): string
     {
         return (string) pathinfo($this->name, PATHINFO_EXTENSION);

@@ -41,9 +41,17 @@ class RealtimeCommand extends Command
         $panelId = (string) ($this->option('panel') ?: 'admin');
         $install = ! $this->option('no-install');
 
+        $previousConnection = AppEnvironment::envValue('BROADCAST_CONNECTION');
         $hasReverb = $this->installReverb($install);
-        $this->writeEnvironment();
+        // Without Reverb (or another Pusher client) a `reverb` connection makes every request
+        // and artisan command fail ("Class Pusher\Pusher not found"), so it waits.
+        $canBroadcast = $hasReverb || AppEnvironment::hasComposerPackage('pusher/pusher-php-server');
+        $this->writeEnvironment($canBroadcast);
         $this->installBroadcasting($hasReverb);
+
+        if (! $canBroadcast) {
+            $this->keepBroadcastConnection($previousConnection);
+        }
         $this->installEchoClient($files);
         $this->installNpmPackages($install);
         $this->enableOnPanel($files, $panelId);
@@ -56,6 +64,7 @@ class RealtimeCommand extends Command
         }
 
         $this->components->bulletList([
+            ...($canBroadcast ? [] : ['Install Reverb, then switch broadcasting on: composer require laravel/reverb, php artisan reverb:install, and BROADCAST_CONNECTION=reverb in .env']),
             'Start the WebSocket server: php artisan reverb:start (keep it running, e.g. with Supervisor)',
             'Run a queue worker, broadcasts are queued: php artisan queue:work',
             'Rebuild your assets: npm run dev',
@@ -92,7 +101,7 @@ class RealtimeCommand extends Command
      * The REVERB_* keys `reverb:install` would add (so it finds them and keeps them), the
      * VITE_* copies Echo reads, and BROADCAST_CONNECTION=reverb.
      */
-    protected function writeEnvironment(): void
+    protected function writeEnvironment(bool $canBroadcast = true): void
     {
         $env = base_path('.env');
 
@@ -113,7 +122,7 @@ class RealtimeCommand extends Command
 
         $written = [...$written, ...AppEnvironment::writeEnv(static::viteVariables(), raw: true)];
 
-        if (AppEnvironment::envValue('BROADCAST_CONNECTION') !== 'reverb') {
+        if ($canBroadcast && AppEnvironment::envValue('BROADCAST_CONNECTION') !== 'reverb') {
             $written = [...$written, ...AppEnvironment::writeEnv(['BROADCAST_CONNECTION' => 'reverb'], overwrite: true)];
         }
 
@@ -129,6 +138,23 @@ class RealtimeCommand extends Command
         AppEnvironment::writeEnv(static::viteVariables(), base_path('.env.example'), raw: true);
 
         $this->steps[] = ['.env', $written === [] ? '<fg=gray>already configured</>' : '<fg=green>'.count($written).' keys written</>'];
+    }
+
+    /**
+     * `install:broadcasting --reverb` writes BROADCAST_CONNECTION=reverb; put the app's own
+     * connection back while Reverb isn't installed.
+     */
+    protected function keepBroadcastConnection(?string $previous): void
+    {
+        if ($previous === 'reverb' || ! is_file(base_path('.env'))) {
+            return;
+        }
+
+        $previous = $previous === null || $previous === '' ? 'log' : $previous;
+
+        AppEnvironment::writeEnv(['BROADCAST_CONNECTION' => $previous], overwrite: true);
+
+        $this->steps[] = ['BROADCAST_CONNECTION', "<fg=yellow>kept {$previous}</> (reverb once laravel/reverb is installed)"];
     }
 
     /**
@@ -177,7 +203,8 @@ class RealtimeCommand extends Command
     }
 
     /**
-     * `resources/js/alfakit/echo.ts`, imported first by the panel entry.
+     * `resources/js/alfakit/echo.ts`, loaded by the panel entry's `createAlfakit({ echo })`
+     * (other entries import it).
      */
     protected function installEchoClient(Filesystem $files): void
     {
@@ -210,8 +237,14 @@ class RealtimeCommand extends Command
 
             $relative = Str::after($entry, base_path().'/');
             $contents = $files->get($entry);
+            // An echo.ts from an earlier version (no `connectEcho()` default export) stays imported.
+            $updated = $import === './echo' && str_contains($files->get($echo), 'export default') ? self::loadEchoInPanelEntry($contents) : null;
 
-            if (str_contains($contents, "'{$import}'") || str_contains($contents, "\"{$import}\"")) {
+            if ($updated !== null && $updated !== $contents) {
+                $files->put($entry, $updated);
+                $written[] = $entry;
+                $this->steps[] = [$relative, '<fg=green>loads Echo</>'];
+            } elseif ($updated !== null || str_contains($contents, "'{$import}'") || str_contains($contents, "\"{$import}\"")) {
                 $this->steps[] = [$relative, '<fg=gray>imports Echo</>'];
             } else {
                 $files->put($entry, "import '{$import}';\n".$contents);
@@ -227,6 +260,36 @@ class RealtimeCommand extends Command
         FrontendFormatter::format($written);
 
         $this->steps[] = ['Echo import', '<fg=yellow>no panel entry found</>: import \'./alfakit/echo\' in your browser entry'];
+    }
+
+    /**
+     * The panel entry hands Echo to `createAlfakit({ echo })` as a factory that imports
+     * `./echo` when AlfaKit first needs it. A static `import './echo'` put laravel-echo and
+     * pusher-js (CommonJS) in the entry's chunk; with another entry sharing the renderer
+     * (the CMS public site's `site.ts`), the bundler then placed its CommonJS helper in the
+     * panel entry and the shared chunk imported it back: every page was blank ("e is not a
+     * function"). An entry with that static import (an earlier `alfakit:realtime`) is
+     * upgraded. Null when the entry has no `createAlfakit({`; unchanged when it is set up.
+     */
+    public static function loadEchoInPanelEntry(string $contents): ?string
+    {
+        if (str_contains($contents, "import('./echo')")) {
+            return $contents;
+        }
+
+        $updated = preg_replace(
+            '/\bcreateAlfakit\(\{/',
+            "createAlfakit({\n    echo: () => import('./echo').then((module) => module.default()),",
+            $contents,
+            1,
+            $count,
+        );
+
+        if ($updated === null || $count !== 1) {
+            return null;
+        }
+
+        return (string) preg_replace('/^import [\'"]\.\/echo[\'"];?[ \t]*\n/m', '', $updated, 1);
     }
 
     protected function installNpmPackages(bool $install): void

@@ -14,7 +14,9 @@ use Symfony\Component\HttpFoundation\Response;
 
 /**
  * Signs suspended and banned users out of the panel (also sessions that started before
- * the suspension). Registered with `$panel->authMiddleware([...])` by `alfakit:users`.
+ * the suspension). Registered with `$panel->authMiddleware([...])` by `alfakit:users`, and
+ * on the `web` middleware group in `bootstrap/app.php` for starter kit panels, whose users
+ * sign in on the app's own login page.
  */
 class EnsureAccountIsActive
 {
@@ -28,7 +30,7 @@ class EnsureAccountIsActive
             return $next($request);
         }
 
-        $status = UserAccounts::status($user);
+        $message = __(UserAccounts::status($user) === UserAccounts::BANNED ? 'alfakit::users.blocked.banned' : 'alfakit::users.blocked.suspended');
 
         if ($guard instanceof StatefulGuard) {
             $guard->logout();
@@ -37,15 +39,21 @@ class EnsureAccountIsActive
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
+        // Background requests (AlfaKit's internal endpoints, the starter kit's header
+        // components) get an error, never the sign-in page's HTML.
+        abort_if($request->expectsJson(), 401, $message);
+
         Notification::make()
             ->danger()
             ->persistent()
-            ->title(__($status === UserAccounts::BANNED ? 'alfakit::users.blocked.banned' : 'alfakit::users.blocked.suspended'))
+            ->title($message)
             ->send();
+        // The starter kits' sign-in pages show the session `status`.
+        $request->session()->flash('status', $message);
 
         $login = $panel->getLoginUrl();
 
-        abort_if($login === null, 403, __('alfakit::users.blocked.suspended'));
+        abort_if($login === null, 403, $message);
 
         return redirect()->to($login);
     }

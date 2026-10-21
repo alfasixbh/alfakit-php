@@ -131,6 +131,9 @@ it('serialises item summaries and the block actions menu', function (): void {
     expect($props['blockActionsMenu'])->toBeTrue()
         ->and($props['items'][0]['summary'])->toBe('Hello world')
         ->and($props['items'][1])->not->toHaveKey('summary')
+        // Blocks with a summary tell the renderers to refresh it when an item collapses.
+        ->and($props['blocks'][0]['summary'] ?? null)->toBeTrue()
+        ->and($props['blocks'][1])->not->toHaveKey('summary')
         ->and(contentBuilder()->toSchema()['blockActionsMenu'] ?? null)->toBeNull();
 });
 
@@ -202,4 +205,29 @@ it('nests repeaters inside blocks', function (): void {
 it('refuses relationship and simple modes', function (): void {
     expect(fn () => Builder::make('content')->relationship())->toThrow(LogicException::class)
         ->and(fn () => Builder::make('content')->simple(TextInput::make('x')))->toThrow(LogicException::class);
+});
+
+it('gives a repeater inside a block template item paths under the block (new blocks)', function (): void {
+    $form = schema([
+        Builder::make('content')->blocks([
+            Block::make('faq')->schema([
+                Repeater::make('items')->schema([TextInput::make('question'), TextInput::make('answer')]),
+            ]),
+        ]),
+    ])->fill(['content' => [['type' => 'faq', 'data' => ['items' => [['question' => 'Q', 'answer' => 'A']]]]]]);
+
+    $builder = $form->toPayload()['components'][0];
+    $repeater = $builder['blocks'][0]['schema'][0];
+
+    // Every new block's repeater writes under its own block; its items under their own index.
+    expect($repeater['statePath'])->toBe('content.__INDEX__.data.items')
+        ->and(array_column($repeater['template'], 'statePath'))->toBe([
+            'content.__INDEX__.data.items.__INDEX__.question',
+            'content.__INDEX__.data.items.__INDEX__.answer',
+        ])
+        // A saved block's repeater keeps its own paths.
+        ->and(array_column($builder['items'][0]['schema'][0]['items'][0]['schema'], 'statePath'))->toBe([
+            'content.0.data.items.0.question',
+            'content.0.data.items.0.answer',
+        ]);
 });

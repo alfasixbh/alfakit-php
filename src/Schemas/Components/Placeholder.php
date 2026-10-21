@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AlfaSix\Alfakit\Schemas\Components;
 
+use AlfaSix\Alfakit\Support\Labels;
 use Closure;
 use Illuminate\Contracts\Support\Htmlable;
 
@@ -19,7 +20,8 @@ class Placeholder extends Component
     public function __construct(string $name)
     {
         $this->key($name);
-        $this->label(str($name)->headline()->toString());
+        // The same derivation as fields, entries and columns: `created_at` -> 'Created at'.
+        $this->label(Labels::fromName($name, isRelationshipPath: false));
     }
 
     public static function make(mixed ...$arguments): static

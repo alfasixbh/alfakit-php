@@ -51,6 +51,10 @@ beforeEach(function (): void {
 
     file_put_contents($this->sandbox.'/bootstrap/providers.php', "<?php\n\nreturn [\n    App\\Providers\\AppServiceProvider::class,\n];\n");
     file_put_contents($this->sandbox.'/routes/web.php', "<?php\n\nuse Illuminate\\Support\\Facades\\Route;\n\nRoute::inertia('/', 'welcome');\n");
+    // An Inertia app (the auth kit and standalone installs refuse apps without one).
+    file_put_contents($this->sandbox.'/package.json', json_encode(['dependencies' => ['@inertiajs/react' => '^3.0', '@inertiajs/vue3' => '^3.0', '@inertiajs/svelte' => '^3.0']]));
+    (new Filesystem)->ensureDirectoryExists($this->sandbox.'/resources/views');
+    file_put_contents($this->sandbox.'/resources/views/app.blade.php', '@inertia');
 
     $this->originalBasePath = $this->app->basePath();
     $this->app->setBasePath($this->sandbox);
@@ -80,6 +84,28 @@ it('generates a standalone page: the component and the Inertia page for each ada
     'vue' => ['vue', 'OrdersOverview.vue', '<AlfakitComponent :component="ordersOverview" />'],
     'svelte' => ['svelte', 'OrdersOverview.svelte', '<AlfakitComponent component={ordersOverview} />'],
 ]);
+
+it('refuses the auth kit in an app without an Inertia frontend, and writes nothing', function (): void {
+    file_put_contents($this->sandbox.'/package.json', json_encode(['devDependencies' => ['vite' => '^7.0']]));
+
+    $this->artisan('alfakit:auth', ['--adapter' => 'react', '--no-interaction' => true])
+        ->expectsOutputToContain('no Inertia frontend')
+        ->assertFailed();
+
+    expect(file_exists($this->sandbox.'/app/Providers/AuthKitServiceProvider.php'))->toBeFalse()
+        ->and(file_exists($this->sandbox.'/resources/js/pages/auth/alfakit.tsx'))->toBeFalse()
+        ->and((string) file_get_contents($this->sandbox.'/routes/web.php'))->not->toContain('AuthKit::routes');
+});
+
+it('refuses the auth kit when the Inertia root view is missing (a panel-only scaffold)', function (): void {
+    unlink($this->sandbox.'/resources/views/app.blade.php');
+
+    $this->artisan('alfakit:auth', ['--adapter' => 'react', '--no-interaction' => true])
+        ->expectsOutputToContain('no Inertia root view')
+        ->assertFailed();
+
+    expect(file_exists($this->sandbox.'/app/Providers/AuthKitServiceProvider.php'))->toBeFalse();
+});
 
 it('sets up the auth kit: provider, routes and the guest and account pages', function (): void {
     $this->artisan('alfakit:auth', ['--adapter' => 'react', '--mfa' => true, '--no-interaction' => true])->assertSuccessful();

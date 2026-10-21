@@ -521,6 +521,8 @@ class Schema
         $root = $this->getRootSchema();
         $server = $root->state;
         $root->serverState = $server;
+        // Hidden with the server's state: such fields were not sent to the browser.
+        $hiddenOnServer = $root->getHiddenStatePaths();
         $root->state = $state;
         $root->stateVersion++;
 
@@ -533,6 +535,24 @@ class Schema
             } else {
                 Arr::forget($root->state, $path);
             }
+        }
+
+        // A field the browser's state shows now (a live toggle revealed it) but that was
+        // hidden when the form was sent has no value there: it keeps the server's (its
+        // default, or the record's) instead of starting empty.
+        $revealed = false;
+
+        foreach ($root->getFlatFields() as $path => $field) {
+            $path = (string) $path;
+
+            if (in_array($path, $hiddenOnServer, true) && ! $field->isNestedInRepeater($root) && ! Arr::has($state, $path) && Arr::has($server, $path)) {
+                Arr::set($root->state, $path, Arr::get($server, $path));
+                $revealed = true;
+            }
+        }
+
+        if ($revealed) {
+            $root->stateVersion++;
         }
 
         // Read-only fields keep the server's value (the record's, or one the server wrote

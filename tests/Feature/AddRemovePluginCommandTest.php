@@ -77,6 +77,8 @@ it('reads the catalog from the plugins\' composer.json files', function (): void
         ->and(implode(' ', $plugins['ops']['notes']))->toContain('authorize(')
         ->and(implode(' ', $plugins['translation-manager']['notes']))->toContain('manageTranslations')
         ->and(implode(' ', $plugins['mail-templates']['notes']))->toContain('manageAlfakitMailTemplates')
+        // Teams turns the panel into a team workspace: users need the HasTeams trait.
+        ->and(implode(' ', $plugins['teams']['notes']))->toContain('AlfaSix\\AlfakitTeams\\Concerns\\HasTeams')->toContain('insteadof HasRoles')
         // Its history needs the record versions table.
         ->and($plugins['mail-templates']['commands'])->toContain(['vendor:publish', '--tag=alfakit-record-versions-migrations']);
 
@@ -438,6 +440,145 @@ it('does not publish the migrations of an already installed plugin a second time
     expect(AppEnvironment::migrationsAlreadyPublished($command))->toBeTrue()
         ->and(AppEnvironment::migrationsAlreadyPublished(['vendor:publish', '--tag=unknown-tag']))->toBeFalse()
         ->and(AppEnvironment::migrationsAlreadyPublished(['alfakit-shield:install']))->toBeFalse();
+});
+
+it('does not ask to run the migrations when registering an installed plugin on another panel published nothing', function (): void {
+    $sandbox = pluginSandbox($this, ['alfasix/alfakit-comments']);
+    $this->artisan('make:alfakit-panel', ['id' => 'app'])->assertSuccessful();
+    $source = $sandbox.'/vendor/comments-migrations';
+    (new Filesystem)->ensureDirectoryExists($source);
+    (new Filesystem)->ensureDirectoryExists($sandbox.'/database/migrations');
+    file_put_contents($source.'/2026_01_01_000000_create_alfakit_comments_table.php', '<?php');
+
+    (new class(app()) extends ServiceProvider
+    {
+        public function publish(string $from): void
+        {
+            $this->publishesMigrations([$from => database_path('migrations')], 'alfakit-comments-migrations');
+        }
+    })->publish($source);
+
+    // Registered on admin earlier: its migration is in the app already.
+    file_put_contents($sandbox.'/database/migrations/2026_10_19_083011_create_alfakit_comments_table.php', '<?php');
+
+    $this->artisan('alfakit:add', ['plugin' => ['comments'], '--panel' => 'app', '--no-interaction' => true])
+        ->expectsOutputToContain('registered on app')
+        ->doesntExpectOutputToContain('Run the migrations')
+        ->assertSuccessful();
+
+    Process::assertDidntRun(fn (PendingProcess $process): bool => is_array($process->command) && in_array('vendor:publish', $process->command, true));
+});
+
+it('adds <AlfakitCopilot /> to the starter kit header block when adding the AI plugin', function (): void {
+    $sandbox = pluginSandbox($this, ['alfasix/alfakit-ai']);
+    (new Filesystem)->copyDirectory(dirname(__DIR__).'/Fixtures/StarterKits/react/resources', $sandbox.'/resources');
+    $files = AlfaSix\Alfakit\Commands\StarterKit\StarterKitInstaller::files('react');
+    $header = $sandbox.'/'.$files['sidebarHeader'];
+
+    // A header block written before the copilot existed.
+    $block = (string) AlfaSix\Alfakit\Commands\StarterKit\StarterKitInstaller::addWidgetsToHeader((string) file_get_contents($header), 'react', sidebarLayout: true);
+    file_put_contents($header, (string) preg_replace('/^[ \t]*<AlfakitCopilot \/>\n/m', '', str_replace('AlfakitCopilot, ', '', $block)));
+
+    expect(Illuminate\Support\Facades\Artisan::call('alfakit:add', ['plugin' => ['ai'], '--no-interaction' => true]))->toBe(0)
+        ->and(Illuminate\Support\Facades\Artisan::output())
+        ->toContain('Added <AlfakitCopilot /> to '.$files['sidebarHeader'])
+        ->toContain("Turn the app header's copilot on: AiPlugin::make()->copilot()");
+
+    // An app that had the AI plugin before: re-running alfakit:add ai patches the header.
+    file_put_contents($header, (string) preg_replace('/^[ \t]*<AlfakitCopilot \/>\n/m', '', str_replace('AlfakitCopilot, ', '', $block)));
+
+    expect(Illuminate\Support\Facades\Artisan::call('alfakit:add', ['plugin' => ['ai'], '--no-interaction' => true]))->toBe(0)
+        ->and(Illuminate\Support\Facades\Artisan::output())
+        ->toContain('already set up')
+        ->toContain('Added <AlfakitCopilot /> to '.$files['sidebarHeader'])
+        ->and(substr_count((string) file_get_contents($header), '<AlfakitCopilot />'))->toBe(1);
+
+    // Nothing left to add: no notes.
+    expect(Illuminate\Support\Facades\Artisan::call('alfakit:add', ['plugin' => ['ai'], '--no-interaction' => true]))->toBe(0)
+        ->and(Illuminate\Support\Facades\Artisan::output())->not->toContain('AlfakitCopilot');
+
+    expect((string) file_get_contents($header))
+        ->toContain("import { AlfakitCopilot, AlfakitNotifications, AlfakitSearch } from '@alfakit/react';")
+        ->and(substr_count((string) file_get_contents($header), '<AlfakitCopilot />'))->toBe(1);
+});
+
+it('adds the team menu <AlfakitTenantSwitcher /> to the starter kit header block when adding Teams', function (): void {
+    $sandbox = pluginSandbox($this, ['alfasix/alfakit-teams']);
+    (new Filesystem)->copyDirectory(dirname(__DIR__).'/Fixtures/StarterKits/react/resources', $sandbox.'/resources');
+    $files = AlfaSix\Alfakit\Commands\StarterKit\StarterKitInstaller::files('react');
+    $header = $sandbox.'/'.$files['sidebarHeader'];
+    file_put_contents($header, (string) AlfaSix\Alfakit\Commands\StarterKit\StarterKitInstaller::addWidgetsToHeader((string) file_get_contents($header), 'react', sidebarLayout: true));
+    $this->artisan('make:alfakit-panel', ['id' => 'app'])->assertSuccessful();
+
+    expect(Illuminate\Support\Facades\Artisan::call('alfakit:add', ['plugin' => ['teams'], '--panel' => 'app', '--no-interaction' => true]))->toBe(0)
+        ->and(Illuminate\Support\Facades\Artisan::output())->toContain('Added <AlfakitTenantSwitcher /> (the team menu) to '.$files['sidebarHeader']);
+
+    $contents = (string) file_get_contents($header);
+
+    expect($contents)->toContain("import { AlfakitCopilot, AlfakitNotifications, AlfakitSearch, AlfakitTenantSwitcher } from '@alfakit/react';")
+        ->and(substr_count($contents, '<AlfakitTenantSwitcher />'))->toBe(1)
+        ->and(strpos($contents, '<AlfakitTenantSwitcher />'))->toBeLessThan(strpos($contents, '<AlfakitSearch />'));
+
+    // Running it again changes nothing.
+    expect(Illuminate\Support\Facades\Artisan::call('alfakit:add', ['plugin' => ['teams'], '--panel' => 'app', '--no-interaction' => true]))->toBe(0)
+        ->and(Illuminate\Support\Facades\Artisan::output())->not->toContain('AlfakitTenantSwitcher')
+        ->and((string) file_get_contents($header))->toBe($contents);
+});
+
+it('does not ask to turn the copilot on when the panel already has it', function (): void {
+    $sandbox = pluginSandbox($this, ['alfasix/alfakit-ai']);
+    (new Filesystem)->copyDirectory(dirname(__DIR__).'/Fixtures/StarterKits/react/resources', $sandbox.'/resources');
+    $files = AlfaSix\Alfakit\Commands\StarterKit\StarterKitInstaller::files('react');
+    $header = $sandbox.'/'.$files['sidebarHeader'];
+    $block = (string) AlfaSix\Alfakit\Commands\StarterKit\StarterKitInstaller::addWidgetsToHeader((string) file_get_contents($header), 'react', sidebarLayout: true);
+    file_put_contents($header, (string) preg_replace('/^[ \t]*<AlfakitCopilot \/>\n/m', '', str_replace('AlfakitCopilot, ', '', $block)));
+
+    expect(Illuminate\Support\Facades\Artisan::call('alfakit:add', ['plugin' => ['ai'], '--no-interaction' => true]))->toBe(0);
+
+    $provider = PanelProviderEditor::path('admin');
+    file_put_contents($provider, str_replace('AiPlugin::make()', 'AiPlugin::make()->copilot()', (string) file_get_contents($provider)));
+    file_put_contents($header, (string) preg_replace('/^[ \t]*<AlfakitCopilot \/>\n/m', '', str_replace('AlfakitCopilot, ', '', $block)));
+
+    expect((string) file_get_contents($provider))->toContain('->copilot()')
+        ->and(Illuminate\Support\Facades\Artisan::call('alfakit:add', ['plugin' => ['ai'], '--no-interaction' => true]))->toBe(0)
+        ->and(Illuminate\Support\Facades\Artisan::output())
+        ->toContain('Added <AlfakitCopilot /> to '.$files['sidebarHeader'])
+        ->not->toContain("Turn the app header's copilot on");
+});
+
+it('says that Teams turns the panel into a team workspace and how to keep the admin panel without teams', function (): void {
+    pluginSandbox($this, ['alfasix/alfakit-teams']);
+    $this->artisan('make:alfakit-panel', ['id' => 'app'])->assertSuccessful();
+
+    expect(Illuminate\Support\Facades\Artisan::call('alfakit:add', ['plugin' => ['teams'], '--no-interaction' => true]))->toBe(0)
+        ->and($admin = Illuminate\Support\Facades\Artisan::output())
+        ->toContain('Teams turns the admin panel into a team workspace')
+        ->toContain('php artisan alfakit:add teams --panel=app');
+
+    expect(Illuminate\Support\Facades\Artisan::call('alfakit:add', ['plugin' => ['teams'], '--panel' => 'app', '--no-interaction' => true]))->toBe(0)
+        ->and(Illuminate\Support\Facades\Artisan::output())
+        ->toContain('Teams turns the app panel into a team workspace')
+        ->not->toContain('--panel=app');
+});
+
+it('publishes core tables shared by two plugins once: forms and analytics in one run', function (): void {
+    $sandbox = pluginSandbox($this);
+    (new Filesystem)->ensureDirectoryExists($sandbox.'/database/migrations');
+
+    $command = ['vendor:publish', '--tag=alfakit-import-export-migrations'];
+
+    // Core publishes single files: recognised, and only "already published" once the app has them.
+    expect(AppEnvironment::migrationsAlreadyPublished($command))->toBeFalse();
+
+    // The first plugin of the run (forms) published them under today's date.
+    file_put_contents($sandbox.'/database/migrations/2026_10_20_051205_create_alfakit_import_export_tables.php', '<?php');
+
+    expect(AppEnvironment::migrationsAlreadyPublished($command))->toBeTrue();
+
+    $this->artisan('alfakit:add', ['plugin' => ['analytics'], '--no-interaction' => true])->assertSuccessful();
+
+    Process::assertRan(fn (PendingProcess $process): bool => $process->command === ['composer', 'require', 'alfasix/alfakit-analytics', '--no-interaction']);
+    Process::assertDidntRun(fn (PendingProcess $process): bool => is_array($process->command) && in_array('--tag=alfakit-import-export-migrations', $process->command, true));
 });
 
 it('knows every first-party plugin in an app installed from Packagist', function (): void {

@@ -10,6 +10,7 @@ use BackedEnum;
 use Closure;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Support\Arr;
+use ReflectionFunction;
 use UnitEnum;
 
 /**
@@ -119,6 +120,11 @@ trait HasOptions
     }
 
     /**
+     * Disabled options: a list of values, a closure returning one, or (as in Filament) a
+     * closure asked per option that takes `$value` and/or `$label` and returns a bool:
+     * `disableOptionWhen(fn (string $value): bool => $value === 'archived')`. Disabled
+     * options are shown disabled and refused on submit.
+     *
      * @param  array<string>|Closure  $options
      */
     public function disableOptionWhen(array|Closure $options): static
@@ -126,6 +132,96 @@ trait HasOptions
         $this->disabledOptions = $options;
 
         return $this;
+    }
+
+    /**
+     * The values of the disabled options, as strings.
+     *
+     * @param  array<string, string>|null  $flatOptions  `getFlatOptions()`, when the caller has it already
+     * @return array<int, string>
+     */
+    public function getDisabledOptionValues(?array $flatOptions = null): array
+    {
+        $disabled = $this->disabledOptions;
+
+        if ($disabled instanceof Closure && self::asksPerOption($disabled)) {
+            $values = [];
+
+            foreach ($flatOptions ?? $this->getFlatOptions() as $value => $label) {
+                if ($this->evaluate($disabled, ['value' => (string) $value, 'label' => $label])) {
+                    $values[] = (string) $value;
+                }
+            }
+
+            return $values;
+        }
+
+        return array_values(array_map('strval', Arr::wrap($this->evaluate($disabled) ?? [])));
+    }
+
+    /**
+     * Option values that may be submitted: every option except the disabled ones.
+     *
+     * @param  array<string, string>|null  $flatOptions  `getFlatOptions()`, when the caller has it already
+     * @return array<int, string>
+     */
+    public function getEnabledOptionValues(?array $flatOptions = null): array
+    {
+        $flatOptions ??= $this->getFlatOptions();
+        $values = array_map('strval', array_keys($flatOptions));
+
+        // A value the record already holds stays valid, so the rest of the record can still
+        // be saved after its option was disabled.
+        $disabled = array_diff($this->getDisabledOptionValues($flatOptions), $this->getStoredOptionValues());
+
+        return array_values(array_diff($values, $disabled));
+    }
+
+    /**
+     * The values the edited record holds for this field (none outside records).
+     *
+     * @return array<int, string>
+     */
+    protected function getStoredOptionValues(): array
+    {
+        if (! method_exists($this, 'getRecord') || ! method_exists($this, 'getName')) {
+            return [];
+        }
+
+        $record = $this->getRecord();
+
+        if (! $record instanceof \Illuminate\Database\Eloquent\Model || ! $record->exists || str_contains((string) $this->getName(), '.')) {
+            return [];
+        }
+
+        $stored = $record->getOriginal($this->getName());
+
+        if (is_string($stored) && \Illuminate\Support\Str::isJson($stored)) {
+            $stored = json_decode($stored, true);
+        }
+
+        $values = [];
+
+        foreach (Arr::wrap($stored) as $value) {
+            $value = $value instanceof BackedEnum ? $value->value : ($value instanceof UnitEnum ? $value->name : $value);
+
+            if (is_scalar($value)) {
+                $values[] = (string) $value;
+            }
+        }
+
+        return $values;
+    }
+
+    private static function asksPerOption(Closure $closure): bool
+    {
+        foreach ((new ReflectionFunction($closure))->getParameters() as $parameter) {
+            if (in_array($parameter->getName(), ['value', 'label'], true)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -209,7 +305,7 @@ trait HasOptions
      */
     public function getSerializedOptions(): array
     {
-        $disabled = $this->evaluate($this->disabledOptions) ?? [];
+        $disabled = $this->getDisabledOptionValues();
         $enum = ($details = $this->getEnumOptionDetails()) === [] ? null : $this->getOptionsEnum();
         $serializeOption = function (mixed $value, mixed $label) use ($disabled, $enum, $details): array {
             $value = (string) $value;
@@ -227,7 +323,7 @@ trait HasOptions
                 'color' => isset($this->optionColors[$value])
                     ? $this->evaluate($this->optionColors[$value])
                     : ($case !== null && in_array('color', $details, true) ? EnumState::color($case) : null),
-                'disabled' => in_array($value, Arr::wrap($disabled), true) ?: null,
+                'disabled' => in_array($value, $disabled, true) ?: null,
             ], static fn (mixed $v): bool => $v !== null);
         };
 

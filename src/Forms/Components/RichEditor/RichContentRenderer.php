@@ -203,7 +203,8 @@ final class RichContentRenderer implements Htmlable
     public function fileAttachments(?string $disk, ?string $directory = null, ?string $visibility = null, ?int $temporaryUrlExpiry = null): self
     {
         $disk ??= config('alfakit.default_filesystem_disk', config('filesystems.default'));
-        $visibility ??= config("filesystems.disks.{$disk}.visibility") === 'private' ? 'private' : 'public';
+        // As the editor (and FileUpload): a local disk without a public `url` is private.
+        $visibility ??= is_string($disk) ? \AlfaSix\Alfakit\Support\TemporaryUrls::defaultVisibility($disk) : 'public';
 
         $this->fileAttachmentUrls = $visibility === 'private' && is_string($disk)
             ? new FileAttachmentUrls($disk, alfakit()->getCurrentOrDefaultPanel()->applyTenantUploadDirectory($directory), $temporaryUrlExpiry)

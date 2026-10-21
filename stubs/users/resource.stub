@@ -46,6 +46,13 @@ class UserResource extends Resource
 
     protected static ?string $slug = 'users';
 
+    /**
+     * Accounts are not owned by a tenant: on tenancy panels the resource lists every user.
+     * To list only the current tenant's members, remove this and set
+     * `protected static ?string $tenantOwnershipRelationshipName = 'teams';`.
+     */
+    protected static bool $isScopedToTenant = false;
+
     public static function getModelLabel(): string
     {
         return __('alfakit::users.model_label');

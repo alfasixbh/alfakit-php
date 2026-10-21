@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AlfaSix\Alfakit\Testing;
 
+use AlfaSix\Alfakit\Http\Middleware\HandleInertiaRequests;
 use AlfaSix\Alfakit\Notifications\Notification;
 use AlfaSix\Alfakit\Pages\Page;
 use AlfaSix\Alfakit\Panel;
@@ -389,11 +390,21 @@ class PageTester
     }
 
     /**
+     * The headers of an Inertia visit with the app's asset version, for raw requests in tests
+     * (`get('/admin/posts', PageTester::inertiaHeaders())`). Inertia only knows the version
+     * once a request has run, and any other version answers 409 once the app has a Vite build.
+     *
      * @return array<string, string>
      */
-    protected function inertiaHeaders(): array
+    public static function inertiaHeaders(): array
     {
-        return ['X-Inertia' => 'true', 'X-Inertia-Version' => Inertia::getVersion()];
+        $version = (string) Inertia::getVersion();
+
+        if ($version === '') {
+            $version = (string) app(HandleInertiaRequests::class)->version(request());
+        }
+
+        return ['X-Inertia' => 'true', 'X-Inertia-Version' => $version];
     }
 
     protected function forgetFlash(): void

@@ -70,6 +70,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 use Illuminate\Support\Traits\Macroable;
 use InvalidArgumentException;
+use LogicException;
 use ReflectionClass;
 use Symfony\Component\Finder\Finder;
 use Throwable;
@@ -579,7 +580,8 @@ class Panel
      */
     public function getMiddleware(): array
     {
-        return [SetUpPanel::class.':'.$this->id, ...$this->middleware, SetPanelLocale::class, PreserveFlashData::class, HandleInertiaRequests::class];
+        // LimitPreloadLinkHeader first: it shortens the `Link` header the `web` group adds on the way out.
+        return [Http\Middleware\LimitPreloadLinkHeader::class, SetUpPanel::class.':'.$this->id, ...$this->middleware, SetPanelLocale::class, PreserveFlashData::class, HandleInertiaRequests::class];
     }
 
     /**
@@ -1769,8 +1771,30 @@ class Panel
         $pages = $this->getPages();
         $resources = $this->getResources();
 
-        // The first item of the navigation, never a hidden page such as the users
-        // resource's forced `ChangePassword` page (starter-kit panels have no dashboard).
+        // The first item of the navigation the user may open, never a hidden page such as
+        // the users resource's forced `ChangePassword` page (starter-kit panels have no
+        // dashboard). A user who may open none of them (just impersonated, a limited role)
+        // would only get a 403 there: starter-kit panels send them to the host's dashboard.
+        $user = $this->auth()->user();
+
+        if ($user !== null) {
+            foreach ($pages as $page) {
+                if ($page::shouldRegisterNavigation() && $page::canAccess()) {
+                    return $this->route($page::getRelativeRouteName(), $parameters);
+                }
+            }
+
+            foreach ($resources as $resource) {
+                if ($resource::shouldRegisterNavigation() && $resource::hasPage('index') && $resource::canAccess()) {
+                    return $resource::getUrl('index', $parameters);
+                }
+            }
+
+            if ($this->isStarterKit) {
+                return Route::has('dashboard') ? route('dashboard') : url('/');
+            }
+        }
+
         foreach ($pages as $page) {
             if ($page::shouldRegisterNavigation()) {
                 return $this->route($page::getRelativeRouteName(), $parameters);
@@ -1868,10 +1892,34 @@ class Panel
     public function registerRoutes(Router $router): void
     {
         $this->registerPanelAssets();
+        $this->ensureUniqueRoutePaths();
 
         foreach ($this->getDomains() as $domain) {
             $this->registerRoutesForDomain($router, $domain);
         }
+    }
+
+    /**
+     * Two pages, or a page and a resource, on the same path: the later route replaces the
+     * earlier one and its name goes missing, which fails every page of the panel with
+     * "Route not defined". Say which classes clash instead.
+     */
+    protected function ensureUniqueRoutePaths(): void
+    {
+        $paths = [];
+
+        $claim = function (string $path, string $class) use (&$paths): void {
+            $path = trim($path, '/');
+
+            if (isset($paths[$path]) && $paths[$path] !== $class) {
+                throw new LogicException("[{$paths[$path]}] and [{$class}] both use the path /".trim($this->path.'/'.$path, '/').' on the ['.$this->id.'] panel. Give one of them another slug (protected static ?string $slug).');
+            }
+
+            $paths[$path] = $class;
+        };
+
+        $this->mapPageRegistrations(static fn (string $page) => $claim($page::getClusterRoutePrefix().ltrim($page::getRoutePath(), '/'), $page));
+        $this->mapResourceRegistrations(static fn (string $resource) => $resource::hasPage('index') ? $claim($resource::getRoutePrefix(), $resource) : null);
     }
 
     protected function registerRoutesForDomain(Router $router, ?string $domain): void

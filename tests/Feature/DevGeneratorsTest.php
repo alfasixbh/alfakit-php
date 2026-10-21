@@ -82,6 +82,8 @@ it('generates a custom field with a React component registered in the entry', fu
         ->toContain("import { FieldWrapper, useField, type FieldProps } from '@alfakit/react'")
         ->toContain('export default function RatingInput(')
         ->toContain('App\\Alfakit\\Forms\\Components\\RatingInput')
+        // The theme's input design (filled, underline) styles it like the built-in inputs.
+        ->toContain('data-slot="input"')
         ->and($entry)
         ->toContain("} from './elsewhere';\nimport RatingInput from './fields/RatingInput';")
         ->toContain("components: {\n        'RatingInput': RatingInput,");
@@ -425,5 +427,34 @@ it('runs the upgrade command', function (): void {
 
     $this->artisan('alfakit:upgrade')
         ->expectsOutputToContain('@alfakit/react is ^0.1.0')
+        ->assertSuccessful();
+});
+
+it('gives the Vue and Svelte field stubs the input slot the themes style', function (string $adapter, string $extension): void {
+    $this->artisan('make:alfakit-field', ['name' => 'SlotProbe', '--adapter' => $adapter, '--force' => true])->assertSuccessful();
+
+    expect(file_get_contents(resource_path("js/alfakit/fields/SlotProbe.{$extension}")))->toContain('data-slot="input"');
+
+    @unlink(resource_path("js/alfakit/fields/SlotProbe.{$extension}"));
+    @unlink(app_path('Alfakit/Forms/Components/SlotProbe.php'));
+})->with([['vue', 'vue'], ['svelte', 'svelte']]);
+
+it('points starter kit apps at the host page instead of a createAlfakit() they do not have', function (): void {
+    writeSandbox('resources/js/pages/Alfakit/Page.tsx', "import { createStarterKitPage } from '@alfakit/react';\nimport AppLayout from '@/layouts/app-layout';\n\nexport default createStarterKitPage({ layout: AppLayout });\n");
+
+    expect(Illuminate\Support\Facades\Artisan::call('make:alfakit-field', ['name' => 'RatingInput', '--adapter' => 'react']))->toBe(0);
+    $output = preg_replace('/\s+/', ' ', Illuminate\Support\Facades\Artisan::output());
+
+    expect($output)
+        ->toContain("resources/js/pages/Alfakit/Page.tsx doesn't auto-register components")
+        ->toContain("Add `discover: import.meta.glob('../../alfakit/{fields,columns,entries,widgets,pages,components,blocks}/**/*.tsx')` to createStarterKitPage()")
+        ->toContain("import RatingInput from '../../alfakit/fields/RatingInput' createStarterKitPage({ layout: AppLayout, components: { 'RatingInput': RatingInput } })")
+        ->not->toContain('No resources/js/alfakit/app entry found')
+        ->not->toContain('Skip this step next time');
+
+    writeSandbox('resources/js/pages/Alfakit/Page.tsx', "import { createStarterKitPage } from '@alfakit/react';\nimport AppLayout from '@/layouts/app-layout';\n\nexport default createStarterKitPage({\n    layout: AppLayout,\n    discover: import.meta.glob('../../alfakit/{fields,columns,entries,widgets,pages,components,blocks}/**/*.tsx'),\n});\n");
+
+    $this->artisan('make:alfakit-column', ['name' => 'ProgressBar', '--adapter' => 'react'])
+        ->expectsOutputToContain("Auto-registered 'column:ProgressBar'")
         ->assertSuccessful();
 });

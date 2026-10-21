@@ -6,6 +6,7 @@ use AlfaSix\Alfakit\Forms\Components\Repeater;
 use AlfaSix\Alfakit\Forms\Components\TextInput;
 use AlfaSix\Alfakit\Infolists\Components\TextEntry;
 use AlfaSix\Alfakit\Resources\Resource;
+use AlfaSix\Alfakit\Schemas\Components\Placeholder;
 use AlfaSix\Alfakit\Support\Labels;
 use AlfaSix\Alfakit\Support\ModelLabel;
 use AlfaSix\Alfakit\Tables\Columns\TextColumn;
@@ -128,4 +129,9 @@ it('lower-cases labels inside sentences without breaking acronyms or German noun
         ->and(TextInput::make('cover_url')->getValidationAttribute())->toBe('cover URL')
         ->and(schema([Repeater::make('addresses')->schema([TextInput::make('city')])])->getFieldByStatePath('addresses')->toSchema()['addActionLabel'])
         ->toBe('Add to addresses');
+});
+
+it('labels a Placeholder like fields, entries and columns', function (): void {
+    expect(Placeholder::make('created_at')->getLabel())->toBe('Created at')
+        ->and(Placeholder::make('cover_image_url')->getLabel())->toBe('Cover image URL');
 });

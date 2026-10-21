@@ -6,6 +6,7 @@ namespace AlfaSix\Alfakit\Commands;
 
 use AlfaSix\Alfakit\Versions\RecordVersion;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Schema;
 use Symfony\Component\Console\Attribute\AsCommand;
 
 /**
@@ -36,6 +37,14 @@ class PruneVersionsCommand extends Command
             $this->components->error('--days and --keep must be positive whole numbers.');
 
             return self::INVALID;
+        }
+
+        $table = (new RecordVersion)->getTable();
+
+        if (! Schema::connection((new RecordVersion)->getConnectionName())->hasTable($table)) {
+            $this->components->info("Nothing to prune: the {$table} table doesn't exist yet (php artisan vendor:publish --tag=alfakit-record-versions-migrations, then php artisan migrate).");
+
+            return self::SUCCESS;
         }
 
         $type = is_string($model) && $model !== '' ? (is_subclass_of($model, \Illuminate\Database\Eloquent\Model::class) ? (new $model)->getMorphClass() : $model) : null;

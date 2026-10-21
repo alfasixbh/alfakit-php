@@ -705,9 +705,10 @@ class Select extends Field
             return null;
         }
 
-        $options = array_keys($this->getFlatOptions());
+        // Disabled options are refused like unknown ones.
+        $flat = $this->getFlatOptions();
 
-        return $options === [] ? null : Rule::in($options);
+        return $flat === [] ? null : Rule::in($this->getEnabledOptionValues($flat));
     }
 
     public function getValidationRulesByPath(): array

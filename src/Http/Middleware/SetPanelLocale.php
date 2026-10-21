@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AlfaSix\Alfakit\Http\Middleware;
 
 use AlfaSix\Alfakit\Localization\LocaleResolver;
+use AlfaSix\Alfakit\Panel;
 use Carbon\Carbon;
 use Carbon\CarbonImmutable;
 use Closure;
@@ -30,19 +31,7 @@ class SetPanelLocale
 
         // These settings are process-wide statics; under Octane they would leak into the
         // next (possibly non-panel) request, so `terminate()` puts them back.
-        $request->attributes->set(self::PREVIOUS, [
-            'app' => app()->getLocale(),
-            'carbon' => Carbon::getLocale(),
-            'carbonImmutable' => CarbonImmutable::getLocale(),
-            'number' => Number::defaultLocale(),
-            'currency' => Number::defaultCurrency(),
-        ]);
-
-        app()->setLocale($locale->getCode());
-        Carbon::setLocale($locale->getCode());
-        CarbonImmutable::setLocale($locale->getCode());
-        Number::useLocale($locale->getCode());
-        Number::useCurrency($panel->getCurrency());
+        $request->attributes->set(self::PREVIOUS, self::apply($locale->getCode(), $panel->getCurrency()));
 
         $response = $next($request);
 
@@ -67,6 +56,59 @@ class SetPanelLocale
 
         $request->attributes->remove(self::PREVIOUS);
 
+        self::restore($previous);
+    }
+
+    /**
+     * Run `$callback` in the language and currency the panel resolves for this request, then
+     * put the previous ones back. Starter kit panels build what they share with the host's
+     * own pages (the sidebar navigation, the dashboard widgets) this way, so those match the
+     * panel's pages and its header components while the host page keeps its own language.
+     *
+     * @template TReturn
+     *
+     * @param  Closure(): TReturn  $callback
+     * @return TReturn
+     */
+    public static function using(Panel $panel, Closure $callback): mixed
+    {
+        $locale = app(LocaleResolver::class)->resolve($panel, request());
+        $previous = self::apply($locale->getCode(), $panel->getCurrency());
+
+        try {
+            return $callback();
+        } finally {
+            self::restore($previous);
+        }
+    }
+
+    /**
+     * @return array{app: string, carbon: string, carbonImmutable: string, number: string, currency: string}
+     */
+    private static function apply(string $locale, string $currency): array
+    {
+        $previous = [
+            'app' => app()->getLocale(),
+            'carbon' => Carbon::getLocale(),
+            'carbonImmutable' => CarbonImmutable::getLocale(),
+            'number' => Number::defaultLocale(),
+            'currency' => Number::defaultCurrency(),
+        ];
+
+        app()->setLocale($locale);
+        Carbon::setLocale($locale);
+        CarbonImmutable::setLocale($locale);
+        Number::useLocale($locale);
+        Number::useCurrency($currency);
+
+        return $previous;
+    }
+
+    /**
+     * @param  array<string, string>  $previous
+     */
+    private static function restore(array $previous): void
+    {
         app()->setLocale($previous['app']);
         Carbon::setLocale($previous['carbon']);
         CarbonImmutable::setLocale($previous['carbonImmutable']);
