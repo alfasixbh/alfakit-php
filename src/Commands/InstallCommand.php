@@ -580,6 +580,11 @@ class InstallCommand extends Command
      */
     protected function buildFrontend(): void
     {
+        if (AppEnvironment::viteHotFileIsStale()) {
+            @unlink(public_path('hot'));
+            $this->components->warn('Removed public/hot: it pointed at a Vite dev server that is not running, so pages would have loaded their scripts from it.');
+        }
+
         if (AppEnvironment::viteDevServerRunning()) {
             $this->frontendBuilt = true;
             $this->components->info('Your Vite dev server is running and serves the new AlfaKit files.');

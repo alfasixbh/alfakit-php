@@ -119,6 +119,20 @@ it('switches language for guests through the session and a cookie', function ():
     expect($localization['code'])->toBe('fr');
 });
 
+it('keeps the latest pick when a request running during the switch saved the old one back', function (): void {
+    // The switch set the cookie to fr; a request that started before it ended later and
+    // saved its session, which still says ar.
+    $this->withSession(['alfakit.locale' => 'ar'])->withCookie('alfakit_locale', 'fr');
+
+    expect(inertiaProps(inertiaGet($this, '/admin/login'))['alfakit']['localization']['code'])->toBe('fr');
+});
+
+it('falls back to the session pick when the cookie names a language the panel does not offer', function (): void {
+    $this->withSession(['alfakit.locale' => 'ar'])->withCookie('alfakit_locale', 'de');
+
+    expect(inertiaProps(inertiaGet($this, '/admin/login'))['alfakit']['localization']['code'])->toBe('ar');
+});
+
 it('rejects languages the panel does not offer', function (): void {
     $this->from('/admin/login')
         ->post('/admin/_alfakit/locale', ['locale' => 'de'])

@@ -75,8 +75,12 @@ final class LocaleResolver
             yield $resolver($request, array_keys($panel->getLocales()));
         }
 
-        if ($request->hasSession()) {
-            yield $request->session()->get(self::SESSION_KEY);
+        if ($request->hasSession() && ($picked = $request->session()->get(self::SESSION_KEY)) !== null) {
+            // The switch writes both. A request that was running during the switch saves the
+            // session it started with when it ends, putting the old language back; the cookie
+            // only the switch writes, so it holds the latest pick.
+            yield $request->cookie(self::COOKIE) ?? $picked;
+            yield $picked;
         }
 
         $user = $panel->auth()->user();

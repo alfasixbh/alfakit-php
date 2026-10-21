@@ -298,10 +298,42 @@ final class AppEnvironment
 
     /**
      * Whether the Vite dev server is running (`public/hot`), so new entries are served live.
+     * A `public/hot` whose server doesn't answer is left over (a dev server that was killed,
+     * or one a tool started and stopped) and doesn't count.
      */
     public static function viteDevServerRunning(): bool
     {
-        return is_file(public_path('hot'));
+        return is_file(public_path('hot')) && ! self::viteHotFileIsStale();
+    }
+
+    /**
+     * `public/hot` names a dev server that doesn't answer. Laravel's `@vite` still reads the
+     * file, so every page would load its scripts from that dead address.
+     */
+    public static function viteHotFileIsStale(): bool
+    {
+        $hot = public_path('hot');
+
+        if (! is_file($hot)) {
+            return false;
+        }
+
+        $url = parse_url(trim((string) file_get_contents($hot)));
+
+        // Not a URL we can check: trust it.
+        if (! is_array($url) || ! isset($url['host'], $url['port'])) {
+            return false;
+        }
+
+        $connection = @fsockopen(trim($url['host'], '[]'), $url['port'], $code, $message, 0.5);
+
+        if ($connection === false) {
+            return true;
+        }
+
+        fclose($connection);
+
+        return false;
     }
 
     /**

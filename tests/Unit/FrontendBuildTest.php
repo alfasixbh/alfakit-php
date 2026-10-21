@@ -61,6 +61,24 @@ it('knows whether the frontend serves AlfaKit\'s entries', function (): void {
         ->and(AppEnvironment::frontendIncludesAlfakit())->toBeTrue();
 });
 
+it('treats a public/hot whose dev server does not answer as stale', function (): void {
+    // A port nothing listens on: the dev server that wrote the file is gone.
+    $socket = stream_socket_server('tcp://127.0.0.1:0');
+    $port = (int) substr((string) stream_socket_get_name($socket, false), strrpos((string) stream_socket_get_name($socket, false), ':') + 1);
+    file_put_contents(public_path('hot'), "http://127.0.0.1:{$port}");
+
+    expect(AppEnvironment::viteHotFileIsStale())->toBeFalse()
+        ->and(AppEnvironment::viteDevServerRunning())->toBeTrue();
+
+    fclose($socket);
+
+    expect(AppEnvironment::viteHotFileIsStale())->toBeTrue()
+        ->and(AppEnvironment::viteDevServerRunning())->toBeFalse()
+        ->and(AppEnvironment::frontendIncludesAlfakit())->toBeFalse();
+
+    unlink(public_path('hot'));
+});
+
 it('explains a missing AlfaKit Vite entry, also when a view wraps it', function (): void {
     $vite = new ViteException('Unable to locate file in Vite manifest: resources/js/pages/Alfakit/Page.tsx.');
     $other = new ViteException('Unable to locate file in Vite manifest: resources/js/app.tsx.');
