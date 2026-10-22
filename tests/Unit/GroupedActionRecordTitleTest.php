@@ -82,3 +82,9 @@ it('names records by the model label without a title attribute, in pages and tab
         ->and($delete->getModalHeading())->toBe(__('alfakit::actions.delete.modal.heading', ['label' => 'Post']))
         ->and($replicate->getModalHeading())->toBe(__('alfakit::actions.replicate.modal.heading', ['label' => 'Post']));
 });
+
+it('titles a record from a rich text attribute by its text, not its HTML', function (): void {
+    expect(PostResource::getRecordTitle(new Post(['title' => '<p>Hello &amp; <strong>world</strong></p><p>Again</p>'])))->toBe('Hello & world Again')
+        // Plain text with a "<" is left alone.
+        ->and(PostResource::getRecordTitle(new Post(['title' => 'a < b'])))->toBe('a < b');
+});

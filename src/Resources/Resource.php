@@ -340,6 +340,11 @@ abstract class Resource
         $attribute = static::getRecordTitleAttribute();
         $title = $attribute !== null ? data_get($record, $attribute) : null;
 
+        // A rich text attribute (`body`) titles the record by its text, not its HTML.
+        if (is_string($title) && preg_match('/<[a-z!\/][^>]*>/i', $title) === 1) {
+            $title = Str::limit(Str::squish(html_entity_decode(strip_tags(str_replace('<', ' <', $title)), ENT_QUOTES | ENT_HTML5)), 80);
+        }
+
         // Without a title attribute (or value), the record is named by the model label, as in
         // Filament: "Edit Post", "Delete Post", never by its key.
         return filled($title) && is_scalar($title) ? (string) $title : Str::ucfirst(static::getModelLabel());
