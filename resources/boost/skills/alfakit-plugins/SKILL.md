@@ -504,7 +504,7 @@ Inertia::render('home', ['newsletter' => AlfakitForms::embed('newsletter')]);
 
 ## CMS
 
-`php artisan alfakit:add cms`, then `php artisan storage:link`. For the public site, register `CmsPage` with `createAlfakit({ pages: { 'Alfakit/CmsPage': CmsPage } })`.
+`php artisan alfakit:add cms`, then `php artisan storage:link`. For the public site, register `CmsPage` with `createAlfakit({ pages: { 'Alfakit/CmsPage': CmsPage } })` in its own entry (a starter kit's `app.blade.php` can't load it: add `resources/js/site.*` to Vite's `input`, a `site.blade.php` with `@vite` of it, and `->rootView('site')`). App routes win over CMS pages, `/` included: for the CMS home page, point the app's `home` route at it with `Route::get('/', \AlfaSix\AlfakitCms\Http\Controllers\PageController::class)->name('home');`.
 
 ```php
 use AlfaSix\AlfakitCms\CmsPlugin;
