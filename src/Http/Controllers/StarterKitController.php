@@ -8,9 +8,10 @@ use Illuminate\Http\JsonResponse;
 
 /**
  * `starterKit()` panels: the panel data the drop-in header components (`<AlfakitSearch />`,
- * `<AlfakitNotifications />`, `<AlfakitTenantSwitcher />`) render with on any page of the host
- * application, loaded the first time one of them renders. The same shape as the `alfakit`
- * prop of the panel's own pages, so the components are the panel's.
+ * `<AlfakitNotifications />`, `<AlfakitTenantSwitcher />`, `<AlfakitLanguageSwitcher />`)
+ * render with on any page of the host application, loaded the first time one of them
+ * renders. The same shape as the `alfakit` prop of the panel's own pages, so the components
+ * are the panel's.
  */
 class StarterKitController
 {

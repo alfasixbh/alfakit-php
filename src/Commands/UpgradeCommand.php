@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AlfaSix\Alfakit\Commands;
 
+use AlfaSix\Alfakit\Commands\StarterKit\StarterKitInstaller;
 use AlfaSix\Alfakit\Support\PluginCompatibility;
 use Composer\InstalledVersions;
 use Illuminate\Console\Command;
@@ -114,10 +115,42 @@ class UpgradeCommand extends Command
             $notes[] = 'You have translation overrides in lang/vendor/alfakit. Run php artisan alfakit:lang:check to find new strings.';
         }
 
+        foreach ($this->starterKitHeadersWithoutLanguageSwitcher() as $header) {
+            $notes[] = "Your app header ({$header}) has no <AlfakitLanguageSwitcher /> yet. Run php artisan alfakit:install --starter-kit --no-npm (with the --panel you installed with) to add it; it renders nothing until the panel has two or more locales.";
+        }
+
         if (app()->routesAreCached() || app()->configurationIsCached()) {
             $notes[] = 'Routes or configuration are cached: run php artisan optimize again so new routes and options take effect.';
         }
 
         return $notes;
+    }
+
+    /**
+     * Starter kit headers the installer set up (its `alfakit:header` block) before
+     * `<AlfakitLanguageSwitcher />` existed: re-running the installer adds it.
+     *
+     * @return list<string>
+     */
+    protected function starterKitHeadersWithoutLanguageSwitcher(): array
+    {
+        $kit = StarterKitInstaller::detect(base_path());
+
+        if ($kit === null) {
+            return [];
+        }
+
+        $files = StarterKitInstaller::files($kit);
+        $headers = [];
+
+        foreach ([$files['sidebarHeader'], $files['header']] as $relative) {
+            $contents = is_file(base_path($relative)) ? (string) file_get_contents(base_path($relative)) : '';
+
+            if (str_contains($contents, StarterKitInstaller::HEADER_MARKER) && ! str_contains($contents, '<AlfakitLanguageSwitcher')) {
+                $headers[] = $relative;
+            }
+        }
+
+        return $headers;
     }
 }

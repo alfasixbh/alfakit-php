@@ -17,7 +17,7 @@ use Inertia\Inertia;
 
 /*
  * Starter kit mode: the drop-in header components (`<AlfakitSearch />`,
- * `<AlfakitNotifications />`, `<AlfakitTenantSwitcher />`) read the `widgets` of the shared
+ * `<AlfakitNotifications />`, `<AlfakitTenantSwitcher />`, `<AlfakitLanguageSwitcher />`) read the `widgets` of the shared
  * navigation and load the panel data from their endpoint; multi-factor authentication is
  * the host's.
  */
@@ -74,6 +74,35 @@ it('leaves out the bell without database notifications', function (): void {
     $this->actingAs(User::query()->create(['name' => 'Ann', 'email' => 'ann'.uniqid().'@example.com', 'password' => 'secret']));
 
     expect(inertiaProps(inertiaGet($this, '/dashboard'))['alfakitNavigation'][0]['widgets'])->not->toHaveKey('notifications');
+});
+
+it('shares the current language of the language switcher with two or more languages', function (): void {
+    widgetsPanel('kitl', fn (Panel $panel): Panel => $panel->resources([PostResource::class])->locales(['en', 'fr', 'ar']));
+    widgetsPanel('kitm', fn (Panel $panel): Panel => $panel->resources([PostResource::class])->locales(['en']));
+    widgetsPanel('kitn', fn (Panel $panel): Panel => $panel->resources([PostResource::class])->locales(['en', 'fr'])->localeSwitcher(false));
+
+    $this->actingAs(User::query()->create(['name' => 'Ann', 'email' => 'ann'.uniqid().'@example.com', 'password' => 'secret']));
+
+    $navigation = collect(inertiaProps(inertiaGet($this, '/dashboard'))['alfakitNavigation'])->keyBy('id');
+
+    expect($navigation['kitl']['widgets']['language'])->toBe([
+        'label' => __('alfakit::ui.change_language'),
+        'current' => ['code' => 'en', 'tag' => 'en', 'label' => 'English', 'direction' => 'ltr'],
+    ])
+        // One language, or `localeSwitcher(false)`: `<AlfakitLanguageSwitcher />` renders nothing.
+        ->and($navigation['kitm']['widgets'])->not->toHaveKey('language')
+        ->and($navigation['kitn']['widgets'])->not->toHaveKey('language');
+
+    // The switch goes back to the host page, which then names the new language; so does the
+    // panel data the header components load again (in it), and the host keeps its own.
+    $this->from('/dashboard')->post('/kitl/_alfakit/locale', ['locale' => 'ar'])->assertRedirect('/dashboard');
+
+    $response = inertiaGet($this, '/dashboard');
+    $navigation = collect(inertiaProps($response)['alfakitNavigation'])->keyBy('id');
+
+    expect($navigation['kitl']['widgets']['language']['current'])->toMatchArray(['code' => 'ar', 'direction' => 'rtl'])
+        ->and($this->getJson('/kitl/_alfakit/starter-kit')->json('localization'))->toMatchArray(['code' => 'ar', 'direction' => 'rtl'])
+        ->and(app()->getLocale())->toBe('en');
 });
 
 it('serves the panel data of the header components to signed-in users only', function (): void {

@@ -71,18 +71,23 @@ it('wires Alfakit into the starter kit, idempotently', function (string $kit, st
         ->and(substr_count($sidebarContents, '<AlfakitNav />'))->toBe(1)
         ->and(strpos($sidebarContents, '<AlfakitNav />'))->toBeGreaterThan(strpos($sidebarContents, '<NavMain'));
 
-    // Both app layouts' headers gain the search field, the bell and the AI copilot (nothing
-    // without the AI plugin) in a marked block, the sidebar layout's at the end of the row,
-    // the header layout's before the user menu.
+    // Both app layouts' headers gain the search field, the bell, the AI copilot (nothing
+    // without the AI plugin) and the language switcher (nothing with fewer than two
+    // languages) in a marked block, the sidebar layout's at the end of the row, the header
+    // layout's before the user menu.
+    $imports = "import { AlfakitCopilot, AlfakitLanguageSwitcher, AlfakitNotifications, AlfakitSearch } from '@alfakit/{$kit}';";
+
     foreach (['sidebarHeader', 'header'] as $file) {
         $header = (string) file_get_contents($app.'/'.StarterKitInstaller::files($kit)[$file]);
 
         expect($header)->toContain(StarterKitInstaller::HEADER_MARKER)
-            ->toContain("import { AlfakitCopilot, AlfakitNotifications, AlfakitSearch } from '@alfakit/{$kit}';")
+            ->toContain($imports)
             ->and(substr_count($header, '<AlfakitSearch />'))->toBe(1)
             ->and(substr_count($header, '<AlfakitNotifications />'))->toBe(1)
             ->and(substr_count($header, '<AlfakitCopilot />'))->toBe(1)
-            ->and(strpos($header, '<AlfakitCopilot />'))->toBeGreaterThan(strpos($header, '<AlfakitNotifications />'));
+            ->and(substr_count($header, '<AlfakitLanguageSwitcher />'))->toBe(1)
+            ->and(strpos($header, '<AlfakitCopilot />'))->toBeGreaterThan(strpos($header, '<AlfakitNotifications />'))
+            ->and(strpos($header, '<AlfakitLanguageSwitcher />'))->toBeGreaterThan(strpos($header, '<AlfakitCopilot />'));
 
         // A block from before the copilot existed gains it (`alfakit:add ai`, re-runs).
         $old = (string) preg_replace('/^[ \t]*<AlfakitCopilot \/>\n/m', '', str_replace('AlfakitCopilot, ', '', $header));
@@ -90,9 +95,35 @@ it('wires Alfakit into the starter kit, idempotently', function (string $kit, st
 
         $upgraded = (string) StarterKitInstaller::addCopilotToHeader($old, $kit);
 
-        expect($upgraded)->toContain("import { AlfakitCopilot, AlfakitNotifications, AlfakitSearch } from '@alfakit/{$kit}';")
+        expect($upgraded)->toContain($imports)
             ->and(substr_count($upgraded, '<AlfakitCopilot />'))->toBe(1)
             ->and(StarterKitInstaller::addWidgetsToHeader($upgraded, $kit, sidebarLayout: $file === 'sidebarHeader'))->toBe($upgraded);
+
+        // A block from before the language switcher existed gains it after the copilot when
+        // the installer runs again (`alfakit:install --starter-kit`).
+        $old = (string) preg_replace('/^[ \t]*<AlfakitLanguageSwitcher \/>\n/m', '', str_replace('AlfakitLanguageSwitcher, ', '', $header));
+        expect($old)->not->toContain('AlfakitLanguageSwitcher');
+
+        $upgraded = (string) StarterKitInstaller::addWidgetsToHeader($old, $kit, sidebarLayout: $file === 'sidebarHeader');
+
+        expect($upgraded)->toBe($header)
+            ->and(StarterKitInstaller::addLanguageSwitcherToHeader($upgraded, $kit))->toBe($upgraded);
+
+        // The oldest blocks (search and bell only) gain both, the switcher after the copilot.
+        $oldest = (string) preg_replace('/^[ \t]*<Alfakit(Copilot|LanguageSwitcher) \/>\n/m', '', str_replace(['AlfakitCopilot, ', 'AlfakitLanguageSwitcher, '], '', $header));
+        $upgraded = (string) StarterKitInstaller::addWidgetsToHeader($oldest, $kit, sidebarLayout: $file === 'sidebarHeader');
+
+        expect($upgraded)->toContain($imports)
+            ->and(substr_count($upgraded, '<AlfakitLanguageSwitcher />'))->toBe(1)
+            ->and(strpos($upgraded, '<AlfakitLanguageSwitcher />'))->toBeGreaterThan(strpos($upgraded, '<AlfakitCopilot />'));
+
+        // Only the bell to place it by: right after it, with its own import name.
+        $bellOnly = (string) preg_replace('/^[ \t]*<Alfakit(Copilot|LanguageSwitcher) \/>\n/m', '', str_replace(['AlfakitCopilot, ', 'AlfakitLanguageSwitcher, '], '', $header));
+
+        expect((string) StarterKitInstaller::addLanguageSwitcherToHeader($bellOnly, $kit))
+            ->toContain("import { AlfakitLanguageSwitcher, AlfakitNotifications, AlfakitSearch } from '@alfakit/{$kit}';")
+            ->toMatch('/<AlfakitNotifications \/>\n[ \t]*<AlfakitLanguageSwitcher \/>\n/')
+            ->and(StarterKitInstaller::addLanguageSwitcherToHeader('<header></header>', $kit))->toBeNull();
     }
 
     $header = (string) file_get_contents($app.'/'.StarterKitInstaller::files($kit)['header']);
@@ -216,4 +247,40 @@ it('runs from alfakit:install --starter-kit', function (): void {
 
     (new Filesystem)->deleteDirectory($app);
     (new Filesystem)->deleteDirectory($vue);
+});
+
+it('gives a header set up before the language switcher existed <AlfakitLanguageSwitcher /> when the installer runs again', function (): void {
+    $app = starterKitApp('react');
+    (new Filesystem)->ensureDirectoryExists($app.'/vendor/composer');
+    (new Filesystem)->ensureDirectoryExists($app.'/public');
+    file_put_contents($app.'/package.json', json_encode(['dependencies' => ['@inertiajs/react' => '^3.0']]));
+    $original = $this->app->basePath();
+    $this->app->setBasePath($app);
+    $header = $app.'/'.StarterKitInstaller::files('react')['sidebarHeader'];
+
+    $this->artisan('alfakit:install', ['--starter-kit' => true, '--no-npm' => true, '--no-composer-script' => true])->assertSuccessful();
+
+    // A header block from an earlier version: no language switcher.
+    $installed = (string) file_get_contents($header);
+    file_put_contents($header, (string) preg_replace('/^[ \t]*<AlfakitLanguageSwitcher \/>\n/m', '', str_replace('AlfakitLanguageSwitcher, ', '', $installed)));
+
+    // alfakit:upgrade (after composer update) says how to get it, and changes nothing itself.
+    $this->artisan('alfakit:upgrade')
+        ->expectsOutputToContain('has no <AlfakitLanguageSwitcher /> yet')
+        ->assertSuccessful();
+
+    expect(file_get_contents($header))->not->toContain('AlfakitLanguageSwitcher');
+
+    $this->artisan('alfakit:install', ['--starter-kit' => true, '--no-npm' => true, '--no-composer-script' => true])
+        ->expectsOutputToContain(StarterKitInstaller::files('react')['sidebarHeader'])
+        ->assertSuccessful();
+
+    expect(file_get_contents($header))->toBe($installed);
+
+    $this->artisan('alfakit:upgrade')
+        ->doesntExpectOutputToContain('AlfakitLanguageSwitcher')
+        ->assertSuccessful();
+
+    $this->app->setBasePath($original);
+    (new Filesystem)->deleteDirectory($app);
 });

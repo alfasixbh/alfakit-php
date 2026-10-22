@@ -27,7 +27,8 @@ use Illuminate\Support\Facades\Route;
  * - The panel navigation is shared with every Inertia page of the application as the
  *   `alfakitNavigation` prop, for the host's sidebar, with what the drop-in header
  *   components (`<AlfakitSearch />`, `<AlfakitNotifications />`, `<AlfakitTenantSwitcher />`,
- *   and plugins' own such as `<AlfakitCopilot />`) need before they load (`widgets`).
+ *   `<AlfakitLanguageSwitcher />`, and plugins' own such as `<AlfakitCopilot />`) need before
+ *   they load (`widgets`).
  * - The panel's dashboard widgets are shared with the host's dashboard (`alfakitWidgets`,
  *   `starterKitDashboard()`), for the drop-in `<AlfakitWidgets />`.
  * - Multi-factor authentication is the host's (Fortify's two-factor settings): Alfakit's
@@ -220,8 +221,8 @@ trait HasStarterKit
 
     /**
      * What the drop-in header components render before their code and the panel data load:
-     * the search field's key bindings and placeholder, the unread count of the bell and the
-     * tenant switcher's tenants. Everything else (translations, endpoints, the command
+     * the search field's key bindings and placeholder, the unread count of the bell, the
+     * tenant switcher's tenants and the current language of the language switcher. Everything else (translations, endpoints, the command
      * palette, realtime) comes from `endpoint` once a component renders.
      *
      * Null while the panel's routes are not registered.
@@ -269,12 +270,17 @@ trait HasStarterKit
                 'registrationLabel' => $this->getTenantRegistrationUrl() === null ? null : $this->getTenantRegistrationLabel(),
                 'searchable' => $this->isTenantMenuSearchable(count($tenants)) ? true : null,
             ]) : null,
+            // `<AlfakitLanguageSwitcher />`: the current language, with two or more to choose from.
+            'language' => $this->hasLocaleSwitcher() && count($this->getLocales()) > 1 ? [
+                'label' => __('alfakit::ui.change_language'),
+                'current' => $this->getCurrentLocale()->toSchema(),
+            ] : null,
             // While impersonating: the banner with **Leave** on the host's own pages too.
             'impersonation' => Impersonation::toSchema($this),
             // Plugins' header components (`starterKitWidget()`); the built-in ones win.
             ...array_diff_key(
                 array_map(fn (Closure $data): mixed => $data($user, $tenant), $this->starterKitWidgets),
-                array_flip(['endpoint', 'search', 'notifications', 'tenancy', 'impersonation']),
+                array_flip(['endpoint', 'search', 'notifications', 'tenancy', 'language', 'impersonation']),
             ),
         ]);
     }

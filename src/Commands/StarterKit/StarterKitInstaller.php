@@ -36,7 +36,7 @@ final class StarterKitInstaller
     /** Marks the lines the installer adds to the host's files (so a second run skips them). */
     public const MARKER = 'alfakit:nav';
 
-    /** Marks the header components the installer adds (`<AlfakitSearch />`, `<AlfakitNotifications />`, `<AlfakitCopilot />`). */
+    /** Marks the header components the installer adds (`<AlfakitSearch />`, `<AlfakitNotifications />`, `<AlfakitCopilot />`, `<AlfakitLanguageSwitcher />`). */
     public const HEADER_MARKER = 'alfakit:header';
 
     /** Marks the dashboard widgets the installer adds to the host's dashboard (`<AlfakitWidgets>`). */
@@ -130,8 +130,8 @@ final class StarterKitInstaller
         $this->writeFile($files['nav'], self::stub("{$this->kit}/nav"), 'the panel navigation for the app sidebar');
         $this->patchFile($files['sidebar'], fn (string $contents): ?string => self::addNavToSidebar($contents, $this->kit), 'added <AlfakitNav /> after <NavMain />');
         if ($headerWidgets) {
-            $this->patchFile($files['sidebarHeader'], fn (string $contents): ?string => self::addWidgetsToHeader($contents, $this->kit, sidebarLayout: true), 'added <AlfakitSearch />, <AlfakitNotifications /> and <AlfakitCopilot /> to the header');
-            $this->patchFile($files['header'], fn (string $contents): ?string => self::addWidgetsToHeader($contents, $this->kit, sidebarLayout: false), 'added <AlfakitSearch />, <AlfakitNotifications /> and <AlfakitCopilot /> before the user menu');
+            $this->patchFile($files['sidebarHeader'], fn (string $contents): ?string => self::addWidgetsToHeader($contents, $this->kit, sidebarLayout: true), 'added <AlfakitSearch />, <AlfakitNotifications />, <AlfakitCopilot /> and <AlfakitLanguageSwitcher /> to the header');
+            $this->patchFile($files['header'], fn (string $contents): ?string => self::addWidgetsToHeader($contents, $this->kit, sidebarLayout: false), 'added <AlfakitSearch />, <AlfakitNotifications />, <AlfakitCopilot /> and <AlfakitLanguageSwitcher /> before the user menu');
         }
 
         if ($dashboardWidgets) {
@@ -187,22 +187,27 @@ final class StarterKitInstaller
     }
 
     /**
-     * Add AlfaKit's search field, notifications bell and AI copilot (which renders nothing
-     * without the AI plugin's `copilot()`) to a header of the starter kit, in a marked block:
-     * at the end of the sidebar layout's header (`app-sidebar-header`), or before the user
-     * menu of the header layout (`app-header`). Their import goes with the host's package
-     * imports. Null when the header does not have the starter kit's shape; a block added by
-     * an earlier version gets the copilot (`addCopilotToHeader()`).
+     * Add AlfaKit's search field, notifications bell, AI copilot (which renders nothing
+     * without the AI plugin's `copilot()`) and language switcher (nothing with fewer than two
+     * `locales()`) to a header of the starter kit, in a marked block: at the end of the
+     * sidebar layout's header (`app-sidebar-header`), or before the user menu of the header
+     * layout (`app-header`). Their import goes with the host's package imports. Null when the
+     * header does not have the starter kit's shape; a block added by an earlier version gets
+     * the copilot (`addCopilotToHeader()`) and the language switcher
+     * (`addLanguageSwitcherToHeader()`), so re-running `alfakit:install --starter-kit`
+     * brings an existing app's header up to date.
      */
     public static function addWidgetsToHeader(string $contents, string $kit, bool $sidebarLayout): ?string
     {
         if (str_contains($contents, self::HEADER_MARKER)) {
-            return self::addCopilotToHeader($contents, $kit) ?? $contents;
+            $contents = self::addCopilotToHeader($contents, $kit) ?? $contents;
+
+            return self::addLanguageSwitcherToHeader($contents, $kit) ?? $contents;
         }
 
         $comment = $kit === 'react'
-            ? '{/* '.self::HEADER_MARKER.': AlfaKit search, notifications and AI copilot (php artisan alfakit:install --starter-kit) */}'
-            : '<!-- '.self::HEADER_MARKER.': AlfaKit search, notifications and AI copilot (php artisan alfakit:install --starter-kit) -->';
+            ? '{/* '.self::HEADER_MARKER.': AlfaKit search, notifications, AI copilot and language switcher (php artisan alfakit:install --starter-kit) */}'
+            : '<!-- '.self::HEADER_MARKER.': AlfaKit search, notifications, AI copilot and language switcher (php artisan alfakit:install --starter-kit) -->';
         $class = $kit === 'react' ? 'className' : 'class';
 
         if ($sidebarLayout) {
@@ -217,6 +222,7 @@ final class StarterKitInstaller
                         .$indent."    <AlfakitSearch />\n"
                         .$indent."    <AlfakitNotifications />\n"
                         .$indent."    <AlfakitCopilot />\n"
+                        .$indent."    <AlfakitLanguageSwitcher />\n"
                         .$indent."</div>\n"
                         .$matches[0];
                 },
@@ -233,6 +239,7 @@ final class StarterKitInstaller
                     .$matches[2]."<AlfakitSearch />\n"
                     .$matches[2]."<AlfakitNotifications />\n"
                     .$matches[2]."<AlfakitCopilot />\n"
+                    .$matches[2]."<AlfakitLanguageSwitcher />\n"
                     .$matches[2].'<DropdownMenu>',
                 $contents,
                 1,
@@ -244,7 +251,7 @@ final class StarterKitInstaller
             return null;
         }
 
-        return self::addImport($updated, "@alfakit/{$kit}", 'import { AlfakitCopilot, AlfakitNotifications, AlfakitSearch } from \'@alfakit/'.$kit.'\';');
+        return self::addImport($updated, "@alfakit/{$kit}", 'import { AlfakitCopilot, AlfakitLanguageSwitcher, AlfakitNotifications, AlfakitSearch } from \'@alfakit/'.$kit.'\';');
     }
 
     /**
@@ -285,6 +292,30 @@ final class StarterKitInstaller
         }
 
         return $imports === 1 ? $updated : self::addImport($updated, "@alfakit/{$kit}", "import { AlfakitCopilot } from '@alfakit/{$kit}';");
+    }
+
+    /**
+     * Add `<AlfakitLanguageSwitcher />` after `<AlfakitCopilot />` (else after
+     * `<AlfakitNotifications />`) in a header block an earlier version of the installer wrote,
+     * and to the import of the other header components. It renders nothing until the panel
+     * has two or more `locales()`, so every header gets it. Unchanged when it is there; null
+     * when the block has neither component to place it by.
+     */
+    public static function addLanguageSwitcherToHeader(string $contents, string $kit): ?string
+    {
+        if (str_contains($contents, '<AlfakitLanguageSwitcher')) {
+            return $contents;
+        }
+
+        foreach (['AlfakitCopilot', 'AlfakitNotifications'] as $anchor) {
+            $updated = preg_replace('/^([ \t]*)<'.$anchor.'\b[^\n]*\/>[ \t]*\n/m', "$0$1<AlfakitLanguageSwitcher />\n", $contents, 1, $count);
+
+            if ($updated !== null && $count === 1) {
+                return self::addNamedImport($updated, $kit, 'AlfakitLanguageSwitcher');
+            }
+        }
+
+        return null;
     }
 
     /**
