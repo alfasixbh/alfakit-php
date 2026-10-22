@@ -115,17 +115,19 @@ class SetupCommand extends Command
         if ($roles) {
             $this->installPlugin($files, 'shield', $panelId);
             $this->addHasRolesTrait($files);
+        } elseif ($hasPanel) {
+            $this->record('Roles and permissions', 'skipped');
         }
 
-        if ($hasPanel && $this->wants('users', 'Generate a users resource (invitations, impersonation, suspend/ban, sessions)?', 'Writes a UserResource and a few helper classes into app/Alfakit, plus one migration; no packages.')) {
-            $suffix = $this->panelNamespaceSuffix($panelId);
+        $usersResourceExists = $hasPanel && ! $this->option('force')
+            && is_file($this->getGenerationPath().str_replace('\\', '/', $this->panelNamespaceSuffix($panelId)).'/Resources/UserResource.php');
 
-            if (! $this->option('force') && is_file($this->getGenerationPath().str_replace('\\', '/', $suffix).'/Resources/UserResource.php')) {
-                $this->record('Users resource', 'already');
-            } else {
-                $this->runStep('Users resource', 'alfakit:users', ['--panel' => $panelId, '--roles' => $roles, '--force' => (bool) $this->option('force')]);
-                $this->needsMigrations = true;
-            }
+        if ($usersResourceExists) {
+            // A re-run: done earlier, so neither asked again nor reported as skipped.
+            $this->record('Users resource', 'already');
+        } elseif ($hasPanel && $this->wants('users', 'Generate a users resource (invitations, impersonation, suspend/ban, sessions)?', 'Writes a UserResource and a few helper classes into app/Alfakit, plus one migration; no packages.')) {
+            $this->runStep('Users resource', 'alfakit:users', ['--panel' => $panelId, '--roles' => $roles, '--force' => (bool) $this->option('force')]);
+            $this->needsMigrations = true;
         } else {
             $this->record('Users resource', 'skipped', $hasPanel ? '' : 'no panel in standalone mode');
         }
@@ -378,15 +380,17 @@ class SetupCommand extends Command
     }
 
     /**
-     * The mode an earlier run installed, read from the panel provider: a re-run without
-     * `--mode` keeps it instead of guessing from the starter kit again.
+     * The mode an earlier run installed, read from the panel provider (or, without one, the
+     * standalone stylesheet import): a re-run without `--mode` keeps it instead of guessing
+     * from the starter kit again.
      */
     protected function installedMode(string $panelId): ?string
     {
         $path = PanelProviderEditor::path($panelId);
 
         if (! is_file($path)) {
-            return null;
+            // Standalone installs have no panel provider, only the stylesheet import.
+            return $this->isInstalled('standalone', $panelId) ? 'standalone' : null;
         }
 
         return str_contains((string) file_get_contents($path), '->starterKit(') ? 'starter-kit' : 'panel';

@@ -47,6 +47,7 @@ beforeEach(function (): void {
 });
 
 afterEach(function (): void {
+    AiSetupCommand::$laravelAiInstalled = null;
     $this->app->setBasePath($this->originalBasePath);
     $this->app->useConfigPath($this->originalBasePath.'/config');
     (new Filesystem)->deleteDirectory($this->sandbox);
@@ -145,6 +146,16 @@ it('checks configured keys with --check', function (): void {
 
     FakeAiKeyTester::$results = [];
     $this->artisan('alfakit:ai-setup', ['--check' => true])->assertSuccessful();
+});
+
+it('never installs laravel/ai with --check, which guards deployments', function (): void {
+    AiSetupCommand::$laravelAiInstalled = false;
+
+    $this->artisan('alfakit:ai-setup', ['--check' => true, '--no-interaction' => true])
+        ->expectsOutputToContain('laravel/ai is not installed')
+        ->assertFailed();
+
+    Process::assertNothingRan();
 });
 
 it('rejects unknown providers', function (): void {

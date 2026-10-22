@@ -42,6 +42,8 @@ function pluginSandbox(object $test, array $packages = []): string
 }
 
 afterEach(function (): void {
+    PluginCatalog::$pluginsDirectory = null;
+
     if (isset($this->originalBasePath)) {
         $sandbox = app()->basePath();
         app()->setBasePath($this->originalBasePath);
@@ -356,6 +358,34 @@ it('shows a plugin\'s highlights, demo tour and related plugins with --list <slu
     Process::assertNothingRan();
 });
 
+it('shows the showcase of a plugin that is not installed yet, as in an app installed from Packagist', function (): void {
+    $sandbox = pluginSandbox($this);
+    PluginCatalog::$pluginsDirectory = $sandbox.'/no-plugins';
+    config(['alfakit.demo_url' => 'https://demo.example.com']);
+
+    $this->artisan('alfakit:add', ['plugin' => ['kanban'], '--list' => true])
+        ->expectsOutputToContain('WIP limits and transitions')
+        ->expectsOutputToContain('https://demo.example.com/react/admin/manama/orders/board')
+        ->expectsOutputToContain('Works great with: workflows, comments, calendar')
+        ->assertSuccessful();
+});
+
+it('ships a copy of every plugin\'s showcase that matches its composer.json', function (): void {
+    $shipped = PluginCatalog::shippedShowcases();
+    $plugins = glob(dirname(__DIR__, 3).'/plugins/*/composer.json') ?: [];
+
+    expect($plugins)->not->toBeEmpty();
+
+    foreach ($plugins as $file) {
+        $composer = json_decode((string) file_get_contents($file), true);
+        $slug = str_replace('alfasix/alfakit-', '', (string) $composer['name']);
+
+        expect($shipped[$slug] ?? null)->toBe($composer['extra']['alfakit']['showcase'], "resources/plugins/showcase.json is out of date for {$slug}: copy extra.alfakit.showcase of every packages/plugins/*/composer.json into it (keyed by slug, sorted), then run npx prettier --write on it");
+    }
+
+    expect(array_keys($shipped))->toHaveCount(count($plugins));
+});
+
 it('publishes the migrations of a plugin that was not on disk before composer require', function (): void {
     $sandbox = pluginSandbox($this);
     $source = dirname(__DIR__, 3).'/plugins/comments';
@@ -469,8 +499,16 @@ it('does not ask to run the migrations when registering an installed plugin on a
     Process::assertDidntRun(fn (PendingProcess $process): bool => is_array($process->command) && in_array('vendor:publish', $process->command, true));
 });
 
+/** Turn the sandbox's admin panel into a starter kit panel, as `alfakit:install --starter-kit` does. */
+function useStarterKitPanel(): void
+{
+    $provider = PanelProviderEditor::path('admin');
+    file_put_contents($provider, str_replace("->id('admin')", "->id('admin')\n            ->starterKit()", (string) file_get_contents($provider)));
+}
+
 it('adds <AlfakitCopilot /> to the starter kit header block when adding the AI plugin', function (): void {
     $sandbox = pluginSandbox($this, ['alfasix/alfakit-ai']);
+    useStarterKitPanel();
     (new Filesystem)->copyDirectory(dirname(__DIR__).'/Fixtures/StarterKits/react/resources', $sandbox.'/resources');
     $files = AlfaSix\Alfakit\Commands\StarterKit\StarterKitInstaller::files('react');
     $header = $sandbox.'/'.$files['sidebarHeader'];
@@ -498,12 +536,13 @@ it('adds <AlfakitCopilot /> to the starter kit header block when adding the AI p
         ->and(Illuminate\Support\Facades\Artisan::output())->not->toContain('AlfakitCopilot');
 
     expect((string) file_get_contents($header))
-        ->toContain("import { AlfakitCopilot, AlfakitNotifications, AlfakitSearch } from '@alfakit/react';")
+        ->toContain("import { AlfakitCopilot, AlfakitLanguageSwitcher, AlfakitNotifications, AlfakitSearch } from '@alfakit/react';")
         ->and(substr_count((string) file_get_contents($header), '<AlfakitCopilot />'))->toBe(1);
 });
 
 it('adds the team menu <AlfakitTenantSwitcher /> to the starter kit header block when adding Teams', function (): void {
     $sandbox = pluginSandbox($this, ['alfasix/alfakit-teams']);
+    useStarterKitPanel();
     (new Filesystem)->copyDirectory(dirname(__DIR__).'/Fixtures/StarterKits/react/resources', $sandbox.'/resources');
     $files = AlfaSix\Alfakit\Commands\StarterKit\StarterKitInstaller::files('react');
     $header = $sandbox.'/'.$files['sidebarHeader'];
@@ -515,7 +554,7 @@ it('adds the team menu <AlfakitTenantSwitcher /> to the starter kit header block
 
     $contents = (string) file_get_contents($header);
 
-    expect($contents)->toContain("import { AlfakitCopilot, AlfakitNotifications, AlfakitSearch, AlfakitTenantSwitcher } from '@alfakit/react';")
+    expect($contents)->toContain("import { AlfakitCopilot, AlfakitLanguageSwitcher, AlfakitNotifications, AlfakitSearch, AlfakitTenantSwitcher } from '@alfakit/react';")
         ->and(substr_count($contents, '<AlfakitTenantSwitcher />'))->toBe(1)
         ->and(strpos($contents, '<AlfakitTenantSwitcher />'))->toBeLessThan(strpos($contents, '<AlfakitSearch />'));
 
@@ -525,8 +564,17 @@ it('adds the team menu <AlfakitTenantSwitcher /> to the starter kit header block
         ->and((string) file_get_contents($header))->toBe($contents);
 });
 
+it('leaves the starter kit header alone when AlfaKit runs as its own panel in a starter kit app', function (): void {
+    $sandbox = pluginSandbox($this, ['alfasix/alfakit-teams']);
+    (new Filesystem)->copyDirectory(dirname(__DIR__).'/Fixtures/StarterKits/react/resources', $sandbox.'/resources');
+
+    expect(Illuminate\Support\Facades\Artisan::call('alfakit:add', ['plugin' => ['teams'], '--no-interaction' => true]))->toBe(0)
+        ->and(Illuminate\Support\Facades\Artisan::output())->not->toContain('AlfakitTenantSwitcher');
+});
+
 it('does not ask to turn the copilot on when the panel already has it', function (): void {
     $sandbox = pluginSandbox($this, ['alfasix/alfakit-ai']);
+    useStarterKitPanel();
     (new Filesystem)->copyDirectory(dirname(__DIR__).'/Fixtures/StarterKits/react/resources', $sandbox.'/resources');
     $files = AlfaSix\Alfakit\Commands\StarterKit\StarterKitInstaller::files('react');
     $header = $sandbox.'/'.$files['sidebarHeader'];

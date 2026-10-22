@@ -100,8 +100,17 @@ final readonly class MailBrand
         return alfakit()->getCurrentPanel() ?? alfakit()->getDefaultPanel();
     }
 
+    /**
+     * Where the logo links to. A starter kit panel lives inside the app, whose own emails
+     * (Fortify's verification mail, which this theme also renders) go to every user, so
+     * the logo links to the app (`app.url`) rather than into the panel.
+     */
     private static function panelUrl(?Panel $panel): ?string
     {
+        if ($panel?->isStarterKit() === true) {
+            return null;
+        }
+
         try {
             return $panel?->getUrl();
         } catch (Throwable) {

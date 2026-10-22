@@ -7,10 +7,13 @@ namespace AlfaSix\Alfakit\Commands\Support;
 use AlfaSix\Alfakit\Commands\MakeThemeCommand;
 use Composer\Autoload\ClassLoader;
 use Composer\InstalledVersions;
+use Illuminate\Console\Command;
 use Illuminate\Contracts\Process\ProcessResult;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\ServiceProvider;
 use ReflectionClass;
+
+use function Laravel\Prompts\confirm;
 
 /**
  * What the setup commands need to know about, and do to, the application: installed
@@ -159,14 +162,46 @@ final class AppEnvironment
     }
 
     /**
-     * @param  array<int, string>  $packages
+     * Ask before Composer may change the app's other packages (interactive runs); scripted
+     * runs (`--no-interaction`) allow it and say so in the output.
      */
-    public static function composerRequire(array $packages, bool $dev = false, ?callable $output = null): ProcessResult
+    public static function allowDependencyChanges(Command $command): bool
     {
-        $result = Process::path(base_path())->timeout(900)->run(
-            ['composer', 'require', ...$packages, ...($dev ? ['--dev'] : []), '--no-interaction'],
-            $output === null ? null : static fn (string $type, string $buffer) => $output($buffer),
+        if ((bool) $command->option('no-interaction')) {
+            return true;
+        }
+
+        return confirm(
+            'Composer can only install this by updating or downgrading packages your app already has. Allow that?',
+            true,
+            hint: 'It shows the changes. Answer no to keep your packages and install it yourself later.',
         );
+    }
+
+    /**
+     * @param  array<int, string>  $packages
+     * @param  (callable(): bool)|null  $allowDependencyChanges  Asked before the retry that may update or downgrade the app's packages; without it, the retry runs
+     */
+    public static function composerRequire(array $packages, bool $dev = false, ?callable $output = null, ?callable $allowDependencyChanges = null): ProcessResult
+    {
+        $command = ['composer', 'require', ...$packages, ...($dev ? ['--dev'] : []), '--no-interaction'];
+        $callback = $output === null ? null : static fn (string $type, string $buffer) => $output($buffer);
+        $result = Process::path(base_path())->timeout(900)->run($command, $callback);
+
+        // A package that needs an older version of a locked dependency (laravel/reverb wants
+        // guzzlehttp/psr7 ^2 while a new Laravel 13 app locks 3.x through guzzle 8) fails a
+        // partial update. Composer's own advice is to allow dependency changes: retry once so.
+        if ($result->failed() && str_contains($result->output().$result->errorOutput(), '--with-all-dependencies')) {
+            if ($allowDependencyChanges !== null && ! $allowDependencyChanges()) {
+                return $result;
+            }
+
+            if ($output !== null) {
+                $output(PHP_EOL.'Retrying with --with-all-dependencies: Composer may update or downgrade packages your app already has (listed below). To undo, restore composer.json and composer.lock from git and run composer install.'.PHP_EOL);
+            }
+
+            $result = Process::path(base_path())->timeout(900)->run([...$command, '--with-all-dependencies'], $callback);
+        }
 
         if ($result->successful()) {
             self::refreshAutoloader();

@@ -86,5 +86,8 @@ it('names records by the model label without a title attribute, in pages and tab
 it('titles a record from a rich text attribute by its text, not its HTML', function (): void {
     expect(PostResource::getRecordTitle(new Post(['title' => '<p>Hello &amp; <strong>world</strong></p><p>Again</p>'])))->toBe('Hello & world Again')
         // Plain text with a "<" is left alone.
-        ->and(PostResource::getRecordTitle(new Post(['title' => 'a < b'])))->toBe('a < b');
+        ->and(PostResource::getRecordTitle(new Post(['title' => 'a < b'])))->toBe('a < b')
+        // A long text title (a comment's body) is cut short.
+        ->and(PostResource::getRecordTitle(new Post(['title' => str_repeat('word ', 40)])))->toEndWith('...')
+        ->and(mb_strlen((string) PostResource::getRecordTitle(new Post(['title' => str_repeat('word ', 40)]))))->toBeLessThanOrEqual(83);
 });

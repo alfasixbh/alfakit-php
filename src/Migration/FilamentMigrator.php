@@ -111,7 +111,13 @@ final class FilamentMigrator
         $process = new Process(['git', 'status', '--porcelain'], $this->basePath);
         $process->run();
 
-        if ($process->isSuccessful() && trim($process->getOutput()) !== '') {
+        // The report of an earlier `--dry-run` is this command's own output, not a change to keep apart.
+        $changes = array_filter(
+            explode("\n", trim($process->getOutput())),
+            static fn (string $line): bool => trim($line) !== '' && trim(substr($line, 3)) !== self::REPORT_FILE,
+        );
+
+        if ($process->isSuccessful() && $changes !== []) {
             return 'The git working tree has uncommitted changes. Commit or stash them first so the migration is a single reviewable diff, or pass --force.';
         }
 

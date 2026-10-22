@@ -41,7 +41,7 @@ trait ManagesPlugins
                 return ['status' => 'skipped', 'detail' => '', 'notes' => [], 'migrate' => false];
             }
 
-            $result = AppEnvironment::composerRequire([$plugin['package']], output: fn (string $buffer) => $this->output->write($buffer));
+            $result = AppEnvironment::composerRequire([$plugin['package']], output: fn (string $buffer) => $this->output->write($buffer), allowDependencyChanges: fn (): bool => AppEnvironment::allowDependencyChanges($this));
 
             if ($result->failed()) {
                 return ['status' => 'failed', 'detail' => "composer require {$plugin['package']}", 'notes' => [], 'migrate' => false];
@@ -115,6 +115,11 @@ trait ManagesPlugins
                 .($panelId === 'admin' ? ' To keep an admin panel without teams, put Teams on a panel of its own as the teams docs do: php artisan make:alfakit-panel app, php artisan alfakit:add teams --panel=app, then php artisan alfakit:remove teams --panel=admin.' : '');
         }
 
+        // Without HasTeams on the user model no user has a team and every team page is a 404.
+        if ($slug === 'teams' && $this->addHasTeamsToUserModel($files)) {
+            $notes = array_values(array_filter($notes, static fn (string $note): bool => ! str_starts_with($note, 'Give users teams:')));
+        }
+
         // Starter kit apps: the team menu goes in the app header (`<AlfakitTenantSwitcher />`).
         if ($slug === 'teams') {
             $notes = [...$notes, ...$this->addTenantSwitcherToStarterKitHeaders($files)];
@@ -129,6 +134,90 @@ trait ManagesPlugins
     }
 
     /**
+     * Give the user model the teams plugin's `HasTeams` trait and the two tenancy contracts
+     * it implements (`HasTenants`, `HasDefaultTenant`). With spatie's `HasRoles` (Shield),
+     * both traits define `teams()`, so the teams plugin's wins (`insteadof`). Returns whether
+     * the model has it now; false leaves the "Give users teams" note in place.
+     */
+    protected function addHasTeamsToUserModel(Filesystem $files): bool
+    {
+        $model = (string) config('auth.providers.users.model', 'App\\Models\\User');
+        $path = app_path(str_replace('\\', '/', Str::after($model, 'App\\')).'.php');
+
+        if (! $files->exists($path)) {
+            return false;
+        }
+
+        $contents = $files->get($path);
+        $updated = static::addHasTeams($contents);
+
+        if ($updated === null) {
+            return false;
+        }
+
+        if ($updated !== $contents) {
+            $files->put($path, $updated);
+            $this->components->task('Added HasTeams to '.class_basename($model).' (teams for every user)');
+        }
+
+        return true;
+    }
+
+    /**
+     * `use HasTeams;` (or a `HasTeams::teams insteadof HasRoles` block next to spatie's
+     * `HasRoles`), `implements HasDefaultTenant, HasTenants` and their imports. Unchanged
+     * when the model has them; null when the class can't be edited safely.
+     */
+    public static function addHasTeams(string $contents): ?string
+    {
+        $trait = 'AlfaSix\\AlfakitTeams\\Concerns\\HasTeams';
+
+        if (! str_contains($contents, 'HasTeams')) {
+            if (preg_match('/^(?:final |abstract |readonly )*class\s+\w+[^{]*\{[ \t]*\n/m', $contents, $match, PREG_OFFSET_CAPTURE) !== 1) {
+                return null;
+            }
+
+            if (preg_match('/^[ \t]*use [^;{]*\bHasRoles\b[^;{]*;/m', $contents) === 1) {
+                $position = (int) $match[0][1] + strlen($match[0][0]);
+                $body = substr($contents, $position);
+
+                // After the class's last top trait statement: the block keeps the teams plugin's teams().
+                if (preg_match('/\A(?:[ \t]*(?:\/\*\*.*?\*\/|use [A-Z][^;]*;)[ \t]*\n)+/s', $body, $traits) !== 1) {
+                    return null;
+                }
+
+                $block = "    use HasTeams {\n        HasTeams::teams insteadof HasRoles;\n    }\n";
+                $contents = substr($contents, 0, $position).$traits[0].$block.substr($body, strlen($traits[0]));
+                $contents = PanelProviderEditor::addImport($contents, $trait);
+            } else {
+                $contents = SetupCommand::addTrait($contents, $trait);
+
+                if ($contents === null) {
+                    return null;
+                }
+            }
+        }
+
+        foreach (['AlfaSix\\Alfakit\\Contracts\\HasDefaultTenant', 'AlfaSix\\Alfakit\\Contracts\\HasTenants'] as $contract) {
+            $basename = class_basename($contract);
+
+            if (preg_match('/^(?:final |abstract |readonly )*class\s+\w+[^{]*\bimplements\b[^{]*\b'.$basename.'\b/m', $contents) === 1) {
+                continue;
+            }
+
+            $contents = (string) preg_replace_callback(
+                '/^((?:final |abstract |readonly )*class\s+\w+(?:\s+extends\s+[\w\\\\]+)?)(\s+implements\s+([^{]+?))?(\s*\{)/m',
+                static fn (array $m): string => $m[1].' implements '.($m[3] !== '' ? rtrim($m[3]).', ' : '').$basename.$m[4],
+                $contents,
+                1,
+            );
+            $contents = PanelProviderEditor::addImport($contents, $contract);
+        }
+
+        return $contents;
+    }
+
+    /**
      * Add `<AlfakitCopilot />` to the header block the starter kit installer wrote (headers
      * from before the component existed), or say how to.
      *
@@ -136,6 +225,11 @@ trait ManagesPlugins
      */
     protected function addCopilotToStarterKitHeaders(Filesystem $files, string $panelId, bool $onlyChanges = false): array
     {
+        // A panel-mode install in a starter kit app: the kit's header isn't AlfaKit's.
+        if (! $this->hasStarterKitPanel($files)) {
+            return [];
+        }
+
         $kit = StarterKitInstaller::detect(base_path());
 
         if ($kit === null) {
@@ -178,6 +272,21 @@ trait ManagesPlugins
     }
 
     /**
+     * Whether a panel of the app runs inside the starter kit (`->starterKit()`): only then do
+     * the kit's header components belong in its header.
+     */
+    protected function hasStarterKitPanel(Filesystem $files): bool
+    {
+        foreach ($files->glob(app_path('Providers/Alfakit/*.php')) ?: [] as $provider) {
+            if (str_contains($files->get($provider), '->starterKit(')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Add `<AlfakitTenantSwitcher />` to the header block the starter kit installer wrote, or
      * say how to: without it a team workspace has no way to its teams, members and settings.
      *
@@ -185,6 +294,11 @@ trait ManagesPlugins
      */
     protected function addTenantSwitcherToStarterKitHeaders(Filesystem $files, bool $onlyChanges = false): array
     {
+        // A panel-mode install in a starter kit app: the kit's header isn't AlfaKit's.
+        if (! $this->hasStarterKitPanel($files)) {
+            return [];
+        }
+
         $kit = StarterKitInstaller::detect(base_path());
 
         if ($kit === null) {

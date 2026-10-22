@@ -132,12 +132,12 @@ class MigrateFromFilamentCommand extends Command
     {
         if (! $discovery->hasInertia && ! $this->option('adapter')) {
             $this->newLine();
-            $this->components->warn('No Inertia app detected (no @inertiajs/* dependency in package.json). The PHP code was migrated; set up Inertia before installing the frontend:');
+            $this->components->warn('No Inertia app detected (no @inertiajs/* dependency in package.json). The PHP code '.($dryRun ? 'would be' : 'was').' migrated; the frontend needs Inertia:');
             $this->components->bulletList([
-                'laravel new my-app --react|--vue|--svelte (Laravel starter kit), or follow https://inertiajs.com/server-side-setup in this app',
-                'then run: php artisan alfakit:migrate-from-filament --adapter='.$adapter.($this->option('keep-filament') ? ' --keep-filament' : ''),
+                'run: php artisan alfakit:migrate-from-filament --adapter='.$adapter.($this->option('keep-filament') ? ' --keep-filament' : '').' (sets up Inertia, '.ucfirst($adapter).', its Vite plugin, Tailwind CSS and TypeScript in this app)',
+                'or set up Inertia yourself first (https://inertiajs.com/server-side-setup), then run the same command',
             ]);
-            $report->add(MigrationReport::SECTION_NOTES, 'package.json', null, 'No Inertia app detected', 'Install an Inertia starter kit (React, Vue or Svelte), then re-run `alfakit:migrate-from-filament --adapter='.$adapter.'` to install the AlfaKit frontend and remove the Filament packages.');
+            $report->add(MigrationReport::SECTION_NOTES, 'package.json', null, 'No Inertia app detected', 'Run `alfakit:migrate-from-filament --adapter='.$adapter.'`: it sets up Inertia, '.ucfirst($adapter).', Vite, Tailwind CSS and TypeScript in this app, installs the AlfaKit frontend and removes the Filament packages (or set up Inertia yourself first, then run it).');
 
             return false;
         }

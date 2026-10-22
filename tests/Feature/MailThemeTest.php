@@ -217,6 +217,19 @@ it('themes Laravel\'s email verification mail', function (): void {
         ->and((string) $message->render())->toContain('Acme Mail')->toContain('https://example.com/email/verify/1/abc');
 });
 
+it('links the logo to the app, not into the panel, in starter kit mode', function (): void {
+    config()->set('app.url', 'https://app.example.com');
+
+    mailPanel();
+
+    expect(MailTheme::brand()->url)->toStartWith('http://localhost/mailer');
+
+    MailTheme::flush();
+    mailPanel(fn (Panel $panel): Panel => $panel->starterKit());
+
+    expect(MailTheme::brand()->url)->toBe('https://app.example.com');
+});
+
 it('sends an edited template with merge tags filled and the HTML sanitised', function (): void {
     mailPanel();
     Mails::register(MailDefinition::make('tests.order')->label('Order')->editable(['number' => 'Number', 'customer' => 'Customer', 'button' => 'Button']));

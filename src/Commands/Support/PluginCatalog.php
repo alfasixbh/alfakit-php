@@ -146,32 +146,49 @@ final class PluginCatalog
     public static function showcase(string $slug): ?array
     {
         $package = 'alfasix/alfakit-'.Str::slug($slug);
+        $showcase = null;
 
         foreach (self::composerFiles() as $file) {
             $composer = json_decode((string) @file_get_contents($file), true);
 
-            if (! is_array($composer) || ($composer['name'] ?? null) !== $package) {
-                continue;
+            if (is_array($composer) && ($composer['name'] ?? null) === $package) {
+                $showcase = $composer['extra']['alfakit']['showcase'] ?? null;
+
+                break;
             }
-
-            $showcase = $composer['extra']['alfakit']['showcase'] ?? null;
-
-            if (! is_array($showcase) || ! is_string($showcase['demoPath'] ?? null)) {
-                return null;
-            }
-
-            $list = static fn (mixed $value): array => array_values(array_filter(is_array($value) ? $value : [], 'is_string'));
-
-            return [
-                'demoPath' => trim($showcase['demoPath'], '/'),
-                'tour' => $list($showcase['tour'] ?? []),
-                'clips' => $list($showcase['clips'] ?? []),
-                'worksWith' => $list($showcase['worksWith'] ?? []),
-                'highlights' => $list($showcase['highlights'] ?? []),
-            ];
         }
 
-        return null;
+        // A plugin that isn't installed yet (an app installed from Packagist has no
+        // packages/plugins): the copy of every showcase shipped with AlfaKit, so
+        // `alfakit:add --list <plugin>` shows it before you install it.
+        $showcase ??= self::shippedShowcases()[Str::slug($slug)] ?? null;
+
+        if (! is_array($showcase) || ! is_string($showcase['demoPath'] ?? null)) {
+            return null;
+        }
+
+        $list = static fn (mixed $value): array => array_values(array_filter(is_array($value) ? $value : [], 'is_string'));
+
+        return [
+            'demoPath' => trim($showcase['demoPath'], '/'),
+            'tour' => $list($showcase['tour'] ?? []),
+            'clips' => $list($showcase['clips'] ?? []),
+            'worksWith' => $list($showcase['worksWith'] ?? []),
+            'highlights' => $list($showcase['highlights'] ?? []),
+        ];
+    }
+
+    /**
+     * `resources/plugins/showcase.json`: every first-party plugin's `extra.alfakit.showcase`,
+     * kept equal to the plugins' composer.json files by `AddRemovePluginCommandTest`.
+     *
+     * @return array<string, mixed>
+     */
+    public static function shippedShowcases(): array
+    {
+        $showcases = json_decode((string) @file_get_contents(dirname(__DIR__, 3).'/resources/plugins/showcase.json'), true);
+
+        return is_array($showcases) ? $showcases : [];
     }
 
     /**

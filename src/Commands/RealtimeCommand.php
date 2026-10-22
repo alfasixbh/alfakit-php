@@ -91,7 +91,7 @@ class RealtimeCommand extends Command
             return false;
         }
 
-        $result = AppEnvironment::composerRequire(['laravel/reverb'], output: fn (string $buffer) => $this->output->write($buffer));
+        $result = AppEnvironment::composerRequire(['laravel/reverb'], output: fn (string $buffer) => $this->output->write($buffer), allowDependencyChanges: fn (): bool => AppEnvironment::allowDependencyChanges($this));
         $this->steps[] = ['laravel/reverb', $result->successful() ? '<fg=green>installed</>' : '<fg=red>failed</> (composer require laravel/reverb)'];
 
         return $result->successful();

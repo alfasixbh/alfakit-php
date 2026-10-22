@@ -242,6 +242,24 @@ trait WritesResources
             return null;
         }
 
-        return $attribute === $model->getKeyName() ? null : $attribute;
+        if ($attribute !== $model->getKeyName()) {
+            return $attribute;
+        }
+
+        // No `name`/`title`-like column: the first text column names the record (a comment by
+        // its `body`), as the parent's relation manager does; rich text titles show as text.
+        try {
+            foreach ([['string', 'email', 'url'], ['text', 'richtext', 'markdown']] as $kinds) {
+                foreach (ModelInspector::inspect($modelClass)['columns'] as $column) {
+                    if (in_array($column['kind'], $kinds, true) && ! str_ends_with($column['name'], '_id') && ! in_array($column['name'], ['password', 'remember_token', 'status', 'state', 'type', 'kind', 'token', 'uuid', 'ulid', 'locale', 'currency', 'color'], true)) {
+                        return $column['name'];
+                    }
+                }
+            }
+        } catch (Throwable) {
+            return null;
+        }
+
+        return null;
     }
 }

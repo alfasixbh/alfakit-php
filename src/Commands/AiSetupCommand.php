@@ -33,6 +33,9 @@ class AiSetupCommand extends Command
         {--no-test : Do not send a test request}
         {--no-install : Do not install laravel/ai when it is missing}';
 
+    /** Whether laravel/ai is installed; null detects it (tests set it). */
+    public static ?bool $laravelAiInstalled = null;
+
     public function handle(AiKeyTester $tester): int
     {
         if (! $this->ensureInstalled()) {
@@ -138,8 +141,15 @@ class AiSetupCommand extends Command
 
     protected function ensureInstalled(): bool
     {
-        if (AppEnvironment::hasComposerPackage('laravel/ai') || class_exists('Laravel\\Ai\\AiServiceProvider')) {
+        if (static::$laravelAiInstalled ?? (AppEnvironment::hasComposerPackage('laravel/ai') || class_exists('Laravel\\Ai\\AiServiceProvider'))) {
             return true;
+        }
+
+        // `--check` only reports (it guards deployments): it never installs anything.
+        if ($this->option('check')) {
+            $this->components->error('laravel/ai is not installed, so no AI provider can work. Run php artisan alfakit:ai-setup to install and configure it.');
+
+            return false;
         }
 
         if ($this->option('no-install') || ! confirm('laravel/ai is not installed. Install it with Composer now?', true)) {
@@ -148,7 +158,7 @@ class AiSetupCommand extends Command
             return false;
         }
 
-        $result = AppEnvironment::composerRequire(['laravel/ai'], output: fn (string $buffer) => $this->output->write($buffer));
+        $result = AppEnvironment::composerRequire(['laravel/ai'], output: fn (string $buffer) => $this->output->write($buffer), allowDependencyChanges: fn (): bool => AppEnvironment::allowDependencyChanges($this));
 
         if ($result->failed()) {
             $this->components->error('Installing laravel/ai failed. Run `composer require laravel/ai` yourself.');

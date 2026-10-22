@@ -718,7 +718,7 @@ Textarea::make('notes')->aiAssist();      // writing assistant (TextInput, Texta
 
 ## Teams
 
-`php artisan alfakit:add teams`. Jetstream-style teams on panel tenancy: the plugin calls `tenant(Team::class, slugAttribute: 'slug', ownershipRelationship: 'team')`, the tenant registration / profile pages, members and invitations pages and the signed invitation route. Run a queue worker (invitation mail).
+`php artisan alfakit:add teams` (it also adds `HasTeams`, the two tenancy contracts and, next to Shield's `HasRoles`, the `HasTeams::teams insteadof HasRoles` block to the user model). Jetstream-style teams on panel tenancy: the plugin calls `tenant(Team::class, slugAttribute: 'slug', ownershipRelationship: 'team')`, the tenant registration / profile pages, members and invitations pages and the signed invitation route. Run a queue worker (invitation mail).
 
 ```php
 use AlfaSix\Alfakit\Contracts\HasDefaultTenant;

@@ -1,0 +1,491 @@
+{
+  "activity-log": {
+    "demoPath": "activity-log",
+    "tour": [
+      "Open Settings > Activity log",
+      "Filter activities by event or causer",
+      "Open an activity to compare old and new values"
+    ],
+    "clips": ["react-light", "react-dark", "vue-light", "vue-dark", "svelte-light", "svelte-dark"],
+    "worksWith": ["shield", "comments", "workflows"],
+    "highlights": [
+      "Activity resource with filters by log, event, subject and causer",
+      "Old and new values side by side",
+      "Relation manager for any model's activities",
+      "Timeline infolist entry",
+      "Logs AlfaKit actions automatically",
+      "Per-user authorisation"
+    ]
+  },
+  "ai": {
+    "demoPath": "products/3/edit",
+    "tour": [
+      "Open a product",
+      "Ask the writing assistant to improve the description",
+      "Open the copilot and ask about orders",
+      "Review usage and cost"
+    ],
+    "clips": ["react-light", "react-dark", "vue-light", "vue-dark", "svelte-light", "svelte-dark"],
+    "worksWith": ["translation-manager", "helpdesk", "cms"],
+    "highlights": [
+      "One-line AI actions on records",
+      "Writing assistant in text fields",
+      "Natural-language table filters",
+      "Panel copilot that respects policies",
+      "MCP server for your resources",
+      "Usage and cost logging",
+      "Works without a provider key in demos"
+    ]
+  },
+  "analytics": {
+    "demoPath": "analytics",
+    "tour": [
+      "Open Marketing > Analytics",
+      "Switch the period and compare",
+      "Click a top page to filter",
+      "Share a read-only dashboard link"
+    ],
+    "clips": ["react-light", "react-dark", "vue-light", "vue-dark", "svelte-light", "svelte-dark"],
+    "worksWith": ["cms", "forms", "feature-flags"],
+    "highlights": [
+      "Cookieless tracking snippet",
+      "React, Vue and Svelte page-view components",
+      "Server-side tracking and middleware",
+      "Daily rollups and retention",
+      "Goals, comparisons and realtime visitors",
+      "Public, signed shared dashboards",
+      "Tenant-scoped sites"
+    ]
+  },
+  "api": {
+    "demoPath": "api-docs",
+    "tour": [
+      "Open Settings > API",
+      "Browse the generated OpenAPI reference",
+      "Create a personal access token with abilities"
+    ],
+    "clips": ["react-light", "react-dark", "vue-light", "vue-dark", "svelte-light", "svelte-dark"],
+    "worksWith": ["webhooks", "shield", "teams"],
+    "highlights": [
+      "CRUD JSON endpoints from your resources",
+      "Reuses form validation and policies",
+      "Personal access tokens with abilities",
+      "Rate limiting, ETags and idempotency keys",
+      "RFC 7807 errors",
+      "OpenAPI 3.1 document and in-panel reference",
+      "Tenant-aware routes"
+    ]
+  },
+  "backup": {
+    "demoPath": "backups",
+    "tour": [
+      "Open System > Backups",
+      "Check the health of each disk",
+      "Create or download a backup"
+    ],
+    "clips": ["react-light", "react-dark", "vue-light", "vue-dark", "svelte-light", "svelte-dark"],
+    "worksWith": ["ops", "health", "activity-log"],
+    "highlights": [
+      "Backups per disk with size and age",
+      "Health status per destination",
+      "Create backups on the queue",
+      "Signed downloads",
+      "Delete old backups",
+      "Use your own page class"
+    ]
+  },
+  "billing": {
+    "demoPath": "billing/plans",
+    "tour": [
+      "Open Settings > Billing > Plans",
+      "Compare monthly plans and the trial",
+      "Start checkout from a plan card"
+    ],
+    "clips": ["react-light", "react-dark", "vue-light", "vue-dark", "svelte-light", "svelte-dark"],
+    "worksWith": ["teams", "shield", "invoices"],
+    "highlights": [
+      "Stripe, Paddle and Spark providers",
+      "Plans page with trials and highlights",
+      "Billing portal link",
+      "Subscription middleware",
+      "Bill tenants or users",
+      "Works without the plugin for custom flows"
+    ]
+  },
+  "calendar": {
+    "demoPath": "calendar",
+    "tour": [
+      "Open the promotions calendar",
+      "Switch between month, week and list views",
+      "Drag an event to a new day",
+      "Click an event to edit it"
+    ],
+    "clips": ["react-light", "react-dark", "vue-light", "vue-dark", "svelte-light", "svelte-dark"],
+    "worksWith": ["kanban", "workflows", "comments"],
+    "highlights": [
+      "FullCalendar month, week, day and list views",
+      "Events from Eloquent queries",
+      "Create, edit and delete actions",
+      "Drag and drop with server checks",
+      "Dashboard widgets",
+      "Themed with your panel"
+    ]
+  },
+  "cms": {
+    "demoPath": "cms/pages",
+    "tour": [
+      "Open Content > Pages",
+      "Edit a page with blocks",
+      "Preview the draft with a signed link",
+      "Manage menus and redirects"
+    ],
+    "clips": ["react-light", "react-dark", "vue-light", "vue-dark", "svelte-light", "svelte-dark"],
+    "worksWith": ["media-library", "forms", "analytics", "translation-manager"],
+    "highlights": [
+      "Block-based pages with drafts and revisions",
+      "Scheduling and signed previews",
+      "SEO fields, sitemap and robots",
+      "Redirects and menus",
+      "Public Inertia route with React, Vue and Svelte blocks",
+      "Read-only JSON API",
+      "Multilingual pages"
+    ]
+  },
+  "comments": {
+    "demoPath": "orders/1",
+    "tour": [
+      "Open an order",
+      "Write a comment and mention a colleague",
+      "React with an emoji",
+      "Open comments from the table action"
+    ],
+    "clips": ["react-light", "react-dark", "vue-light", "vue-dark", "svelte-light", "svelte-dark"],
+    "worksWith": ["activity-log", "workflows", "helpdesk"],
+    "highlights": [
+      "Comments on any record",
+      "Mentions with notifications",
+      "Reactions",
+      "Infolist entry and slide-over action",
+      "Table action and polling widget",
+      "Policy-checked editing and deletion"
+    ]
+  },
+  "feature-flags": {
+    "demoPath": "feature-flags",
+    "tour": [
+      "Open Settings > Feature flags",
+      "Open a feature and change its rollout percentage",
+      "Target a user or tenant",
+      "Read the audit trail"
+    ],
+    "clips": ["react-light", "react-dark", "vue-light", "vue-dark", "svelte-light", "svelte-dark"],
+    "worksWith": ["shield", "analytics", "teams"],
+    "highlights": [
+      "Every Laravel Pennant feature with its status",
+      "Kill switch",
+      "Percentage and scheduled rollouts",
+      "Per-user and per-tenant targeting",
+      "Rich values",
+      "Full audit trail",
+      "Hide pages, resources and actions behind flags"
+    ]
+  },
+  "file-manager": {
+    "demoPath": "files",
+    "tour": [
+      "Open Content > Files",
+      "Upload a file with progress",
+      "Preview an image or PDF",
+      "Move files to the trash"
+    ],
+    "clips": ["react-light", "react-dark", "vue-light", "vue-dark", "svelte-light", "svelte-dark"],
+    "worksWith": ["media-library", "cms", "backup"],
+    "highlights": [
+      "Folders on any Laravel disk",
+      "Uploads with progress and drag and drop",
+      "Image, PDF and text previews",
+      "Zip downloads",
+      "Trash and search",
+      "Share links",
+      "File picker field",
+      "Path-checked and tenant-scoped"
+    ]
+  },
+  "forms": {
+    "demoPath": "forms",
+    "tour": [
+      "Open Marketing > Forms",
+      "Build a multi-step form with conditional logic",
+      "Preview the public form",
+      "Review submissions and stats"
+    ],
+    "clips": ["react-light", "react-dark", "vue-light", "vue-dark", "svelte-light", "svelte-dark"],
+    "worksWith": ["helpdesk", "analytics", "cms"],
+    "highlights": [
+      "Visual builder with sections and page breaks",
+      "Conditional logic",
+      "Public route and embeds in any page",
+      "Server-side re-validation",
+      "Spam protection and captcha",
+      "Submissions with CSV and XLSX export",
+      "Email notifications"
+    ]
+  },
+  "health": {
+    "demoPath": "health",
+    "tour": ["Open System > Health", "Read each check's status", "Refresh the results"],
+    "clips": ["react-light", "react-dark", "vue-light", "vue-dark", "svelte-light", "svelte-dark"],
+    "worksWith": ["ops", "backup"],
+    "highlights": [
+      "spatie/laravel-health results page",
+      "Status per check",
+      "Refresh action",
+      "Dashboard widget",
+      "Owner-only access"
+    ]
+  },
+  "helpdesk": {
+    "demoPath": "helpdesk/inbox",
+    "tour": [
+      "Open Support > Inbox",
+      "Answer a ticket with a canned reply",
+      "Add an internal note",
+      "Watch the SLA timer"
+    ],
+    "clips": ["react-light", "react-dark", "vue-light", "vue-dark", "svelte-light", "svelte-dark"],
+    "worksWith": ["comments", "ai", "forms", "tags"],
+    "highlights": [
+      "Tickets with SLAs on business hours",
+      "Threaded conversation with internal notes",
+      "Canned replies",
+      "Agent inbox with keyboard shortcuts",
+      "Customer portal and contact form",
+      "Embeddable live chat widget",
+      "Reports"
+    ]
+  },
+  "invoices": {
+    "demoPath": "invoices",
+    "tour": [
+      "Open Sales > Invoices",
+      "Create an invoice with live totals",
+      "Record a payment",
+      "Open the print-ready document"
+    ],
+    "clips": ["react-light", "react-dark", "vue-light", "vue-dark", "svelte-light", "svelte-dark"],
+    "worksWith": ["billing", "workflows", "file-manager"],
+    "highlights": [
+      "Invoices, quotes, credit notes and receipts",
+      "Exact integer money in any currency",
+      "Inclusive, exclusive and compound taxes",
+      "Atomic per-tenant numbering",
+      "Live server-side totals",
+      "Payments and overdue tracking",
+      "Branded document and signed customer link"
+    ]
+  },
+  "kanban": {
+    "demoPath": "orders/board",
+    "tour": [
+      "Open Sales > Order board",
+      "Drag an order to the next column",
+      "Filter and search the cards",
+      "Move a card with the keyboard"
+    ],
+    "clips": ["react-light", "react-dark", "vue-light", "vue-dark", "svelte-light", "svelte-dark"],
+    "worksWith": ["workflows", "comments", "calendar"],
+    "highlights": [
+      "Boards for any Eloquent model",
+      "Drag and drop with keyboard and touch",
+      "WIP limits and transitions",
+      "Swimlanes",
+      "Search, filters and polling",
+      "Authorised, tenant-scoped moves"
+    ]
+  },
+  "mail-templates": {
+    "demoPath": "mail-templates",
+    "tour": [
+      "Open Settings > Mail templates",
+      "Customise the sign-in code email in Arabic",
+      "Insert a merge tag from the editor",
+      "Preview it light and dark, then send a test to yourself"
+    ],
+    "clips": ["react-light", "react-dark", "vue-light", "vue-dark", "svelte-light", "svelte-dark"],
+    "worksWith": ["teams", "helpdesk", "invoices"],
+    "highlights": [
+      "Edit any AlfaKit or plugin email per language",
+      "Merge tags with validation",
+      "Sanitised rich-text bodies",
+      "Preview with sample data, light and dark",
+      "Test email to yourself only",
+      "Reset to default and version history"
+    ]
+  },
+  "media-library": {
+    "demoPath": "products/3/edit",
+    "tour": ["Open a product", "Upload images to the gallery", "Reorder the images"],
+    "clips": ["react-light", "react-dark", "vue-light", "vue-dark", "svelte-light", "svelte-dark"],
+    "worksWith": ["file-manager", "cms", "tags"],
+    "highlights": [
+      "Upload field backed by media collections",
+      "Conversions and responsive images",
+      "Custom properties",
+      "Ordering",
+      "Private disks",
+      "Image column and entry"
+    ]
+  },
+  "ops": {
+    "demoPath": "ops/overview",
+    "tour": [
+      "Open System > Ops",
+      "Check queues and failed jobs",
+      "Review the scheduler",
+      "Read system information"
+    ],
+    "clips": ["react-light", "react-dark", "vue-light", "vue-dark", "svelte-light", "svelte-dark"],
+    "worksWith": ["health", "backup", "webhooks"],
+    "highlights": [
+      "Failed jobs with retry and delete",
+      "Queues and batches",
+      "Scheduler overview",
+      "Log viewer",
+      "Cache and maintenance mode",
+      "System information",
+      "Read-only mode"
+    ]
+  },
+  "settings": {
+    "demoPath": "house-settings",
+    "tour": ["Open Settings > House settings", "Change a value", "Save the settings"],
+    "clips": ["react-light", "react-dark", "vue-light", "vue-dark", "svelte-light", "svelte-dark"],
+    "worksWith": ["shield", "translation-manager"],
+    "highlights": [
+      "Settings pages for spatie/laravel-settings",
+      "Any AlfaKit form field",
+      "Filling and saving handled for you",
+      "Per-page authorisation",
+      "Register pages through the plugin"
+    ]
+  },
+  "shield": {
+    "demoPath": "shield/roles",
+    "tour": [
+      "Open Settings > Roles",
+      "Edit a role",
+      "Toggle permissions per resource, page and widget"
+    ],
+    "clips": ["react-light", "react-dark", "vue-light", "vue-dark", "svelte-light", "svelte-dark"],
+    "worksWith": ["activity-log", "teams", "feature-flags"],
+    "highlights": [
+      "Role resource on spatie/laravel-permission",
+      "Permission and policy generation",
+      "Page and widget guards",
+      "Per-tenant roles",
+      "Super admin command"
+    ]
+  },
+  "tags": {
+    "demoPath": "customers",
+    "tour": ["Open Sales > Customers", "Filter by a segment tag", "Edit a customer's segments"],
+    "clips": ["react-light", "react-dark", "vue-light", "vue-dark", "svelte-light", "svelte-dark"],
+    "worksWith": ["media-library", "helpdesk", "cms"],
+    "highlights": [
+      "Tags input with suggestions",
+      "Tag types",
+      "Saved with syncTagsWithType()",
+      "Badge column",
+      "Infolist entry"
+    ]
+  },
+  "teams": {
+    "demoPath": "staff",
+    "tour": ["Open Settings > Staff", "Invite a member with a role", "Switch to another team"],
+    "clips": ["react-light", "react-dark", "vue-light", "vue-dark", "svelte-light", "svelte-dark"],
+    "worksWith": ["billing", "shield", "feature-flags"],
+    "highlights": [
+      "Team creation and settings",
+      "Personal teams",
+      "Members with configurable roles and permissions",
+      "Email invitations",
+      "Domain auto-join",
+      "Seat limits",
+      "Optional billing seat hook"
+    ]
+  },
+  "translation-manager": {
+    "demoPath": "translations",
+    "tour": [
+      "Open Settings > Translations",
+      "Edit a key in the spreadsheet",
+      "Check placeholders and plurals",
+      "Scan the code for missing keys"
+    ],
+    "clips": ["react-light", "react-dark", "vue-light", "vue-dark", "svelte-light", "svelte-dark"],
+    "worksWith": ["ai", "cms", "settings"],
+    "highlights": [
+      "Keyboard-driven spreadsheet of keys and locales",
+      "Placeholder and plural checks",
+      "Instant database override layer",
+      "Safe export to lang files",
+      "Code scanning for missing and unused keys",
+      "Reviewed AI translations"
+    ]
+  },
+  "tree": {
+    "demoPath": "categories/tree",
+    "tour": [
+      "Open Catalog > Categories > Tree",
+      "Drag a category under another",
+      "Move it with the keyboard"
+    ],
+    "clips": ["react-light", "react-dark", "vue-light", "vue-dark", "svelte-light", "svelte-dark"],
+    "worksWith": ["cms", "kanban"],
+    "highlights": [
+      "Tree pages and widgets",
+      "Drag and drop",
+      "Keyboard and screen reader support",
+      "Max depth and ordering",
+      "Themed with your panel"
+    ]
+  },
+  "webhooks": {
+    "demoPath": "webhooks",
+    "tour": [
+      "Open Settings > Webhooks",
+      "Create an endpoint and pick events",
+      "Inspect the deliveries log",
+      "Replay a delivery"
+    ],
+    "clips": ["react-light", "react-dark", "vue-light", "vue-dark", "svelte-light", "svelte-dark"],
+    "worksWith": ["api", "ops", "workflows"],
+    "highlights": [
+      "HMAC-SHA256 signed, queued deliveries",
+      "Retries with exponential backoff",
+      "SSRF protection",
+      "Auto-disable on failures",
+      "Deliveries log with replay",
+      "Tenant scoping"
+    ]
+  },
+  "workflows": {
+    "demoPath": "approvals",
+    "tour": [
+      "Open Sales > Approvals",
+      "Approve a pending return",
+      "Open the record's history timeline",
+      "View the workflow diagram"
+    ],
+    "clips": ["react-light", "react-dark", "vue-light", "vue-dark", "svelte-light", "svelte-dark"],
+    "worksWith": ["kanban", "comments", "activity-log", "invoices"],
+    "highlights": [
+      "State machines for any model",
+      "Transitions with guards, forms and policies",
+      "Single, any-of, all-of and multi-level approvals",
+      "Delegation, reminders and escalation",
+      "Approvals inbox",
+      "History timeline and diagram"
+    ]
+  }
+}

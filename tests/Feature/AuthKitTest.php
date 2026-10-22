@@ -129,6 +129,8 @@ it('signs in with the right password, sends the user home and rate limits wrong 
 });
 
 it('locks the sign-in after five wrong passwords', function (): void {
+    // The message counts down the seconds left: a second ticking over mid-test read "59".
+    $this->freezeTime();
     authKit();
     $user = kitUser();
     $token = kitProps($this, '/login')['component']['token'];

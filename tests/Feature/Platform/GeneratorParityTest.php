@@ -14,6 +14,7 @@ use AlfaSix\Alfakit\Tests\Fixtures\AuthTenancy\Panels;
 use AlfaSix\Alfakit\Tests\Fixtures\Models\Category;
 use AlfaSix\Alfakit\Tests\Fixtures\Models\Comment;
 use AlfaSix\Alfakit\Tests\Fixtures\Models\Post;
+use AlfaSix\Alfakit\Tests\Fixtures\Models\Remark;
 use AlfaSix\Alfakit\Tests\Fixtures\Models\StrictCategory;
 use AlfaSix\Alfakit\Tests\Fixtures\Models\Team;
 use AlfaSix\Alfakit\Tests\Fixtures\Models\UntypedComment;
@@ -192,7 +193,11 @@ it('generates relation managers with soft deletes and a view action', function (
 
     expect(fn () => token_get_all($code, TOKEN_PARSE))->not->toThrow(ParseError::class);
 
-    $this->artisan('make:alfakit-relation-manager', ['resource' => 'PostResource', 'relationship' => 'tags', 'recordTitleAttribute' => 'name'])->assertSuccessful();
+    // The hint names the class so it resolves from the resource's namespace (which doesn't import RelationManagers).
+    $this->artisan('make:alfakit-relation-manager', ['resource' => 'PostResource', 'relationship' => 'tags', 'recordTitleAttribute' => 'name'])
+        ->expectsOutputToContain('PostResource\\RelationManagers\\TagsRelationManager::class')
+        ->doesntExpectOutputToContain('getRelations(): RelationManagers\\')
+        ->assertSuccessful();
 
     expect(generatedFile('PostResource/RelationManagers/TagsRelationManager.php'))
         ->not->toContain('TrashedFilter')
@@ -397,6 +402,59 @@ it('links a nested resource from its parent with a registered relation manager',
     $this->artisan('make:alfakit-resource', ['model' => Comment::class, '--nested' => 'PostResource', '--force' => true])->assertSuccessful();
 
     expect(substr_count(generatedFile('Resources/PostResource.php'), 'CommentsRelationManager::class'))->toBe(1);
+});
+
+it('links an existing relation manager to a nested resource generated after it (the quick start, then --nested)', function (): void {
+    $this->artisan('make:alfakit-resource', ['model' => Post::class])->assertSuccessful();
+    // The quick start's own manager, then the owner's nested resource.
+    $this->artisan('make:alfakit-relation-manager', ['resource' => 'PostResource', 'relationship' => 'comments', 'recordTitleAttribute' => 'body', '--register' => true])->assertSuccessful();
+    $this->artisan('make:alfakit-resource', ['model' => Comment::class, '--generate' => true, '--nested' => 'PostResource'])
+        ->expectsOutputToContain('it now links to CommentResource')
+        ->assertSuccessful();
+
+    $manager = generatedFile('PostResource/RelationManagers/CommentsRelationManager.php');
+    $nested = generatedFile('Resources/CommentResource.php');
+
+    expect($manager)->toContain('protected static ?string $relatedResource = CommentResource::class;')
+        ->toContain('\\Resources\\CommentResource;')
+        ->and(substr_count(generatedFile('Resources/PostResource.php'), 'CommentsRelationManager::class'))->toBe(1);
+
+    foreach ([$manager, $nested] as $code) {
+        expect(shell_exec('echo '.escapeshellarg($code).' | php -l 2>&1'))->toContain('No syntax errors');
+    }
+});
+
+it('lists a rich text body as text when it links an existing relation manager to the nested resource', function (): void {
+    $this->artisan('make:alfakit-resource', ['model' => Post::class])->assertSuccessful();
+    // The quick start's plain manager, then the nested resource's rich `body` (`--rich`).
+    $this->artisan('make:alfakit-relation-manager', ['resource' => 'PostResource', 'relationship' => 'comments', 'recordTitleAttribute' => 'body'])->assertSuccessful();
+    $this->artisan('make:alfakit-relation-manager', ['resource' => 'PostResource', 'relationship' => 'comments', 'recordTitleAttribute' => 'body', '--related' => 'CommentResource', '--rich' => true])->assertSuccessful();
+
+    $manager = generatedFile('PostResource/RelationManagers/CommentsRelationManager.php');
+
+    expect($manager)->toContain('protected static ?string $relatedResource = CommentResource::class;')
+        ->toContain("TextColumn::make('body')\n                    ->formatStateUsing(fn (?string \$state): string => trim(strip_tags((string) \$state)))")
+        ->and(substr_count($manager, 'formatStateUsing'))->toBe(1)
+        ->and(shell_exec('echo '.escapeshellarg($manager).' | php -l 2>&1'))->toContain('No syntax errors');
+});
+
+it('names a body-only model by its body and lists the body as text', function (): void {
+    Illuminate\Support\Facades\Schema::create('remarks', function (Illuminate\Database\Schema\Blueprint $table): void {
+        $table->id();
+        $table->foreignId('post_id');
+        $table->text('body');
+        $table->timestamps();
+    });
+
+    $this->artisan('make:alfakit-resource', ['model' => Remark::class, '--generate' => true])->assertSuccessful();
+
+    $code = generatedFile('Resources/RemarkResource.php');
+
+    // Before: no title (breadcrumbs said "Remark") and a table of empty rows (only hidden timestamps).
+    expect($code)->toContain("protected static ?string \$recordTitleAttribute = 'body';")
+        ->toContain("TextColumn::make('body')")
+        ->toContain('strip_tags((string) $state)')
+        ->and(shell_exec('echo '.escapeshellarg($code).' | php -l 2>&1'))->toContain('No syntax errors');
 });
 
 it('registers a relation manager in getRelations() next to existing ones', function (): void {

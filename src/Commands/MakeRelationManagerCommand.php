@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AlfaSix\Alfakit\Commands;
 
 use AlfaSix\Alfakit\Commands\Concerns\CanGenerateFiles;
+use AlfaSix\Alfakit\Commands\Support\PanelProviderEditor;
 use Illuminate\Console\Command;
 use Illuminate\Support\Str;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -65,6 +66,7 @@ class MakeRelationManagerCommand extends Command
         }
 
         $relatedResource = '';
+        $relatedClass = '';
         $related = trim((string) $this->option('related'));
 
         if ($related !== '') {
@@ -78,27 +80,47 @@ class MakeRelationManagerCommand extends Command
             ? "TextColumn::make('{$title}')\n                    ->formatStateUsing(fn (?string \$state): string => trim(strip_tags((string) \$state)))\n                    ->limit(80)\n                    ->searchable()"
             : "TextColumn::make('{$title}')->searchable()";
 
-        $this->writeStub('relation-manager', $path, [
-            'tableExtras' => $tableExtras,
-            'bulkActions' => $bulkActions,
-            'infolist' => $infolist,
-            'namespace' => $namespace,
-            'class' => $class,
-            'relationship' => $relationship,
-            'recordTitleAttribute' => $title,
-            'headerActions' => $headerActions,
-            'recordActions' => $recordActions,
-            'imports' => $imports,
-            'relatedResource' => $relatedResource,
-            'titleColumn' => $titleColumn,
-        ], (bool) $this->option('force'));
+        // `make:alfakit-resource Comment --nested=PostResource` after the quick start's own
+        // CommentsRelationManager: keep the file, but link it to the nested resource, or its
+        // create, view and edit pages can't be reached from the parent.
+        if ($related !== '' && is_file($path) && ! $this->option('force')) {
+            $linked = self::linkRelatedResource((string) file_get_contents($path), $relatedClass);
+
+            // The nested resource edits it as rich text: list the text, not the stored HTML.
+            if ($linked !== null && $this->option('rich')) {
+                $linked = self::listAsPlainText($linked, $title);
+            }
+
+            if ($linked === null) {
+                $this->components->warn("{$class} already exists. Link it to {$related} yourself: protected static ?string \$relatedResource = {$related}::class;");
+            } elseif ($linked !== file_get_contents($path)) {
+                file_put_contents($path, $linked);
+                $this->components->info("{$class} already exists: it now links to {$related} (\$relatedResource), so its create, view and edit open the nested pages.");
+            }
+        } else {
+            $this->writeStub('relation-manager', $path, [
+                'tableExtras' => $tableExtras,
+                'bulkActions' => $bulkActions,
+                'infolist' => $infolist,
+                'namespace' => $namespace,
+                'class' => $class,
+                'relationship' => $relationship,
+                'recordTitleAttribute' => $title,
+                'headerActions' => $headerActions,
+                'recordActions' => $recordActions,
+                'imports' => $imports,
+                'relatedResource' => $relatedResource,
+                'titleColumn' => $titleColumn,
+            ], (bool) $this->option('force'));
+        }
 
         $resourcePath = $this->getGenerationPath().str_replace('\\', '/', $suffix)."/Resources/{$resource}.php";
 
         if ($this->option('register') && self::registerInResource($resourcePath, "{$resource}\\RelationManagers\\{$class}")) {
             $this->components->info("Registered it in {$resource}::getRelations().");
         } else {
-            $this->components->info("Register it in {$resource}::getRelations(): RelationManagers\\{$class}::class");
+            // Relative to the resource's own namespace, which doesn't import RelationManagers.
+            $this->components->info("Register it in {$resource}::getRelations(): {$resource}\\RelationManagers\\{$class}::class (or run the command with --register to add it for you).");
         }
 
         return self::SUCCESS;
@@ -108,6 +130,38 @@ class MakeRelationManagerCommand extends Command
      * Add the manager to the resource's `getRelations()` (once). False when the method is
      * missing or not a plain array, so the caller prints the manual step instead.
      */
+    /**
+     * Add `protected static ?string $relatedResource = X::class;` (and its import) to an
+     * existing relation manager. Unchanged when it has one; null when the class body can't
+     * be found.
+     */
+    public static function linkRelatedResource(string $code, string $relatedClass): ?string
+    {
+        if (str_contains($code, '$relatedResource')) {
+            return $code;
+        }
+
+        $basename = class_basename($relatedClass);
+        $updated = preg_replace('/(protected static string \$relationship = [^;]+;\n)/', "$1\n    protected static ?string \$relatedResource = {$basename}::class;\n", $code, 1, $count);
+
+        if (! is_string($updated) || $count !== 1) {
+            return null;
+        }
+
+        return PanelProviderEditor::addImport($updated, $relatedClass);
+    }
+
+    /**
+     * Turn the manager's plain `TextColumn::make($column)` into the plain-text form of a rich
+     * text column (tags stripped). Columns that already format their state are left alone.
+     */
+    public static function listAsPlainText(string $code, string $column): string
+    {
+        $pattern = '/TextColumn::make\(\''.preg_quote($column, '/').'\'\)(?!\s*->formatStateUsing)/';
+
+        return (string) preg_replace($pattern, "TextColumn::make('{$column}')\n                    ->formatStateUsing(fn (?string \$state): string => trim(strip_tags((string) \$state)))\n                    ->limit(80)\n                    ", $code, 1);
+    }
+
     public static function registerInResource(string $resourcePath, string $relativeClass): bool
     {
         if (! is_file($resourcePath)) {

@@ -95,3 +95,49 @@ it('explains a missing AlfaKit Vite entry, also when a view wraps it', function 
 
     expect((string) $rendered->getContent())->toContain('npm run build');
 });
+
+it('retries composer require with --with-all-dependencies when a locked dependency blocks it', function (): void {
+    $calls = 0;
+
+    Process::fake(function (PendingProcess $process) use (&$calls) {
+        $calls++;
+
+        return in_array('--with-all-dependencies', (array) $process->command, true)
+            ? Process::result('Installing laravel/reverb')
+            : Process::result(errorOutput: 'laravel/reverb requires guzzlehttp/psr7 ^2.6 but the package is fixed to 3.2.0. Use the option --with-all-dependencies (-W) to allow upgrades', exitCode: 2);
+    });
+
+    $lines = [];
+    $result = AppEnvironment::composerRequire(['laravel/reverb'], output: function (string $line) use (&$lines): void {
+        $lines[] = $line;
+    });
+
+    expect($result->successful())->toBeTrue()
+        ->and($calls)->toBe(2)
+        ->and(implode('', $lines))->toContain('Retrying with --with-all-dependencies');
+
+    Process::assertRan(fn (PendingProcess $process): bool => $process->command === ['composer', 'require', 'laravel/reverb', '--no-interaction', '--with-all-dependencies']);
+});
+
+it('keeps the app\'s packages when the user declines the dependency changes', function (): void {
+    $calls = 0;
+
+    Process::fake(function () use (&$calls) {
+        $calls++;
+
+        return Process::result(errorOutput: 'Use the option --with-all-dependencies (-W) to allow upgrades', exitCode: 2);
+    });
+
+    $result = AppEnvironment::composerRequire(['laravel/reverb'], allowDependencyChanges: fn (): bool => false);
+
+    expect($result->failed())->toBeTrue()->and($calls)->toBe(1);
+    Process::assertDidntRun(fn (PendingProcess $process): bool => in_array('--with-all-dependencies', (array) $process->command, true));
+});
+
+it('does not retry a composer require that failed for another reason', function (): void {
+    Process::fake(fn () => Process::result(errorOutput: 'Could not find package alfasix/nope', exitCode: 1));
+
+    expect(AppEnvironment::composerRequire(['alfasix/nope'])->failed())->toBeTrue();
+
+    Process::assertRanTimes(fn (PendingProcess $process): bool => ($process->command[0] ?? null) === 'composer', 1);
+});

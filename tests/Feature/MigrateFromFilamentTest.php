@@ -359,6 +359,25 @@ it('refuses a dirty git working tree unless forced', function (): void {
         ->and(array_filter($this->files->directories($this->sandbox.'/storage'), static fn (string $dir): bool => str_contains($dir, 'alfakit-migration-backup-')))->toBe([]);
 });
 
+it('runs after its own --dry-run on a committed tree: the report it wrote is not a change', function (): void {
+    foreach ([['git', 'init', '-q'], ['git', 'add', '-A'], ['git', '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'filament']] as $command) {
+        $git = new Process($command, $this->sandbox);
+        $git->run();
+
+        if (! $git->isSuccessful()) {
+            $this->markTestSkipped('git is not available');
+        }
+    }
+
+    runMigration($this, ['--dry-run' => true])->assertSuccessful();
+
+    expect($this->files->exists($this->sandbox.'/alfakit-migration-report.md'))->toBeTrue();
+
+    runMigration($this)->doesntExpectOutputToContain('uncommitted changes')->assertSuccessful();
+
+    expect($this->files->isDirectory($this->sandbox.'/app/Alfakit'))->toBeTrue();
+});
+
 it('stops before installing the frontend when there is no Inertia app', function (): void {
     $this->files->delete($this->sandbox.'/package.json');
 
@@ -368,7 +387,8 @@ it('stops before installing the frontend when there is no Inertia app', function
 
     expect($this->files->exists($this->sandbox.'/app/Alfakit/Resources/PostResource.php'))->toBeTrue()
         ->and($this->files->exists($this->sandbox.'/resources/js/alfakit/app.tsx'))->toBeFalse()
-        ->and($this->files->get($this->sandbox.'/alfakit-migration-report.md'))->toContain('Install an Inertia starter kit');
+        // --adapter sets the toolchain up itself (alfakit:install --scaffold): the advice says so instead of sending you to a new app.
+        ->and($this->files->get($this->sandbox.'/alfakit-migration-report.md'))->toContain('Run `alfakit:migrate-from-filament --adapter=react`: it sets up Inertia');
 });
 
 it('boots the rewritten resource in a panel', function (): void {

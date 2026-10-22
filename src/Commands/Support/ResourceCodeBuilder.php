@@ -44,8 +44,24 @@ final class ResourceCodeBuilder
      */
     public function defaultTableColumns(): array
     {
-        return $this->names(static fn (array $column): bool => ! in_array($column['kind'], ['key', 'password', 'text', 'richtext', 'json'], true)
+        $names = $this->names(static fn (array $column): bool => ! in_array($column['kind'], ['key', 'password', 'text', 'richtext', 'json'], true)
             && ! in_array($column['name'], ['remember_token', 'deleted_at', 'email_verified_at'], true));
+
+        // A table whose only short columns are foreign keys and the (hidden) timestamps, like
+        // a comment's `post_id` and `body`, would list empty rows: show its text instead.
+        $visible = array_filter($names, fn (string $name): bool => ! in_array($name, ['created_at', 'updated_at'], true) && ! str_ends_with($name, '_id') && ($this->column($name)['kind'] ?? null) !== 'relation');
+
+        if ($visible === []) {
+            foreach ($this->columns as $column) {
+                if (in_array($column['kind'], ['text', 'richtext'], true)) {
+                    array_unshift($names, $column['name']);
+
+                    break;
+                }
+            }
+        }
+
+        return $names;
     }
 
     /**
@@ -232,7 +248,9 @@ final class ResourceCodeBuilder
             'relation' => "{$text}::make('{$column['relationship']}.{$column['titleAttribute']}')\n                    ->searchable()\n                    ->sortable()",
             'enum' => "{$text}::make('{$name}')\n                    ->badge()\n                    ->sortable()",
             'boolean' => $this->use('Tables\\Columns\\IconColumn')."::make('{$name}')\n                    ->boolean()",
-            'text', 'richtext' => "{$text}::make('{$name}')\n                    ->limit(50)",
+            'text' => "{$text}::make('{$name}')\n                    ->limit(50)",
+            // Listed as plain text: the stored HTML's tags would show otherwise.
+            'richtext' => "{$text}::make('{$name}')\n                    ->formatStateUsing(fn (?string \$state): string => trim(strip_tags((string) \$state)))\n                    ->limit(50)",
             'json', 'password' => "{$text}::make('{$name}')\n                    ->toggleable(isToggledHiddenByDefault: true)",
             'date' => "{$text}::make('{$name}')\n                    ->date()\n                    ->sortable()",
             'datetime' => "{$text}::make('{$name}')\n                    ->dateTime()\n                    ->sortable()".(in_array($name, ['created_at', 'updated_at'], true) ? "\n                    ->toggleable(isToggledHiddenByDefault: true)" : ''),

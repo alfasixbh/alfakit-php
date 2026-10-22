@@ -34,7 +34,7 @@ class InstallCommand extends Command
         {--import-export : Publish the migrations for ImportAction and ExportAction}
         {--standalone : Use Alfakit components in your own Inertia pages instead of a panel (styles, an example form and page)}
         {--starter-kit : Run the panel inside an app made from a Laravel React, Vue or Svelte starter kit (its auth, layout, sidebar and theme)}
-        {--no-header-widgets : With --starter-kit, do not add the AlfaKit search and notifications bell to the app header}
+        {--no-header-widgets : With --starter-kit, do not add the AlfaKit header components (search, notifications, AI copilot, language switcher) to the app header}
         {--no-dashboard-widgets : With --starter-kit, do not add the panel widgets (AlfakitWidgets) to the app dashboard}
         {--scaffold : Set up the frontend toolchain of a fresh Laravel app (Inertia, the framework, its Vite plugin, Tailwind, TypeScript)}
         {--no-composer-script : Do not add alfakit:upgrade to the post-autoload-dump composer script}

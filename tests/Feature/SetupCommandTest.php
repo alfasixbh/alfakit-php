@@ -144,6 +144,31 @@ it('keeps the installed panel mode when re-run on a starter kit without --mode',
         ->not->toContain('Install (starter-kit)');
 });
 
+it('keeps a standalone install standalone when re-run on a starter kit without --mode', function (): void {
+    $sandbox = setupSandbox($this);
+    (new Filesystem)->copyDirectory(dirname(__DIR__).'/Fixtures/StarterKits/react/resources', $sandbox.'/resources');
+    file_put_contents($sandbox.'/resources/css/app.css', "@import 'tailwindcss';\n@import '@alfakit/react/standalone.css';\n");
+
+    expect(Illuminate\Support\Facades\Artisan::call('alfakit:setup', ['--bundle' => 'ops', '--no-install' => true, '--no-interaction' => true]))->toBe(0)
+        ->and(Illuminate\Support\Facades\Artisan::output())
+        ->toContain('Install (standalone)')
+        ->toContain('bundles need a panel')
+        ->not->toContain('Install (starter-kit)')
+        ->and(file_exists(PanelProviderEditor::path('admin')))->toBeFalse();
+});
+
+it('reports an existing users resource as already set up on a re-run, without asking', function (): void {
+    $sandbox = setupSandbox($this);
+    $this->artisan('alfakit:setup', ['--mode' => 'panel', '--adapter' => 'react', '--users' => true, '--no-install' => true, '--no-interaction' => true])->assertSuccessful();
+
+    expect(file_exists("{$sandbox}/app/Alfakit/Admin/Resources/UserResource.php") || file_exists("{$sandbox}/app/Alfakit/Resources/UserResource.php"))->toBeTrue();
+
+    // No --users this time: the resource is there, so it is reported, not skipped.
+    Illuminate\Support\Facades\Artisan::call('alfakit:setup', ['--no-install' => true, '--no-interaction' => true]);
+
+    expect(preg_replace('/\e\[[0-9;]*m/', '', Illuminate\Support\Facades\Artisan::output()))->toMatch('/Users resource[ .]*already set up/');
+});
+
 it('installs roles through Shield: composer, the plugin, its installer and HasRoles on the user model', function (): void {
     $sandbox = setupSandbox($this);
     $this->artisan('make:alfakit-panel', ['id' => 'admin'])->assertSuccessful();
@@ -324,6 +349,30 @@ it('sets up Shield roles when a bundle includes it and merges bundles with --plu
     expect(file_get_contents("{$sandbox}/app/Models/User.php"))->toContain('Notifiable, HasRoles;');
 });
 
+it('gives the user model HasTeams with the saas bundle, so its users have teams', function (): void {
+    $sandbox = setupSandbox($this, ['alfasix/alfakit-teams', 'alfasix/alfakit-shield', 'alfasix/alfakit-billing', 'alfasix/alfakit-feature-flags', 'alfasix/alfakit-analytics']);
+    $this->artisan('make:alfakit-panel', ['id' => 'admin'])->assertSuccessful();
+
+    $this->artisan('alfakit:setup', ['--mode' => 'panel', '--bundle' => 'saas', '--no-install' => true, '--no-interaction' => true])
+        ->doesntExpectOutputToContain('Give users teams')
+        ->assertSuccessful();
+
+    $model = (string) file_get_contents("{$sandbox}/app/Models/User.php");
+
+    expect($model)->toContain('Notifiable, HasRoles;')
+        ->toContain("    use HasTeams {\n        HasTeams::teams insteadof HasRoles;\n    }")
+        ->toContain('class User extends Authenticatable implements HasDefaultTenant, HasTenants')
+        ->toContain('use AlfaSix\\AlfakitTeams\\Concerns\\HasTeams;')
+        ->toContain('use AlfaSix\\Alfakit\\Contracts\\HasTenants;')
+        ->and(shell_exec('php -l '.escapeshellarg("{$sandbox}/app/Models/User.php")))->toContain('No syntax errors')
+        ->and(SetupCommand::addHasTeams($model))->toBe($model);
+
+    // Without HasRoles the trait joins the model's trait statement.
+    expect(SetupCommand::addHasTeams("<?php\n\nnamespace App\\Models;\n\nclass Member extends Authenticatable implements MustVerifyEmail\n{\n    use HasFactory, Notifiable;\n}\n"))
+        ->toContain('use HasFactory, Notifiable, HasTeams;')
+        ->toContain('class Member extends Authenticatable implements MustVerifyEmail, HasDefaultTenant, HasTenants');
+});
+
 it('installs every bundle and every plugin with all', function (): void {
     setupSandbox($this);
     $this->artisan('make:alfakit-panel', ['id' => 'admin'])->assertSuccessful();
@@ -462,6 +511,16 @@ it('asks for the admin user interactively and creates it', function (): void {
     expect($user)->not->toBeNull()
         ->and($user->name)->toBe('Owner')
         ->and(Hash::check('secret-password', $user->password))->toBeTrue();
+});
+
+it('lists every step in the summary, the skipped roles step too', function (): void {
+    setupSandbox($this);
+
+    $this->artisan('alfakit:setup', ['--mode' => 'panel', '--adapter' => 'react', '--no-install' => true, '--no-interaction' => true])
+        ->expectsOutputToContain('Roles and permissions')
+        ->expectsOutputToContain('Users resource')
+        ->expectsOutputToContain('Realtime')
+        ->assertSuccessful();
 });
 
 it('points standalone installs at their own pages, not at a panel', function (): void {
