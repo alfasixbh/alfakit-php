@@ -1333,10 +1333,16 @@ class Panel
 
     // ---------------------------------------------------------------- Plugins
 
-    public function plugin(Plugin $plugin): static
+    /**
+     * Register a plugin. More than one may be passed (`->plugin(KanbanPlugin::make(),
+     * CmsPlugin::make())`): PHP would otherwise drop the extra ones without a word.
+     */
+    public function plugin(Plugin $plugin, Plugin ...$more): static
     {
-        $this->plugins[$plugin->getId()] = $plugin;
-        $plugin->register($this);
+        foreach ([$plugin, ...$more] as $each) {
+            $this->plugins[$each->getId()] = $each;
+            $each->register($this);
+        }
 
         return $this;
     }
