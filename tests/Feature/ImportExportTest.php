@@ -8,6 +8,7 @@ use AlfaSix\Alfakit\Actions\Exports\Models\Export;
 use AlfaSix\Alfakit\Actions\ImportAction;
 use AlfaSix\Alfakit\Actions\Imports\Models\FailedImportRow;
 use AlfaSix\Alfakit\Actions\Imports\Models\Import;
+use AlfaSix\Alfakit\Standalone\StandalonePanel;
 use AlfaSix\Alfakit\Tables\Table;
 use AlfaSix\Alfakit\Tests\Fixtures\ImportExport\PostExporter;
 use AlfaSix\Alfakit\Tests\Fixtures\ImportExport\PostImporter;
@@ -208,6 +209,21 @@ it('serves an example CSV through a signed link', function (): void {
 
     $forged = URL::temporarySignedRoute('alfakit.admin.internal.imports.example', now()->addHour(), ['importer' => User::class]);
     $this->get($forged)->assertNotFound();
+});
+
+it('serves import and export files outside panels and links them from the notifications', function (): void {
+    $this->actingAs(importExportUser());
+
+    // The import modal of a standalone table links its example file (the modal answered 500).
+    $url = URL::temporarySignedRoute('alfakit.standalone.internal.imports.example', now()->addHour(), ['importer' => PostImporter::class]);
+
+    expect($this->get($url)->assertOk()->streamedContent())->toContain("title,slug,author,is_published,rating\n")
+        ->and(app('router')->getRoutes()->hasNamedRoute('alfakit.standalone.internal.exports.download'))->toBeTrue()
+        ->and(app('router')->getRoutes()->hasNamedRoute('alfakit.standalone.internal.imports.failed-rows'))->toBeTrue();
+
+    // Runs started outside panels resolve their panel, so completion notifications get download links.
+    expect((new Import)->forceFill(['panel' => StandalonePanel::ID])->getPanel()?->getId())->toBe(StandalonePanel::ID)
+        ->and((new Import)->forceFill(['panel' => 'missing'])->getPanel())->toBeNull();
 });
 
 it('exports the filtered table to CSV and XLSX with signed download links', function (): void {

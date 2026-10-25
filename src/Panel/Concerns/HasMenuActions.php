@@ -220,6 +220,24 @@ trait HasMenuActions
     }
 
     /**
+     * The user menu's own entries (`userMenuItems()`, plugin entries such as Billing's) for a
+     * starter kit's user menu (`<AlfakitUserMenuItems />`): links only, because the host's
+     * pages have no action endpoint context to run server logic or open a modal. The
+     * built-in profile and logout entries stay the kit's own.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function getStarterKitUserMenuItems(): array
+    {
+        $items = (array) ($this->getUserMenuSchema()['items'] ?? []);
+
+        return array_values(array_filter(
+            $items,
+            static fn (mixed $item): bool => is_array($item) && ! isset($item['action']) && is_string($item['url'] ?? null) && $item['url'] !== '',
+        ));
+    }
+
+    /**
      * The tenant menu's entries and built-in overrides as sent to the renderer.
      *
      * @return array<string, mixed>

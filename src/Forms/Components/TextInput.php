@@ -309,12 +309,32 @@ class TextInput extends Field
         };
     }
 
+    public function getInputMode(): ?string
+    {
+        $mode = $this->evaluate($this->inputMode);
+
+        if ($mode !== null || blank($this->evaluate($this->mask))) {
+            return $mode;
+        }
+
+        return match (true) {
+            (bool) $this->evaluate($this->isInteger) => 'numeric',
+            (bool) $this->evaluate($this->isNumeric) => 'decimal',
+            default => null,
+        };
+    }
+
     public function getInputType(): string
     {
+        $isNumber = (bool) $this->evaluate($this->isNumeric) || (bool) $this->evaluate($this->isInteger);
+
         return match (true) {
             (bool) $this->evaluate($this->isEmail) => 'email',
             (bool) $this->evaluate($this->isPassword) => 'password',
-            (bool) $this->evaluate($this->isNumeric), (bool) $this->evaluate($this->isInteger) => 'number',
+            // A masked number (`mask('9,999,999')->stripCharacters(',')->numeric()`) holds the
+            // mask's separators while typing, which a number input refuses: render it as text.
+            $isNumber && filled($this->evaluate($this->mask)) => 'text',
+            $isNumber => 'number',
             (bool) $this->evaluate($this->isTel) => 'tel',
             (bool) $this->evaluate($this->isUrl) => 'url',
             default => $this->evaluate($this->inputType),
@@ -442,7 +462,7 @@ class TextInput extends Field
             'copyable' => $this->isCopyable() ?: null,
             'copyMessage' => $this->isCopyable() ? $this->evaluate($this->copyMessage) : null,
             'copyMessageDuration' => $this->isCopyable() ? $this->evaluate($this->copyMessageDuration) : null,
-            'inputMode' => $this->evaluate($this->inputMode),
+            'inputMode' => $this->getInputMode(),
             'datalist' => $this->evaluate($this->datalist),
             'autocapitalize' => $this->getAutocapitalize(),
             ...$this->getAffixes(),

@@ -18,11 +18,14 @@ class TableController
     use ResolvesContext;
 
     /**
-     * POST {token, component, record, column, state}: inline cell edit.
+     * POST {token, component, record, column, state, tableQuery}: inline cell edit. The
+     * page's query names the list tab, view and filters, so the record is found in the
+     * table as the page shows it (a draft on the Drafts tab, not only the default tab).
      */
     public function updateCell(Request $request): JsonResponse|Response
     {
         $context = $this->resolveContext($request);
+        TableQueryString::apply($request);
         $page = $this->resolvePage($context);
         $table = $this->resolveTable($page, $context->component ?? (string) $request->input('component', 'table'));
 
@@ -83,11 +86,13 @@ class TableController
     }
 
     /**
-     * POST {token, component, order[]}: persist drag-and-drop order.
+     * POST {token, component, order[], tableQuery}: persist drag-and-drop order, among the
+     * records of the page's list tab and filters.
      */
     public function reorder(Request $request): JsonResponse|Response
     {
         $context = $this->resolveContext($request);
+        TableQueryString::apply($request);
         $page = $this->resolvePage($context);
         $table = $this->resolveTable($page, $context->component ?? (string) $request->input('component', 'table'));
 

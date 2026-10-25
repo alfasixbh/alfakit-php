@@ -2000,7 +2000,10 @@ class Panel
 
                         $this->mapPageRegistrations(fn (string $page) => $page::registerRoutes($this));
 
-                        $this->mapResourceRegistrations(fn (string $resource) => $resource::registerRoutes($this));
+                        // Configured registrations first: `PostResource::make('archived')` claims
+                        // `posts/archived` before the plain registration's `posts/{record}` matches it.
+                        $this->mapResourceRegistrations(fn (string $resource, ?ResourceConfiguration $configuration) => $configuration !== null ? $resource::registerRoutes($this) : null);
+                        $this->mapResourceRegistrations(fn (string $resource, ?ResourceConfiguration $configuration) => $configuration === null ? $resource::registerRoutes($this) : null);
 
                         $this->registerCustomRoutes($router, authenticated: true);
                     });

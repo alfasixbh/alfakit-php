@@ -173,3 +173,11 @@ it('does not point at a panel it did not create with --no-panel', function (): v
 
     expect(file_exists($this->sandbox.'/app/Providers/Alfakit/OtherPanelProvider.php'))->toBeFalse();
 });
+
+it('shows the component tag in the app renderer\'s syntax', function (): void {
+    file_put_contents($this->sandbox.'/package.json', json_encode(['dependencies' => ['@inertiajs/vue3' => '^3.0']]));
+
+    $this->artisan('make:alfakit-table', ['name' => 'PostsTable'])
+        ->expectsOutputToContain('<AlfakitComponent :component="postsTable" />')
+        ->assertSuccessful();
+});

@@ -70,6 +70,8 @@ it('serialises a form into an Inertia prop with everything the renderer needs', 
         ->and($form['endpoints']['tableCells'])->toBe('http://localhost/_alfakit/table/cells')
         ->and($form['endpoints']['tableViews'])->toBe('http://localhost/_alfakit/table/views')
         ->and($form['endpoints']['schemaDeferred'])->toBe('http://localhost/_alfakit/schema/deferred')
+        // The Undo button and Ctrl/Cmd+Z of `undoable()` actions post here (they sent nothing).
+        ->and($form['endpoints']['undo'])->toBe('http://localhost/_alfakit/actions/undo')
         ->and($form['endpoints'])->not->toHaveKeys(['logout', 'notifications', 'globalSearch'])
         ->and($form['localization']['code'])->toBe('en')
         ->and($form['translations']['save'])->toBe('Save')

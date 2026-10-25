@@ -205,7 +205,16 @@ trait HasLocalization
 
     public function getCurrency(): string
     {
-        $currency = $this->evaluate($this->currency) ?? config('alfakit.currency') ?? Number::defaultCurrency();
+        // Blank counts as unset: `ALFAKIT_CURRENCY=` in .env is an empty string, not null.
+        $currency = $this->evaluate($this->currency);
+
+        if (blank($currency)) {
+            $currency = config('alfakit.currency');
+        }
+
+        if (blank($currency)) {
+            $currency = Number::defaultCurrency();
+        }
 
         return Currency::normalize((string) $currency);
     }

@@ -28,15 +28,23 @@ final class TranslationLoader implements Loader
         }
 
         $lines = [];
+        $locale = (string) $locale;
+
+        // A regional or script variant (`ar_EG`, `pt-PT`, `ku_Arab`) starts from its base
+        // language's strings, so a variant without a pack of its own isn't shown in English.
+        $base = preg_split('/[-_]/', $locale)[0] ?? $locale;
+        $locales = $base !== '' && $base !== $locale ? [$base, $locale] : [$locale];
 
         foreach ([...Translations::paths($namespace), $this->overridesPath.'/'.$namespace] as $directory) {
-            $file = "{$directory}/{$locale}/{$group}.php";
+            foreach ($locales as $candidate) {
+                $file = "{$directory}/{$candidate}/{$group}.php";
 
-            if (is_file($file)) {
-                $loaded = require $file;
+                if (is_file($file)) {
+                    $loaded = require $file;
 
-                if (is_array($loaded)) {
-                    $lines = array_replace_recursive($lines, $loaded);
+                    if (is_array($loaded)) {
+                        $lines = array_replace_recursive($lines, $loaded);
+                    }
                 }
             }
         }

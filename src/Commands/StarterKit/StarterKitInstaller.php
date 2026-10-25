@@ -44,6 +44,9 @@ final class StarterKitInstaller
 
     public const ASSETS_MARKER = 'alfakit:assets';
 
+    /** Marks the user menu entries the installer added to the kit's user menu. */
+    public const USER_MENU_MARKER = 'alfakit:user-menu';
+
     /** @var list<array{status: 'created'|'updated'|'unchanged'|'skipped', path: string, note: string}> */
     private array $changes = [];
 
@@ -74,7 +77,7 @@ final class StarterKitInstaller
     /**
      * The host files of a starter kit the installer reads or writes, relative to the app root.
      *
-     * @return array{layout: string, sidebar: string, sidebarHeader: string, header: string, dashboard: string, entry: string, page: string, nav: string, navImport: string, css: string}
+     * @return array{layout: string, sidebar: string, sidebarHeader: string, header: string, dashboard: string, entry: string, page: string, nav: string, navImport: string, userMenu: string, userMenuItems: string, userMenuItemsImport: string, css: string}
      */
     public static function files(string $kit): array
     {
@@ -89,6 +92,9 @@ final class StarterKitInstaller
                 'page' => 'resources/js/pages/Alfakit/Page.vue',
                 'nav' => 'resources/js/components/AlfakitNav.vue',
                 'navImport' => "import AlfakitNav from '@/components/AlfakitNav.vue';",
+                'userMenu' => 'resources/js/components/UserMenuContent.vue',
+                'userMenuItems' => 'resources/js/components/AlfakitUserMenuItems.vue',
+                'userMenuItemsImport' => "import AlfakitUserMenuItems from '@/components/AlfakitUserMenuItems.vue';",
                 'css' => 'resources/css/app.css',
             ],
             'svelte' => [
@@ -101,6 +107,9 @@ final class StarterKitInstaller
                 'page' => 'resources/js/pages/Alfakit/Page.svelte',
                 'nav' => 'resources/js/components/AlfakitNav.svelte',
                 'navImport' => "import AlfakitNav from '@/components/AlfakitNav.svelte';",
+                'userMenu' => 'resources/js/components/UserMenuContent.svelte',
+                'userMenuItems' => 'resources/js/components/AlfakitUserMenuItems.svelte',
+                'userMenuItemsImport' => "import AlfakitUserMenuItems from '@/components/AlfakitUserMenuItems.svelte';",
                 'css' => 'resources/css/app.css',
             ],
             default => [
@@ -113,6 +122,9 @@ final class StarterKitInstaller
                 'page' => 'resources/js/pages/Alfakit/Page.tsx',
                 'nav' => 'resources/js/components/alfakit-nav.tsx',
                 'navImport' => "import { AlfakitNav } from '@/components/alfakit-nav';",
+                'userMenu' => 'resources/js/components/user-menu-content.tsx',
+                'userMenuItems' => 'resources/js/components/alfakit-user-menu-items.tsx',
+                'userMenuItemsImport' => "import { AlfakitUserMenuItems } from '@/components/alfakit-user-menu-items';",
                 'css' => 'resources/css/app.css',
             ],
         };
@@ -131,6 +143,8 @@ final class StarterKitInstaller
         $this->writeFile($files['page'], self::stub("{$this->kit}/page"), 'the Alfakit/Page Inertia page, in the app layout');
         $this->writeFile($files['nav'], self::stub("{$this->kit}/nav"), 'the panel navigation for the app sidebar');
         $this->patchFile($files['sidebar'], fn (string $contents): ?string => self::addNavToSidebar($contents, $this->kit), 'added <AlfakitNav /> after <NavMain />');
+        $this->writeFile($files['userMenuItems'], self::stub("{$this->kit}/user-menu-items"), 'the panel\'s user menu entries (userMenuItems(), Billing…) for the app user menu');
+        $this->patchFile($files['userMenu'], fn (string $contents): ?string => self::addUserMenuItems($contents, $this->kit), 'added <AlfakitUserMenuItems /> before Log out');
         if ($headerWidgets) {
             $this->patchFile($files['sidebarHeader'], fn (string $contents): ?string => self::addWidgetsToHeader($contents, $this->kit, sidebarLayout: true), 'added {added} to the header');
             $this->patchFile($files['header'], fn (string $contents): ?string => self::addWidgetsToHeader($contents, $this->kit, sidebarLayout: false), 'added {added} before the user menu');
@@ -211,6 +225,52 @@ final class StarterKitInstaller
         );
 
         return $updated === null || $componentCount !== 1 ? null : $updated;
+    }
+
+    /**
+     * Add the panel's user menu entries (`<AlfakitUserMenuItems />`) to the kit's user menu,
+     * in a marked block before the separator above Log out, and its import after the
+     * dropdown-menu import. Null when the file does not have the starter kit's shape;
+     * unchanged when the block is there.
+     */
+    public static function addUserMenuItems(string $contents, string $kit): ?string
+    {
+        if (str_contains($contents, self::USER_MENU_MARKER)) {
+            return $contents;
+        }
+
+        $logout = strpos($contents, 'logout-button');
+        $separator = $logout === false ? false : strrpos(substr($contents, 0, $logout), '<DropdownMenuSeparator');
+
+        if ($separator === false) {
+            return null;
+        }
+
+        $lineStart = strrpos(substr($contents, 0, $separator), "\n");
+        $lineStart = $lineStart === false ? 0 : $lineStart + 1;
+        $indent = substr($contents, $lineStart, $separator - $lineStart);
+
+        if (trim($indent) !== '') {
+            return null;
+        }
+
+        $comment = $kit === 'react'
+            ? '{/* '.self::USER_MENU_MARKER.': AlfaKit panel user menu entries (php artisan alfakit:install --starter-kit) */}'
+            : '<!-- '.self::USER_MENU_MARKER.': AlfaKit panel user menu entries (php artisan alfakit:install --starter-kit) -->';
+        $updated = substr_replace($contents, $indent.$comment."\n".$indent."<AlfakitUserMenuItems />\n", $lineStart, 0);
+
+        // The import goes before the (multi-line) import of the app's dropdown menu, which
+        // keeps the app's `@/components/…` imports sorted.
+        $import = self::files($kit)['userMenuItemsImport'];
+        $result = preg_replace_callback(
+            '/^([ \t]*)import\b[^;]*?from\s+[\'"]@\/components\/ui\/dropdown-menu[\'"];?[ \t]*\n/m',
+            static fn (array $matches): string => $matches[1].$import."\n".$matches[0],
+            $updated,
+            1,
+            $count,
+        );
+
+        return $result === null || $count !== 1 ? null : $result;
     }
 
     /**

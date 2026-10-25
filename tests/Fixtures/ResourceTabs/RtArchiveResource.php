@@ -61,6 +61,8 @@ class RtArchiveResource extends Resource
         return [
             'index' => Pages\ListRtEntries::route('/'),
             'edit' => Pages\EditRtEntry::route('/{record}/edit'),
+            // `/{record}` of the plain registration must not swallow `/archived`.
+            'view' => Pages\ViewRtEntry::route('/{record}'),
         ];
     }
 }

@@ -149,6 +149,24 @@ it('offers the tenant switcher of tenancy panels on host pages', function (): vo
         ->and($navigation['widgets']['tenancy']['tenants'][0])->toMatchArray(['name' => 'Alpha', 'url' => 'http://localhost/kitt/alpha/projects']);
 });
 
+it("lists a starter kit panel's main dashboard under the team name, next to the app's own Dashboard", function (): void {
+    widgetsPanel('kitd', fn (Panel $panel): Panel => $panel->tenant(Team::class, slugAttribute: 'slug')->pages([AlfaSix\Alfakit\Pages\Dashboard::class])->resources([ProjectResource::class]));
+    $user = TenantUser::query()->create(['name' => 'Ada', 'email' => 'ada'.uniqid().'@example.com', 'password' => 'secret']);
+    $alpha = Team::query()->create(['name' => 'Kit Team', 'slug' => 'kit-team']);
+    $user->teams()->attach($alpha->id);
+
+    $this->actingAs($user);
+
+    $props = inertiaProps(inertiaGet($this, '/kitd/kit-team/projects'));
+    $labels = collect($props['alfakitNavigation'][0]['groups'])->flatMap(fn (array $group): array => $group['items'])->pluck('label');
+
+    expect($labels->all())->toContain('Kit Team')
+        ->and($labels->all())->not->toContain('Dashboard');
+
+    // The page itself keeps its title.
+    expect(inertiaProps(inertiaGet($this, '/kitd/kit-team'))['page']['title'])->toBe('Dashboard');
+});
+
 it('leaves multi-factor authentication to the host while it signs users in', function (): void {
     $panel = widgetsPanel('kitm', fn (Panel $panel): Panel => $panel->multiFactorAuthentication([AppAuthentication::make()], isRequired: true));
 

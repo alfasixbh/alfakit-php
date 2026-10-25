@@ -32,13 +32,14 @@ trait HasEmbeddedActions
     }
 
     /**
-     * The configured actions and groups, bound to this component.
+     * The configured actions and groups, bound to this component. Like section header
+     * actions they get the component's form context, so `$get` / `$set` work.
      *
      * @return array<int, Action|ActionGroup>
      */
     public function getActions(): array
     {
-        return $this->prepareActions($this->embeddedActions);
+        return $this->prepareActions($this->embeddedActions, withFieldContext: true);
     }
 
     /**
@@ -49,6 +50,29 @@ trait HasEmbeddedActions
     public function getAllActions(): array
     {
         return $this->flattenActions($this->getActions());
+    }
+
+    /**
+     * Inside a form, the renderers run these actions (and those placed in the component's
+     * mixed content) through the field action endpoint (`field:{schema}::{key}`), like a
+     * section's header actions, so `$get` / `$set` reach the form state.
+     *
+     * @return array<string, Action>
+     */
+    public function getFieldActions(): array
+    {
+        $actions = [];
+
+        foreach ($this->getAllActions() as $action) {
+            $actions[$action->getName()] = $action;
+        }
+
+        return $actions;
+    }
+
+    public function getFieldAction(string $name): ?Action
+    {
+        return $this->getFieldActions()[$name] ?? null;
     }
 
     /**

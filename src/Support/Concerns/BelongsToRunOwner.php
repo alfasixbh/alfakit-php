@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AlfaSix\Alfakit\Support\Concerns;
 
 use AlfaSix\Alfakit\Panel;
+use AlfaSix\Alfakit\Standalone\StandalonePanel;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
@@ -61,7 +62,14 @@ trait BelongsToRunOwner
     {
         $id = $this->getAttribute('panel');
 
-        return is_string($id) && alfakit()->hasPanel($id) ? alfakit()->getPanel($id) : null;
+        if (! is_string($id)) {
+            return null;
+        }
+
+        // Runs started outside panels belong to the hidden standalone panel, which `hasPanel()` doesn't list.
+        $standalone = $id === StandalonePanel::ID && StandalonePanel::isEnabled();
+
+        return $standalone || alfakit()->hasPanel($id) ? alfakit()->getPanel($id) : null;
     }
 
     public function isCompleted(): bool

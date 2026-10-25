@@ -61,7 +61,14 @@ trait GeneratesStandaloneComponents
                 default => "['{$variable}' => \${$variable}]",
             };
 
-            $this->components->info("Render it from a controller: Inertia::render('YourPage', ['{$prop}' => \\{$namespace}\\{$name}::make({$arguments})]) and show it with <AlfakitComponent component={{$prop}} />.");
+            // The component tag as the app's renderer writes it.
+            $tag = match (\AlfaSix\Alfakit\Commands\Support\AppEnvironment::adapter()) {
+                'vue' => "<AlfakitComponent :component=\"{$prop}\" />",
+                'svelte' => "<AlfakitComponent component={{$prop}} />",
+                default => "<AlfakitComponent component={{$prop}} />",
+            };
+
+            $this->components->info("Render it from a controller: Inertia::render('YourPage', ['{$prop}' => \\{$namespace}\\{$name}::make({$arguments})]) and show it with {$tag}.");
         }
 
         return self::SUCCESS;

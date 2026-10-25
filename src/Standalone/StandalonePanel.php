@@ -6,9 +6,11 @@ namespace AlfaSix\Alfakit\Standalone;
 
 use AlfaSix\Alfakit\Contracts\Plugin;
 use AlfaSix\Alfakit\Http\Controllers\ActionController;
+use AlfaSix\Alfakit\Http\Controllers\ImportExportController;
 use AlfaSix\Alfakit\Http\Controllers\SchemaController;
 use AlfaSix\Alfakit\Http\Controllers\StandaloneController;
 use AlfaSix\Alfakit\Http\Controllers\TableController;
+use AlfaSix\Alfakit\Http\Controllers\UndoController;
 use AlfaSix\Alfakit\Http\Middleware\PreserveFlashData;
 use AlfaSix\Alfakit\Http\Middleware\SetUpPanel;
 use AlfaSix\Alfakit\Panel;
@@ -103,6 +105,8 @@ class StandalonePanel extends Panel
                 // and `canAccess()` are re-checked on each request (ResolvesContext).
                 $router->prefix($prefix)->name('internal.')->group(static function (Router $router) use ($guard): void {
                     $router->post('/actions', [ActionController::class, 'execute'])->name('actions.execute');
+                    // The toast's Undo button and Ctrl/Cmd+Z of `undoable()` actions.
+                    $router->post('/actions/undo', [UndoController::class, 'undo'])->name('actions.undo');
                     // Field actions send the form's state, which can be too large for a query string, so the
                     // modal endpoint also takes POST. One route (not a GET and a POST route on the same URI)
                     // keeps Laravel Wayfinder's generated actions valid in starter kit apps.
@@ -122,6 +126,13 @@ class StandalonePanel extends Panel
                     // Fresh schemas of lazy and polled components (the host page has no
                     // `alfakitPoll` prop to partially reload).
                     $router->get('/standalone/components', [StandaloneController::class, 'components'])->name('standalone.components');
+
+                    // Signed links from import/export notifications and the import modal's example
+                    // file; files are served to their owner only.
+                    $files = $router->middleware(['auth:'.$guard, 'signed']);
+                    $files->get('/exports/{export}/download', [ImportExportController::class, 'downloadExport'])->name('exports.download');
+                    $files->get('/imports/{import}/failed-rows', [ImportExportController::class, 'downloadFailedRows'])->name('imports.failed-rows');
+                    $files->get('/imports/example', [ImportExportController::class, 'downloadExample'])->name('imports.example');
 
                     $uploads = $router->middleware(static::allowsGuestUploads() ? ['throttle:60,1'] : ['auth:'.$guard]);
                     $uploads->post('/uploads', [StandaloneController::class, 'storeUpload'])->name('uploads.store');
@@ -153,6 +164,7 @@ class StandalonePanel extends Panel
         return [
             'action' => $endpoint('actions.execute'),
             'modal' => $endpoint('actions.modal'),
+            'undo' => $endpoint('actions.undo'),
             'schemaRefresh' => $endpoint('schema.refresh'),
             'schemaOptions' => $endpoint('schema.options'),
             'schemaValidate' => $endpoint('schema.validate'),

@@ -8,6 +8,7 @@ use AlfaSix\Alfakit\Tables\Columns\Column;
 use AlfaSix\Alfakit\Tables\Columns\ColumnGroup;
 use AlfaSix\Alfakit\Tables\Columns\Layout\Component as LayoutComponent;
 use Closure;
+use InvalidArgumentException;
 
 /**
  * Column layouts (`Split`, `Stack`, `Panel`, `Grid`), `contentGrid()` card layouts and
@@ -95,6 +96,15 @@ trait HasContentLayout
                 array_push($columns, ...$component->getColumns());
             } elseif ($component instanceof Column) {
                 $columns[] = $component;
+            } elseif ($component !== null) {
+                // A form layout (`Schemas\Components\Grid`, `Group`, …) imported by mistake used to be dropped,
+                // leaving a table without columns and without an error.
+                $type = get_debug_type($component);
+                $hint = is_object($component) && class_exists('AlfaSix\\Alfakit\\Tables\\Columns\\Layout\\'.class_basename($component))
+                    ? ' Use AlfaSix\\Alfakit\\Tables\\Columns\\Layout\\'.class_basename($component).' for a table layout.'
+                    : '';
+
+                throw new InvalidArgumentException("Table columns() accepts columns, column groups and table layouts only; got [{$type}].{$hint}");
             }
         }
 

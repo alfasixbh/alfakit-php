@@ -373,6 +373,14 @@ class Doctor
 
     // ---------------------------------------------------------------- Panels
 
+    /** The app's stylesheet imports AlfaKit's standalone styles (`alfakit:install --standalone`). */
+    protected function usesStandaloneComponents(): bool
+    {
+        $css = $this->env->basePath('resources/css/app.css');
+
+        return is_file($css) && str_contains((string) file_get_contents($css), '/standalone.css');
+    }
+
     /**
      * @return iterable<DoctorCheck>
      */
@@ -383,7 +391,10 @@ class Doctor
         yield from $this->unregisteredProviders();
 
         if ($panels === []) {
-            yield DoctorCheck::error('Panels', 'Panels', 'no panel is registered', 'php artisan make:alfakit-panel admin, then add the provider to bootstrap/providers.php');
+            // `alfakit:install --standalone`: components in the app's own pages need no panel.
+            yield $this->usesStandaloneComponents()
+                ? DoctorCheck::skipped('Panels', 'Panels', 'no panel: standalone components only')
+                : DoctorCheck::error('Panels', 'Panels', 'no panel is registered', 'php artisan make:alfakit-panel admin, then add the provider to bootstrap/providers.php');
 
             return;
         }

@@ -41,6 +41,8 @@ it('wires Alfakit into the starter kit, idempotently', function (string $kit, st
         $page => 'created',
         $nav => 'created',
         $sidebar => 'updated',
+        StarterKitInstaller::files($kit)['userMenuItems'] => 'created',
+        StarterKitInstaller::files($kit)['userMenu'] => 'updated',
         StarterKitInstaller::files($kit)['sidebarHeader'] => 'updated',
         StarterKitInstaller::files($kit)['header'] => 'updated',
         StarterKitInstaller::files($kit)['dashboard'] => 'updated',
@@ -71,6 +73,25 @@ it('wires Alfakit into the starter kit, idempotently', function (string $kit, st
         ->toContain(StarterKitInstaller::MARKER)
         ->and(substr_count($sidebarContents, '<AlfakitNav />'))->toBe(1)
         ->and(strpos($sidebarContents, '<AlfakitNav />'))->toBeGreaterThan(strpos($sidebarContents, '<NavMain'));
+
+    // The user menu gains the panel's entries (userMenuItems(), Billing…) in a marked block
+    // before the separator above Log out, built from the app's own dropdown items.
+    expect(file_get_contents($app.'/'.StarterKitInstaller::files($kit)['userMenuItems']))
+        ->toContain("from '@/components/ui/dropdown-menu'")
+        ->toContain('useAlfakitNavigation()')
+        ->toContain('userMenuItems');
+
+    $menu = (string) file_get_contents($app.'/'.StarterKitInstaller::files($kit)['userMenu']);
+    $menuImport = ($kit === 'svelte' ? '    ' : '').StarterKitInstaller::files($kit)['userMenuItemsImport'];
+
+    expect($menu)->toContain(StarterKitInstaller::USER_MENU_MARKER)
+        ->toContain($menuImport."\n")
+        ->and(substr_count($menu, '<AlfakitUserMenuItems />'))->toBe(1)
+        ->and(strpos($menu, $menuImport))->toBeLessThan(strpos($menu, "from '@/components/ui/dropdown-menu'"))
+        ->and(strpos($menu, '<AlfakitUserMenuItems />'))->toBeGreaterThan(strpos($menu, 'Settings'))
+        ->and(strpos($menu, '<AlfakitUserMenuItems />'))->toBeLessThan(strrpos($menu, '<DropdownMenuSeparator'))
+        ->and(StarterKitInstaller::addUserMenuItems($menu, $kit))->toBe($menu)
+        ->and(StarterKitInstaller::addUserMenuItems('<template><span /></template>', $kit))->toBeNull();
 
     // Both app layouts' headers gain the search field, the bell, the AI copilot (nothing
     // without the AI plugin) and the language switcher (nothing with fewer than two
@@ -166,13 +187,13 @@ it('wires Alfakit into the starter kit, idempotently', function (string $kit, st
         ->and(file_get_contents($app.'/bootstrap/providers.php'))->toContain('use App\\Providers\\Alfakit\\AdminPanelProvider;')->toContain('    AdminPanelProvider::class,');
 
     // A second run changes nothing.
-    $snapshot = collect([$page, $nav, $sidebar, StarterKitInstaller::files($kit)['sidebarHeader'], StarterKitInstaller::files($kit)['header'], StarterKitInstaller::files($kit)['dashboard'], 'resources/css/app.css', 'bootstrap/providers.php'])
+    $snapshot = collect([$page, $nav, $sidebar, StarterKitInstaller::files($kit)['userMenu'], StarterKitInstaller::files($kit)['userMenuItems'], StarterKitInstaller::files($kit)['sidebarHeader'], StarterKitInstaller::files($kit)['header'], StarterKitInstaller::files($kit)['dashboard'], 'resources/css/app.css', 'bootstrap/providers.php'])
         ->mapWithKeys(fn (string $file): array => [$file => file_get_contents($app.'/'.$file)]);
 
     $again = (new StarterKitInstaller($app, $kit))->install('admin', 'admin');
 
     expect(collect($again)->pluck('status')->unique()->values()->all())->toBe(['unchanged'])
-        ->and($snapshot->map(fn (string $contents, string $file): bool => file_get_contents($app.'/'.$file) === $contents)->filter()->count())->toBe(8);
+        ->and($snapshot->map(fn (string $contents, string $file): bool => file_get_contents($app.'/'.$file) === $contents)->filter()->count())->toBe(10);
 
     (new Filesystem)->deleteDirectory($app);
 })->with('starter kits');
@@ -300,6 +321,38 @@ it('gives a header set up before the language switcher existed <AlfakitLanguageS
 
     $this->artisan('alfakit:upgrade')
         ->doesntExpectOutputToContain('AlfakitLanguageSwitcher')
+        ->assertSuccessful();
+
+    $this->app->setBasePath($original);
+    (new Filesystem)->deleteDirectory($app);
+});
+
+it('reminds an app set up before <AlfakitUserMenuItems /> existed, and adds it when the installer runs again', function (): void {
+    $app = starterKitApp('vue');
+    (new Filesystem)->ensureDirectoryExists($app.'/vendor/composer');
+    (new Filesystem)->ensureDirectoryExists($app.'/public');
+    file_put_contents($app.'/package.json', json_encode(['dependencies' => ['@inertiajs/vue3' => '^3.0']]));
+    $original = $this->app->basePath();
+    $this->app->setBasePath($app);
+    $menu = $app.'/'.StarterKitInstaller::files('vue')['userMenu'];
+    $before = (string) file_get_contents($menu);
+
+    $this->artisan('alfakit:install', ['--starter-kit' => true, '--no-npm' => true, '--no-composer-script' => true])->assertSuccessful();
+    $installed = (string) file_get_contents($menu);
+
+    // An app installed by an earlier version: its user menu is the kit's own.
+    file_put_contents($menu, $before);
+
+    $this->artisan('alfakit:upgrade')
+        ->expectsOutputToContain('has no <AlfakitUserMenuItems /> yet')
+        ->assertSuccessful();
+
+    $this->artisan('alfakit:install', ['--starter-kit' => true, '--no-npm' => true, '--no-composer-script' => true])->assertSuccessful();
+
+    expect(file_get_contents($menu))->toBe($installed);
+
+    $this->artisan('alfakit:upgrade')
+        ->doesntExpectOutputToContain('AlfakitUserMenuItems')
         ->assertSuccessful();
 
     $this->app->setBasePath($original);

@@ -180,3 +180,18 @@ it('scaffolds and checks a new language', function (): void {
         File::deleteDirectory($directory);
     }
 });
+
+it('treats a blank currency setting as unset', function (): void {
+    $panel = alfakit()->getPanel('admin');
+
+    // `ALFAKIT_CURRENCY=` in .env is an empty string, not null.
+    config(['alfakit.currency' => '']);
+    Number::useCurrency('GBP');
+
+    expect($panel->currency(null)->getCurrency())->toBe('GBP')
+        ->and($panel->currency(fn (): string => '')->getCurrency())->toBe('GBP');
+
+    config(['alfakit.currency' => 'jpy']);
+
+    expect($panel->currency(fn (): ?string => null)->getCurrency())->toBe('JPY');
+});

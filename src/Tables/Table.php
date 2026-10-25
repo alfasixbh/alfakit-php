@@ -148,7 +148,8 @@ class Table implements HasResource
     /** @var array<int|string>|Closure */
     protected array|Closure $paginationPageOptions = [10, 25, 50, 100];
 
-    protected int|string|Closure $defaultPaginationPageOption = 10;
+    /** Null: 10 when it is one of the page options, otherwise the first option. */
+    protected int|string|Closure|null $defaultPaginationPageOption = null;
 
     protected string|Closure|null $searchPlaceholder = null;
 
@@ -1572,13 +1573,24 @@ class Table implements HasResource
     }
 
     /**
-     * Whether the selection checkboxes are shown.
+     * Whether the selection checkboxes are shown: by default when the user can see one of
+     * the bulk actions (hidden and unauthorised ones are not sent to the browser either).
      */
     public function isSelectionEnabled(): bool
     {
         $selectable = $this->evaluate($this->isSelectable);
 
-        return $selectable === null ? $this->getBulkActions() !== [] : (bool) $selectable;
+        if ($selectable !== null) {
+            return (bool) $selectable;
+        }
+
+        foreach ($this->getBulkActions() as $action) {
+            if ($action->isVisible()) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -1880,7 +1892,15 @@ class Table implements HasResource
             return is_numeric($requested) ? (int) $requested : $requested;
         }
 
-        return $this->evaluate($this->defaultPaginationPageOption);
+        $default = $this->evaluate($this->defaultPaginationPageOption);
+
+        if ($default !== null) {
+            return $default;
+        }
+
+        // `paginationPageOptions([25, 50])` without a default used to show 10 records, a size the
+        // per-page select doesn't offer.
+        return in_array(10, $options, true) || $options === [] ? 10 : reset($options);
     }
 
     /**

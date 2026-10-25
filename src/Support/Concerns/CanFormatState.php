@@ -434,11 +434,11 @@ trait CanFormatState
         }
 
         if ($decimals === null && $maxDecimals !== null) {
-            return NumberFormat::format($number, maxPrecision: (int) $maxDecimals, locale: $this->getFormatLocale()) ?: (string) $number;
+            return NumberFormat::format($number, maxPrecision: (int) $maxDecimals, locale: $this->getNumberLocale()) ?: (string) $number;
         }
 
         // `decimalPlaces` fixes the decimals (`numeric(2)`: 1,234.50), like Filament.
-        return NumberFormat::format($number, $decimals, $maxDecimals, $this->getFormatLocale()) ?: (string) $number;
+        return NumberFormat::format($number, $decimals, $maxDecimals, $this->getNumberLocale()) ?: (string) $number;
     }
 
     protected function formatDate(mixed $state): mixed
@@ -534,6 +534,15 @@ trait CanFormatState
      * The `numeric()` / `money()` locale: a code, or a backed enum whose value is one
      * (`Locale::De`). Null uses the app's locale.
      */
+    /**
+     * The locale `numeric()` formats with: the configured one, else the app's (outside
+     * panels nothing sets `Number::useLocale()`, so its default would be English).
+     */
+    protected function getNumberLocale(): string
+    {
+        return $this->getFormatLocale() ?? app()->getLocale();
+    }
+
     protected function getFormatLocale(): ?string
     {
         $locale = $this->evaluate($this->locale);

@@ -12,8 +12,10 @@ use AlfaSix\Alfakit\Forms\Components\TextInput;
 use AlfaSix\Alfakit\Notifications\Notification;
 use AlfaSix\Alfakit\Resources\RelationManagers\RelationGroup;
 use AlfaSix\Alfakit\Resources\Resource;
+use AlfaSix\Alfakit\Schemas\Components\Wizard\Step;
 use AlfaSix\Alfakit\Schemas\Schema;
 use AlfaSix\Alfakit\Tables\Columns\TextColumn;
+use AlfaSix\Alfakit\Tables\Columns\ToggleColumn;
 use AlfaSix\Alfakit\Tables\Table;
 use AlfaSix\Alfakit\Tests\Fixtures\Models\Post;
 use Illuminate\Database\Eloquent\Model;
@@ -33,6 +35,9 @@ class ArticleResource extends Resource
 
     public static bool $sawLazyCollection = false;
 
+    /** Adds an editable toggle column and a wizard record action (list tab requests). */
+    public static bool $withTabRequests = false;
+
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
@@ -44,8 +49,17 @@ class ArticleResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            ->columns([TextColumn::make('title')])
+            ->columns([
+                TextColumn::make('title'),
+                ...(static::$withTabRequests ? [ToggleColumn::make('is_published')] : []),
+            ])
             ->recordActions([
+                ...(static::$withTabRequests ? [
+                    Action::make('onboard')->steps([
+                        Step::make('Account')->key('account')->schema([TextInput::make('email')->required()]),
+                        Step::make('Profile')->key('profile')->schema([TextInput::make('bio')]),
+                    ])->action(fn () => null),
+                ] : []),
                 EditAction::make()
                     ->url(null)
                     ->extraModalFooterActions([

@@ -14,6 +14,14 @@ class ListArticles extends ListRecords
 {
     protected static string $resource = ArticleResource::class;
 
+    /** The tab shown without `?activeTab=` (null: the first one). */
+    public static ?string $defaultTab = null;
+
+    public function getDefaultActiveTab(): string|int|null
+    {
+        return static::$defaultTab ?? parent::getDefaultActiveTab();
+    }
+
     public function getTabs(): array
     {
         return [

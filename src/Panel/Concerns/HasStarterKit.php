@@ -229,6 +229,8 @@ trait HasStarterKit
                         static fn (NavigationGroup $group): array => $group->toSchema(),
                         $this->applyNavigationGroupOptions($this->getNavigation()),
                     )),
+                    // Tenancy panels: their entries may link to tenant routes, so only inside a tenant.
+                    'userMenu' => $this->hasTenancy() && $tenant === null ? null : ($this->getStarterKitUserMenuItems() ?: null),
                     'widgets' => $this->getStarterKitWidgetsSchema($user, $tenant),
                 ]);
             };

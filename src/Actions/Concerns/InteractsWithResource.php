@@ -39,7 +39,17 @@ trait InteractsWithResource
     {
         $resource = $this->getResource();
 
-        if ($resource === null || ! $resource::hasPage($page)) {
+        if ($resource === null) {
+            return null;
+        }
+
+        // A nested resource without an index page lists its records on the parent's page
+        // (`getUrl('index')` resolves it), e.g. where DeleteAction returns after a delete.
+        if ($page === 'index' && ! $resource::hasPage('index') && $resource::isNested()) {
+            return $resource::getParentRelationPageUrl();
+        }
+
+        if (! $resource::hasPage($page)) {
             return null;
         }
 

@@ -620,10 +620,12 @@ class Action
         // Client-side buttons: submitting the surrounding modal, opening the notifications.
         $isClientSide = ! $isUnauthorized && ($this->isModalSubmit || $this->opensDatabaseNotifications());
 
+        $isLabelHidden = (bool) $this->evaluate($this->isLabelHidden);
+
         return Serializable::compact([
             'type' => 'Action',
             'name' => $this->getName(),
-            'label' => $this->evaluate($this->isLabelHidden) ? null : $this->getLabel(),
+            'label' => $isLabelHidden ? null : $this->getLabel(),
             'icon' => $icon = $this->getIcon(),
             'iconPosition' => $icon ? $this->getIconPosition()->value : null,
             'color' => $this->getColor(),
@@ -633,7 +635,10 @@ class Action
             'badge' => $badge = $this->evaluate($this->badge),
             // Colour closures receive the badge value as `$badge`.
             'badgeColor' => $this->evaluate($this->badgeColor, ['badge' => $badge]),
-            'tooltip' => $isUnauthorized && ! $sendsNotification ? $this->getAuthorizationMessage() : $this->evaluate($this->tooltip),
+            // `hiddenLabel()`: the label stays the tooltip and the accessible name.
+            'tooltip' => $isUnauthorized && ! $sendsNotification
+                ? $this->getAuthorizationMessage()
+                : ($this->evaluate($this->tooltip) ?? ($isLabelHidden ? $this->getLabel() : null)),
             'disabled' => ($sendsNotification ? (bool) $this->evaluate($this->isDisabled) : $this->isDisabled()) ?: null,
             'url' => $url,
             'openUrlInNewTab' => $isUnauthorized ? null : ($this->shouldOpenUrlInNewTab() ?: null),
@@ -643,7 +648,7 @@ class Action
             'hasModal' => $isLink || $sendsNotification || $isClientSide ? null : ($this->hasModal() ?: null),
             // A POST link isn't a plain link: the runner sends the request.
             'hasAction' => $sendsNotification || $postsToUrl ? true : ($isLink || $isClientSide ? null : (($this->hasAction() || $this->hasForm()) ?: null)),
-            'labeledFrom' => $this->evaluate($this->isLabelHidden) ? null : $this->getLabeledFrom(),
+            'labeledFrom' => $isLabelHidden ? null : $this->getLabeledFrom(),
             'submitsModal' => $this->isModalSubmit && ! $isUnauthorized ? true : null,
             'arguments' => $this->isModalSubmit ? ($this->arguments ?: null) : null,
             'opensDatabaseNotifications' => $isClientSide && ! $this->isModalSubmit ? true : null,

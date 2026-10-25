@@ -154,3 +154,9 @@ it('renders view entries with their component and props', function (): void {
 it('rejects other values inside a layout', function (): void {
     Table::make()->query(Post::query())->columns([Stack::make(['title'])])->getColumns();
 })->throws(InvalidArgumentException::class);
+
+it('rejects form layout components in columns() instead of rendering an empty table', function (): void {
+    Table::make()->query(Post::query())->columns([
+        AlfaSix\Alfakit\Schemas\Components\Grid::make(['default' => 1, 'lg' => 3])->schema([TextColumn::make('title')]),
+    ])->getColumns();
+})->throws(InvalidArgumentException::class, 'AlfaSix\Alfakit\Tables\Columns\Layout\Grid');

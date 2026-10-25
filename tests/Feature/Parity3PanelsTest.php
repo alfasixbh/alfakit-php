@@ -116,6 +116,16 @@ it('links a nested resource without an index to the parent page named by page()'
     expect(P3PostCommentResource::getUrl())->toBe("http://localhost/p3/posts/{$this->post->id}/comments");
 });
 
+it('redirects a delete on a nested record page without an index to the parent page (W-V5-12)', function (): void {
+    $comment = $this->post->comments()->first();
+    $props = inertiaProps(inertiaGet($this, "/p3/posts/{$this->post->id}/comments/{$comment->id}/edit"));
+
+    inertiaPost($this, '/p3/_alfakit/actions', ['token' => $props['page']['token'], 'action' => 'delete'])
+        ->assertRedirect("http://localhost/p3/posts/{$this->post->id}/comments");
+
+    expect($comment->fresh())->toBeNull();
+});
+
 // ------------------------------------------------------------ Configurable pages
 
 it('registers configurable pages under their own URLs with their options', function (): void {
@@ -258,6 +268,41 @@ it('runs exposed page methods in a transaction from the page setting unless the 
     expect($uses(new AlfaSix\Alfakit\Pages\Attributes\Expose, $withTransactions))->toBeTrue()
         ->and($uses(new AlfaSix\Alfakit\Pages\Attributes\Expose(transaction: false), $withTransactions))->toBeFalse()
         ->and($uses(new AlfaSix\Alfakit\Pages\Attributes\Expose, $withoutSetting))->toBe(alfakit()->getCurrentOrDefaultPanel()->hasDatabaseTransactions());
+});
+
+it('refuses one relation manager class registered twice with different properties and no keys (W-V5-11)', function (): void {
+    P3PostResource::$relationsOverride = [
+        AlfaSix\Alfakit\Resources\RelationManagers\RelationGroup::make('Discussion', [
+            P3CommentsRelationManager::make(['author' => 'Ann']),
+            P3CommentsRelationManager::class,
+        ]),
+    ];
+
+    try {
+        $this->withoutExceptionHandling();
+
+        expect(fn () => $this->get("/p3/posts/{$this->post->id}/edit"))
+            ->toThrow(InvalidArgumentException::class, 'registered more than once');
+    } finally {
+        P3PostResource::$relationsOverride = null;
+    }
+});
+
+it('still accepts the same relation manager twice when keyed or identical', function (): void {
+    P3PostResource::$relationsOverride = [
+        'ann' => P3CommentsRelationManager::make(['author' => 'Ann']),
+        'all' => P3CommentsRelationManager::class,
+        AlfaSix\Alfakit\Resources\RelationManagers\RelationGroup::make('Again', [P3TagsRelationManager::class]),
+        P3TagsRelationManager::class,
+    ];
+
+    try {
+        $managers = p3Managers(inertiaProps(inertiaGet($this, "/p3/posts/{$this->post->id}/edit")));
+
+        expect(collect($managers['managers'])->pluck('slug')->filter()->values()->all())->toBe(['ann', 'all']);
+    } finally {
+        P3PostResource::$relationsOverride = null;
+    }
 });
 
 it('defers relation group badges with deferBadge()', function (): void {

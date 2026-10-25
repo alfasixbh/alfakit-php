@@ -80,6 +80,22 @@ it('formats money columns in the currency and its precision', function (): void 
         ->and($state(TextColumn::make('price')->money(), 10))->toBe('$10.00');
 });
 
+it("formats numeric() columns in the app's language outside panels", function (): void {
+    $previous = [app()->getLocale(), Illuminate\Support\Number::defaultLocale()];
+    // Outside panels nothing calls Number::useLocale(): only the app's locale is German.
+    app()->setLocale('de');
+    Illuminate\Support\Number::useLocale('en');
+
+    try {
+        expect(TextColumn::make('views')->numeric()->formatState(1234567))->toBe('1.234.567')
+            ->and(TextColumn::make('views')->numeric(decimalPlaces: 2)->formatState(1234.5))->toBe('1.234,50')
+            ->and(TextColumn::make('views')->numeric(locale: 'en')->formatState(1234567))->toBe('1,234,567');
+    } finally {
+        app()->setLocale($previous[0]);
+        Illuminate\Support\Number::useLocale($previous[1]);
+    }
+});
+
 it('hydrates and dehydrates money inputs in major or minor units', function (): void {
     $form = schema([
         MoneyInput::make('price')->currency('BHD')->minorUnits(),
@@ -137,6 +153,32 @@ it('layers registered translation directories under app overrides', function ():
     } finally {
         File::deleteDirectory($pack);
         File::deleteDirectory(lang_path('vendor/alfakit/xx'));
+    }
+});
+
+it('falls back to the base language pack for regional and script variants', function (): void {
+    $pack = sys_get_temp_dir().'/alfakit-variant-'.uniqid();
+    File::ensureDirectoryExists("{$pack}/xv");
+    File::ensureDirectoryExists("{$pack}/xv_YY");
+    File::put("{$pack}/xv/ui.php", "<?php return ['save' => 'Base save', 'cancel' => 'Base cancel'];");
+    File::put("{$pack}/xv_YY/ui.php", "<?php return ['cancel' => 'Variant cancel'];");
+
+    $overrides = lang_path('vendor/alfakit/xv');
+    File::ensureDirectoryExists($overrides);
+    File::put("{$overrides}/ui.php", "<?php return ['submit' => 'App base submit'];");
+
+    Translations::register($pack);
+
+    try {
+        // ar_EG has no pack of its own: its strings come from ar, not from English.
+        expect(__('alfakit::ui.save', [], 'xv_YY'))->toBe('Base save')
+            ->and(__('alfakit::ui.cancel', [], 'xv_YY'))->toBe('Variant cancel')
+            ->and(__('alfakit::ui.submit', [], 'xv_YY'))->toBe('App base submit')
+            ->and(__('alfakit::ui.save', [], 'xv-ZZ'))->toBe('Base save')
+            ->and(__('alfakit::ui.close', [], 'xv_YY'))->toBe('Close');
+    } finally {
+        File::deleteDirectory($pack);
+        File::deleteDirectory(lang_path('vendor/alfakit/xv'));
     }
 });
 

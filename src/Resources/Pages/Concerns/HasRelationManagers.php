@@ -10,6 +10,7 @@ use AlfaSix\Alfakit\Resources\RelationManagers\RelationGroup;
 use AlfaSix\Alfakit\Resources\RelationManagers\RelationManager;
 use AlfaSix\Alfakit\Resources\RelationManagers\RelationManagerConfiguration;
 use AlfaSix\Alfakit\Schemas\Components\Tabs\Tab;
+use InvalidArgumentException;
 
 trait HasRelationManagers
 {
@@ -44,14 +45,14 @@ trait HasRelationManagers
             if ($entry instanceof RelationGroup) {
                 foreach ($entry->getManagers() as $memberKey => $member) {
                     $definition = $this->makeRelationManagerDefinition($member, is_string($memberKey) ? $memberKey : null);
-                    $definitions[$definition['id']] ??= $definition;
+                    $definitions[$definition['id']] = $this->ensureSameRelationManagerDefinition($definitions[$definition['id']] ?? null, $definition);
                 }
 
                 continue;
             }
 
             $definition = $this->makeRelationManagerDefinition($entry, is_string($key) ? $key : null);
-            $definitions[$definition['id']] ??= $definition;
+            $definitions[$definition['id']] = $this->ensureSameRelationManagerDefinition($definitions[$definition['id']] ?? null, $definition);
         }
 
         return array_map(static fn (array $definition): array => [
@@ -59,6 +60,32 @@ trait HasRelationManagers
             'properties' => $definition['properties'],
             'key' => $definition['key'],
         ], $definitions);
+    }
+
+    /**
+     * The same manager listed twice shares one identifier unless it is keyed: refuse two
+     * unkeyed registrations with different `make([...])` properties instead of silently
+     * showing the first one twice.
+     *
+     * @param  array{id: string, class: class-string<RelationManager>, properties: array<string, mixed>, key: string|null}|null  $existing
+     * @param  array{id: string, class: class-string<RelationManager>, properties: array<string, mixed>, key: string|null}  $definition
+     * @return array{id: string, class: class-string<RelationManager>, properties: array<string, mixed>, key: string|null}
+     */
+    protected function ensureSameRelationManagerDefinition(?array $existing, array $definition): array
+    {
+        if ($existing === null) {
+            return $definition;
+        }
+
+        if ($existing['properties'] !== $definition['properties']) {
+            throw new InvalidArgumentException(sprintf(
+                'Relation manager [%s] is registered more than once with different properties; give each registration its own key (e.g. [\'pending\' => %s::make([...])]).',
+                $definition['id'],
+                class_basename($definition['class']),
+            ));
+        }
+
+        return $existing;
     }
 
     /**

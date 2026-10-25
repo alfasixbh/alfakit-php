@@ -179,3 +179,13 @@ it('sends a prebuilt action success notification only once', function (): void {
 
     expect(Notification::getFlashed())->toHaveCount(1);
 });
+
+it('keeps a hidden label as the tooltip and accessible name (W-V5-01)', function (): void {
+    expect(Action::make('hidden')->label('Hidden label')->icon('eye-off')->hiddenLabel()->toSchema())
+        ->toMatchArray(['name' => 'hidden', 'icon' => 'eye-off', 'tooltip' => 'Hidden label'])
+        ->not->toHaveKey('label');
+
+    // An explicit tooltip wins over the hidden label.
+    expect(Action::make('hidden')->label('Hidden label')->icon('eye-off')->tooltip('Hide it')->hiddenLabel()->toSchema())
+        ->toMatchArray(['tooltip' => 'Hide it']);
+});

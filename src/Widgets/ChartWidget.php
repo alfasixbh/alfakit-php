@@ -142,7 +142,7 @@ abstract class ChartWidget extends Widget
             return $this->filter;
         }
 
-        $requested = request()->query('widgetFilters.'.$this->getId()) ?? data_get(request()->query('widgetFilters'), $this->getId());
+        $requested = request()->query('widgetFilters.'.$this->getId()) ?? data_get(static::pageQuery('widgetFilters'), $this->getId());
         $filters = $this->getFilters();
 
         if ($filters !== null && $requested !== null && array_key_exists($requested, $filters)) {
@@ -295,7 +295,7 @@ abstract class ChartWidget extends Widget
 
         $schema->fill();
         $defaults = $schema->getRawState();
-        $requested = request()->query(self::FILTERS_QUERY_KEY);
+        $requested = static::pageQuery(self::FILTERS_QUERY_KEY);
         $requested = is_array($requested) ? ($requested[$this->getId()] ?? null) : null;
 
         if (is_array($requested) && $requested !== []) {
@@ -317,6 +317,30 @@ abstract class ChartWidget extends Widget
     public function getType(): string
     {
         return 'Chart';
+    }
+
+    /**
+     * A key of the page's query string. Internal endpoints (a starter kit dashboard's or a
+     * standalone page's widgets, loaded from `/_alfakit/standalone/components`) don't share the
+     * page URL; the renderer sends it as `tableQuery`, so read the key from there too.
+     */
+    protected static function pageQuery(string $key): mixed
+    {
+        $value = request()->query($key);
+
+        if ($value !== null) {
+            return $value;
+        }
+
+        $query = request()->input('tableQuery');
+
+        if (! is_string($query) || $query === '') {
+            return null;
+        }
+
+        parse_str(ltrim($query, '?'), $parameters);
+
+        return $parameters[$key] ?? null;
     }
 
     /**

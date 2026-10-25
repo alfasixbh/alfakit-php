@@ -68,7 +68,7 @@ trait HasMixedContent
 
         foreach ($items as $item) {
             foreach ($item instanceof ActionGroup ? $item->getFlatActions() : ($item instanceof Action ? [$item] : []) as $action) {
-                $actions[] = $action->schemaComponent($this);
+                $actions[] = $action->schemaComponent($this)->fieldComponent($this);
             }
         }
 

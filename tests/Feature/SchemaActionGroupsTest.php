@@ -115,3 +115,68 @@ it('does not run a hidden action inside a section header group', function (): vo
     expect($response->status())->toBeIn([403, 404]);
     SchemaActionsPage::reset();
 });
+
+it('gives callout, empty state and mixed-content actions $get and $set like section header actions', function (): void {
+    $user = User::query()->create(['name' => 'Admin', 'email' => 'admin@example.com', 'password' => 'password']);
+    $this->actingAs($user);
+    $seen = [];
+    $read = function (string $name) use (&$seen): Closure {
+        return function (AlfaSix\Alfakit\Schemas\Components\Utilities\Get $get, AlfaSix\Alfakit\Schemas\Components\Utilities\Set $set) use (&$seen, $name): void {
+            $seen[$name] = $get('title');
+            $set('title', $name);
+        };
+    };
+    SchemaActionsPage::reset();
+    SchemaActionsPage::$formUsing = fn (): array => [
+        TextInput::make('title'),
+        Section::make('Details')
+            ->key('details')
+            ->headerActions([Action::make('header')->action($read('header'))])
+            ->afterHeader([Action::make('afterHeader')->action($read('afterHeader'))])
+            ->footer([Action::make('sectionFooter')->action($read('sectionFooter'))])
+            ->schema([]),
+        Callout::make('Tip')
+            ->key('tip')
+            ->actions([Action::make('pay')->action($read('pay'))])
+            ->controlActions([Action::make('dismiss')->action($read('dismiss'))])
+            ->footer([Action::make('calloutFooter')->action($read('calloutFooter'))]),
+        EmptyState::make('Nothing')
+            ->key('nothing')
+            ->actions([Action::make('create')->action($read('create'))])
+            ->footer([Action::make('import')->action($read('import'))]),
+    ];
+
+    $names = ['header', 'afterHeader', 'sectionFooter', 'pay', 'dismiss', 'calloutFooter', 'create', 'import'];
+
+    foreach ($names as $name) {
+        $this->postJson('/admin/_alfakit/actions', [
+            'token' => SchemaActionsPage::token($user),
+            'component' => 'page',
+            'action' => $name,
+            'state' => ['title' => 'x'],
+        ])->assertOk();
+    }
+
+    // Each action got the same form context as the section's header action.
+    expect(array_keys($seen))->toBe($names)
+        ->and(array_unique($seen))->toHaveCount(1);
+
+    // As the renderers post them inside a form: through the field action endpoint of the
+    // owning component, with the form's state, so `$get` reads it and `$set` writes back.
+    $owners = ['header' => 'details', 'afterHeader' => 'details', 'sectionFooter' => 'details', 'pay' => 'tip', 'dismiss' => 'tip', 'calloutFooter' => 'tip', 'create' => 'nothing', 'import' => 'nothing'];
+    $seen = [];
+
+    foreach ($owners as $name => $owner) {
+        $response = $this->postJson('/admin/_alfakit/actions', [
+            'token' => SchemaActionsPage::token($user),
+            'component' => 'field:form::'.$owner,
+            'action' => $name,
+            'state' => ['title' => 'x'],
+        ])->assertOk();
+
+        expect($response->json('form.state.title'))->toBe($name);
+    }
+
+    expect($seen)->toBe(array_fill_keys($names, 'x'));
+    SchemaActionsPage::reset();
+});

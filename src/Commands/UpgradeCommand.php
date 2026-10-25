@@ -119,6 +119,10 @@ class UpgradeCommand extends Command
             $notes[] = "Your app header ({$header}) has no <AlfakitLanguageSwitcher /> yet. Run php artisan alfakit:install --starter-kit --no-npm (with the --panel you installed with) to add it; it renders nothing until the panel has two or more locales.";
         }
 
+        if (($menu = $this->starterKitUserMenuWithoutItems()) !== null) {
+            $notes[] = "Your app user menu ({$menu}) has no <AlfakitUserMenuItems /> yet, so the panel's userMenuItems() (and plugin entries such as Billing's) don't show there. Run php artisan alfakit:install --starter-kit --no-npm (with the --panel you installed with) to add it.";
+        }
+
         if (app()->routesAreCached() || app()->configurationIsCached()) {
             $notes[] = 'Routes or configuration are cached: run php artisan optimize again so new routes and options take effect.';
         }
@@ -152,5 +156,26 @@ class UpgradeCommand extends Command
         }
 
         return $headers;
+    }
+
+    /**
+     * The kit's user menu file when the installer set up the app (its `alfakit:nav` block)
+     * before `<AlfakitUserMenuItems />` existed: re-running the installer adds it.
+     */
+    protected function starterKitUserMenuWithoutItems(): ?string
+    {
+        $kit = StarterKitInstaller::detect(base_path());
+
+        if ($kit === null) {
+            return null;
+        }
+
+        $files = StarterKitInstaller::files($kit);
+        $sidebar = is_file(base_path($files['sidebar'])) ? (string) file_get_contents(base_path($files['sidebar'])) : '';
+        $menu = is_file(base_path($files['userMenu'])) ? (string) file_get_contents(base_path($files['userMenu'])) : null;
+
+        return str_contains($sidebar, StarterKitInstaller::MARKER) && $menu !== null && ! str_contains($menu, StarterKitInstaller::USER_MENU_MARKER)
+            ? $files['userMenu']
+            : null;
     }
 }

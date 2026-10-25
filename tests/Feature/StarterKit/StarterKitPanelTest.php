@@ -95,6 +95,32 @@ it('shares the panel navigation with the host application pages', function (): v
         ->and(alfakit()->getCurrentPanel())->toBeNull();
 });
 
+it('shares the panel user menu links with the host pages, for <AlfakitUserMenuItems />', function (): void {
+    starterKitPanel(fn (Panel $panel): Panel => $panel->userMenuItems([
+        [AlfaSix\Alfakit\Actions\Action::make('billing')->label('Billing')->icon('credit-card')->url('/billing')],
+        [AlfaSix\Alfakit\Actions\Action::make('docs')->label('Docs')->url('https://example.com/docs', shouldOpenInNewTab: true)],
+        // Server logic needs the panel's action endpoint: not offered on the host's pages.
+        AlfaSix\Alfakit\Actions\Action::make('ping')->label('Ping')->action(fn () => null),
+        AlfaSix\Alfakit\Actions\Action::make('secret')->label('Secret')->url('/secret')->hidden(),
+    ]));
+
+    $this->actingAs(starterKitUser());
+
+    $menu = inertiaProps(inertiaGet($this, '/dashboard'))['alfakitNavigation'][0]['userMenu'];
+
+    expect(array_column($menu, 'label'))->toBe(['Billing', 'Docs'])
+        ->and($menu[0])->toMatchArray(['icon' => 'credit-card', 'url' => '/billing'])
+        ->and($menu[1]['openInNewTab'])->toBeTrue()
+        ->and($menu[1]['group'])->toBe(1);
+});
+
+it('leaves the user menu out of the shared navigation when the panel has no entries', function (): void {
+    starterKitPanel();
+    $this->actingAs(starterKitUser());
+
+    expect(inertiaProps(inertiaGet($this, '/dashboard'))['alfakitNavigation'][0])->not->toHaveKey('userMenu');
+});
+
 it('does not share starter kit navigation on pages of other panels', function (): void {
     starterKitPanel();
 

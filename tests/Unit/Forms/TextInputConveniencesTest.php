@@ -129,3 +129,18 @@ it('validates a number held by a text input as its text', function (): void {
     expect($schema->getValidator()->errors()->toArray())->toBe(['code' => ['The code field must not be greater than 3 characters.']])
         ->and($schema->getRawState()['zip'])->toBe(12345);
 });
+
+it('renders a masked numeric input as text so the mask separators can be typed', function (): void {
+    $masked = TextInput::make('amount')->mask('9,999,999')->stripCharacters(',')->numeric();
+    $maskedInteger = TextInput::make('count')->mask('999 999')->integer();
+    $plain = TextInput::make('price')->numeric();
+    $ownMode = TextInput::make('qty')->mask('9,999')->numeric()->inputMode('tel');
+
+    $schema = schema([$masked, $maskedInteger, $plain, $ownMode])->fill(['amount' => '1,234,567']);
+
+    expect($masked->toSchema())->toMatchArray(['inputType' => 'text', 'inputMode' => 'decimal'])
+        ->and($maskedInteger->toSchema())->toMatchArray(['inputType' => 'text', 'inputMode' => 'numeric'])
+        ->and($plain->toSchema()['inputType'])->toBe('number')
+        ->and($ownMode->toSchema()['inputMode'])->toBe('tel')
+        ->and($schema->getState()['amount'])->toBe(1234567);
+});

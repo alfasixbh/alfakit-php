@@ -340,3 +340,19 @@ it('prints a table, JSON for CI and fails on errors', function (): void {
         ->expectsOutputToContain('"passed": false')
         ->assertExitCode(1);
 });
+
+it('passes a standalone install that has no panel', function (): void {
+    healthyApp($this->env);
+    doctorApp($this->env, ['resources/css/app.css' => "@import 'tailwindcss';\n@import '@alfakit/react/standalone.css';\n"]);
+
+    // `alfakit:install --standalone` registers no panel.
+    $manager = alfakit();
+    $panels = (fn () => $this->panels)->call($manager);
+    (fn () => $this->panels = [])->call($manager);
+
+    try {
+        expect(doctorChecks()['Panels › Panels']->status->value)->toBe('skipped');
+    } finally {
+        (fn () => $this->panels = $panels)->call($manager);
+    }
+});

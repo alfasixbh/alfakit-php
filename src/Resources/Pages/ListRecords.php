@@ -51,7 +51,8 @@ class ListRecords extends Page
             $table->query(fn () => $this->shouldApplyActiveTabQuery() ? $this->modifyQueryWithActiveTab($resource::getEloquentQuery()) : $resource::getEloquentQuery())
                 ->modelLabel($resource::getModelLabel())
                 ->pluralModelLabel($resource::getPluralModelLabel())
-                ->recordUrl(fn ($record): ?string => $this->getTableRecordUrl($record)),
+                // Rows from `records()` (arrays) have no edit or view page to open.
+                ->recordUrl(fn (mixed $record): ?string => $record instanceof \Illuminate\Database\Eloquent\Model ? $this->getTableRecordUrl($record) : null),
         );
     }
 

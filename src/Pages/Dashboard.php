@@ -48,12 +48,38 @@ class Dashboard extends Page
     {
         $label = static::getNavigationOverride('label');
 
-        return is_string($label) ? $label : static::$navigationLabel ?? static::$title ?? (static::isMainDashboard() ? __('alfakit::panel.dashboard.title') : \AlfaSix\Alfakit\Support\Html::toText(parent::getNavigationLabel()));
+        if (is_string($label) || static::$navigationLabel !== null || static::$title !== null || ! static::isMainDashboard()) {
+            return static::getDashboardLabel();
+        }
+
+        // In a starter kit the app sidebar already has the app's own "Dashboard": the main
+        // dashboard of a panel is listed under the current team's name (tenancy panels) or
+        // the panel's brand name instead. The page keeps its "Dashboard" title.
+        $panel = alfakit()->getCurrentPanel();
+
+        if ($panel !== null && $panel->isStarterKit()) {
+            $tenant = $panel->hasTenancy() ? $panel->getTenant() : null;
+
+            return $tenant !== null ? \AlfaSix\Alfakit\Support\Html::toText($panel->getTenantName($tenant)) : $panel->getBrandName();
+        }
+
+        return static::getDashboardLabel();
     }
 
     public function getTitle(): string
     {
-        return static::$title ?? \AlfaSix\Alfakit\Support\Html::toText(static::getNavigationLabel());
+        return static::$title ?? \AlfaSix\Alfakit\Support\Html::toText(static::getDashboardLabel());
+    }
+
+    /**
+     * The dashboard's own label: the navigation override, `$navigationLabel`, `$title`, else
+     * "Dashboard" (the main one) or the class name.
+     */
+    protected static function getDashboardLabel(): string
+    {
+        $label = static::getNavigationOverride('label');
+
+        return is_string($label) ? $label : static::$navigationLabel ?? static::$title ?? (static::isMainDashboard() ? __('alfakit::panel.dashboard.title') : \AlfaSix\Alfakit\Support\Html::toText(parent::getNavigationLabel()));
     }
 
     /**

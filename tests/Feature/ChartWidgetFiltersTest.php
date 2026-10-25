@@ -62,3 +62,18 @@ it('shows the empty state when getData() returns nothing', function (): void {
         ->and($schema['emptyState'])->toBe(['heading' => 'No orders yet', 'icon' => 'chart-bar'])
         ->and($schema['data'])->toBe([]);
 });
+
+it('reads its filters from the host page query string on internal endpoints', function (): void {
+    $id = ParityChartWidget::make()->getId();
+
+    // A starter kit dashboard or standalone page loads widgets from `/_alfakit/standalone/components`,
+    // which receives the page's own query string as `tableQuery`.
+    app()->instance('request', Request::create('/admin/_alfakit/standalone/components', 'GET', [
+        'tableQuery' => '?'.http_build_query(['chartFilters' => [$id => ['range' => 'month']], 'widgetFilters' => [$id => 'x']]),
+    ]));
+
+    $schema = ParityChartWidget::make()->toSchema();
+
+    expect($schema['filtersForm']['state'])->toMatchArray(['range' => 'month'])
+        ->and(ParityChartWidget::$seenFilters['range'])->toBe('month');
+});

@@ -78,6 +78,22 @@ it('serialises columns, records and pagination with default sort', function (): 
         ->and($schema['selectable'])->toBeTrue();
 });
 
+it('shows no selection column when the user can see none of the bulk actions', function (): void {
+    seedPosts();
+
+    $schema = fn (Table $table): array => $table->state(stateFrom([]))->toSchema();
+    $hidden = postsTable()->bulkActions([
+        BulkAction::make('delete')->action(fn () => null)->visible(false),
+        AlfaSix\Alfakit\Actions\ActionGroup::make([BulkAction::make('archive')->action(fn () => null)->hidden()]),
+    ]);
+
+    expect($schema($hidden))->not->toHaveKey('selectable')
+        ->and($schema($hidden))->not->toHaveKey('selectionScope')
+        ->and($schema(postsTable()->bulkActions([BulkAction::make('delete')->action(fn () => null)->visible(false), BulkAction::make('touch')->action(fn () => null)]))['selectable'])->toBeTrue()
+        // An explicit selectable() still wins.
+        ->and($schema($hidden->selectable())['selectable'])->toBeTrue();
+});
+
 it('renders boolean icon columns', function (): void {
     seedPosts();
 
@@ -169,6 +185,18 @@ it('paginates and respects page options', function (): void {
         ->and(array_column($page2['records'], 'key'))->toBe([3])
         ->and(count($all['records']))->toBe(3)
         ->and($all['pagination']['perPage'])->toBe('all');
+});
+
+it('starts on the first page option when the options leave out the default of 10', function (): void {
+    seedPosts();
+
+    $fifty = postsTable()->paginationPageOptions([2, 50])->state(stateFrom([]))->toSchema();
+    $withTen = postsTable()->paginationPageOptions([2, 10])->state(stateFrom([]))->toSchema();
+    $explicit = postsTable()->paginationPageOptions([1, 2])->defaultPaginationPageOption(2)->state(stateFrom([]))->toSchema();
+
+    expect($fifty['pagination']['perPage'])->toBe(2)
+        ->and($withTen['pagination']['perPage'])->toBe(10)
+        ->and($explicit['pagination']['perPage'])->toBe(2);
 });
 
 it('toggles columns via state and prefixes keys with an identifier', function (): void {

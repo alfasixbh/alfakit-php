@@ -29,6 +29,7 @@ $panel
 - Any other language: `php artisan alfakit:lang:add sw`, translate `lang/vendor/alfakit/sw/*.php`, then add `'sw'` to `locales()`.
 - Check completeness: `php artisan alfakit:lang:check -v`. It fails on missing strings or broken `:placeholders`, so it fits CI.
 - Override single strings in `lang/vendor/alfakit/{locale}/{group}.php`.
+- A regional or script variant (`ar_EG`, `pt_PT`) with no pack of its own takes its base language's strings (`ar`), then English; list `ar_EG` (or `ar_SA`) in `locales()` for Arabic-Indic digits with the Arabic strings.
 
 ## Your labels and model names
 

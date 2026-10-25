@@ -62,6 +62,14 @@ it('serves each registration with its configuration', function (): void {
         ->and(cfgTitles($this, '/rt/draft-entries'))->toBe(['Draft']);
 });
 
+it('routes a configured registration under the plain slug before the plain registration\'s view page', function (): void {
+    expect(app('router')->getRoutes()->match(request()->create('/rt/entries/archived'))->getName())
+        ->toBe('alfakit.rt.resources.entries.archived.index')
+        ->and(cfgTitles($this, '/rt/entries/archived'))->toBe(['Old']);
+
+    $this->get("/rt/entries/{$this->draft->id}")->assertOk();
+});
+
 it('resolves records through the configuration that serves the page', function (): void {
     $this->get("/rt/entries/archived/{$this->draft->id}/edit", ['X-Inertia' => 'true', 'X-Inertia-Version' => ''])->assertNotFound();
 
