@@ -304,6 +304,37 @@ it('verifies the email address with the signed link of its own notification', fu
     $this->get('/verify-email')->assertRedirect('http://localhost/dashboard');
 });
 
+it('registers Fortify\'s password confirmation page when Fortify\'s views are off', function (): void {
+    // With `'views' => false` Fortify keeps `POST /user/confirm-password` but drops the
+    // `password.confirm` page, which `password.confirm` middleware (the starter kits'
+    // security settings) redirects to: without it those pages answer 500.
+    Route::middleware('web')->post('/user/confirm-password', fn () => 'stored')->name('password.confirm.store');
+    app()->bind('Laravel\\Fortify\\Contracts\\ConfirmPasswordViewResponse', fn () => new class implements Illuminate\Contracts\Support\Responsable
+    {
+        public function toResponse($request): Symfony\Component\HttpFoundation\Response
+        {
+            return response('fortify confirm view');
+        }
+    });
+
+    authKit();
+
+    expect(Route::has('password.confirm'))->toBeTrue()
+        ->and(route('password.confirm'))->toBe('http://localhost/user/confirm-password');
+
+    $this->get('/user/confirm-password')->assertRedirect('http://localhost/login');
+
+    $this->actingAs(kitUser())->get('/user/confirm-password')->assertOk()->assertSee('fortify confirm view');
+});
+
+it('leaves password confirmation alone without Fortify\'s confirmation view', function (): void {
+    Route::middleware('web')->post('/user/confirm-password', fn () => 'stored')->name('password.confirm.store');
+
+    authKit();
+
+    expect(Route::has('password.confirm'))->toBeFalse();
+});
+
 it('takes over Fortify\'s verification link route instead of registering the name twice', function (): void {
     config()->set('auth.providers.users.model', VerifiableUser::class);
     app('auth')->forgetGuards();

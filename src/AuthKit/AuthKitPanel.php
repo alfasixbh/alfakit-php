@@ -31,6 +31,9 @@ class AuthKitPanel extends StandalonePanel
 {
     public const ID = 'auth-kit';
 
+    /** Laravel Fortify's binding for its password confirmation view (`Fortify::confirmPasswordView()`). */
+    public const FORTIFY_CONFIRM_PASSWORD_VIEW = 'Laravel\\Fortify\\Contracts\\ConfirmPasswordViewResponse';
+
     protected string $guestPage = 'auth/alfakit';
 
     protected string $accountPage = 'settings/alfakit';
@@ -329,6 +332,20 @@ class AuthKitPanel extends StandalonePanel
                 ->get($verifyUri, [AuthKitController::class, 'verify'])
                 ->name($this->pageRouteNamePrefix.'verification.verify')
                 ->middleware([$auth, 'signed', 'throttle:6,1']);
+        }
+
+        // Fortify keeps `POST /user/confirm-password` with its views off but drops the
+        // `password.confirm` page that Laravel's `password.confirm` middleware redirects to (the
+        // starter kits' security settings use it). Serve Fortify's own confirmation view there.
+        $confirmUri = $this->existingRouteUri($router, 'password.confirm') === null
+            ? $this->existingRouteUri($router, 'password.confirm.store')
+            : null;
+
+        if ($confirmUri !== null && app()->bound(self::FORTIFY_CONFIRM_PASSWORD_VIEW)) {
+            $router->middleware($this->getMiddleware())
+                ->get($confirmUri, [AuthKitController::class, 'confirmPassword'])
+                ->name('password.confirm')
+                ->middleware($auth);
         }
 
         $router->prefix($this->getPath())

@@ -324,6 +324,7 @@ $panel->pwa(
 ```
 
 - Without `icons:` an SVG favicon/logo is listed as-is and 192/512/maskable PNGs are generated (GD) from a raster favicon/logo in `public/` or the brand initial.
+- Starter kit panels: add `@alfakitPwa` to the `<head>` of `resources/views/app.blade.php` for the PWA head tags.
 - Push setup: `php artisan alfakit:pwa-keys` (writes `ALFAKIT_PWA_VAPID_PUBLIC_KEY`/`_PRIVATE_KEY` to `.env`; `--show`, `--force`), set `ALFAKIT_PWA_VAPID_SUBJECT`, `php artisan vendor:publish --tag=alfakit-pwa-migrations && php artisan migrate` (table `alfakit_push_subscriptions`). No composer package needed (OpenSSL encryption + VAPID). Every `Notification::make()->sendToDatabase($user)` is also pushed to the user's subscribed browsers (title, plain-text body, first action URL); push anything else with `AlfaSix\Alfakit\Pwa\PushNotifications::send($user, ['title' => '…', 'body' => '…', 'url' => '/admin/…'])`.
 - Custom root views: add `{{ $alfakitPanel->renderPwaHeadTags() }}` to `<head>`. Frontend: `pwaStore`, `promptPwaInstall()`, `applyPwaUpdate()`, `subscribeToPush()`, `unsubscribeFromPush()` from `@alfakit/core`; menu items carry `data-slot="pwa-install"` / `"pwa-push"`; the offline page is the `alfakit::pwa.offline` view.
 

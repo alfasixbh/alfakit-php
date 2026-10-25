@@ -29,7 +29,9 @@ afterEach(function (): void {
 
 it('generates a standalone form, table, infolist and component that compile', function (): void {
     $this->artisan('make:alfakit-form', ['name' => 'ContactForm'])->assertSuccessful();
-    $this->artisan('make:alfakit-table', ['name' => 'OrdersTable', '--model' => 'Order'])->assertSuccessful();
+    $this->artisan('make:alfakit-table', ['name' => 'OrdersTable', '--model' => 'Order'])
+        ->expectsOutputToContain('OrdersTable::make()]')
+        ->assertSuccessful();
     $this->artisan('make:alfakit-infolist', ['name' => 'OrderDetails', '--model' => 'App\\Models\\Order'])->assertSuccessful();
     $this->artisan('make:alfakit-component', ['name' => 'AccountOverview'])->assertSuccessful();
 
@@ -42,7 +44,8 @@ it('generates a standalone form, table, infolist and component that compile', fu
         ->toContain('class ContactForm extends Form')
         ->toContain('public function submit(array $data): mixed')
         ->and($table)->toContain('use App\\Models\\Order;')
-        ->toContain('public Order $order;')
+        // A table lists every order: no `public Order $order;` and no `make(['order' => …])`.
+        ->not->toContain('public Order $order;')
         ->toContain('->query(Order::query())')
         ->and($infolist)->toContain('use App\\Models\\Order;')
         ->toContain('class OrderDetails extends Infolist')
@@ -84,7 +87,11 @@ it('installs for use outside panels: styles, an example form and page, no panel'
     (new Filesystem)->ensureDirectoryExists($this->sandbox.'/resources/views');
     file_put_contents($this->sandbox.'/resources/views/app.blade.php', '@inertia');
 
-    $this->artisan('alfakit:install', ['--standalone' => true, '--no-npm' => true])->assertSuccessful();
+    $this->artisan('alfakit:install', ['--standalone' => true, '--no-npm' => true])
+        // A closure route: Route::inertia() with a component in its props can't be cached (php artisan optimize).
+        ->expectsOutputToContain("Route::get('/contact', fn () => Inertia::render('Contact'")
+        ->doesntExpectOutputToContain('Route::inertia(')
+        ->assertSuccessful();
 
     expect(file_get_contents($this->sandbox.'/resources/css/app.css'))->toContain("@import '@alfakit/vue/standalone.css';")
         ->and(file_exists($this->sandbox.'/app/Alfakit/Standalone/ContactForm.php'))->toBeTrue()
@@ -139,6 +146,21 @@ it('does not publish the import/export migrations a second time when the app alr
     } finally {
         array_map('unlink', array_diff(glob($target.'/*_create_alfakit_import_export_tables.php') ?: [], $before));
     }
+});
+
+it('only publishes the import/export migrations when AlfaKit is already installed (a starter kit app)', function (): void {
+    file_put_contents($this->sandbox.'/package.json', json_encode(['dependencies' => ['@inertiajs/react' => '^3.0']]));
+    (new Filesystem)->ensureDirectoryExists($this->sandbox.'/app/Providers/Alfakit');
+    file_put_contents($this->sandbox.'/app/Providers/Alfakit/AdminPanelProvider.php', "<?php\n// ->starterKit()\n");
+    (new Filesystem)->ensureDirectoryExists($this->sandbox.'/database/migrations');
+    file_put_contents($this->sandbox.'/database/migrations/2026_01_01_000000_create_alfakit_import_export_tables.php', '<?php');
+
+    $this->artisan('alfakit:install', ['--import-export' => true, '--no-npm' => true])->assertSuccessful();
+
+    // No admin panel entry next to the starter kit.
+    expect(file_exists($this->sandbox.'/resources/js/alfakit/app.tsx'))->toBeFalse()
+        ->and(file_exists($this->sandbox.'/resources/css/alfakit.css'))->toBeFalse()
+        ->and((string) file_get_contents($this->sandbox.'/app/Providers/Alfakit/AdminPanelProvider.php'))->toBe("<?php\n// ->starterKit()\n");
 });
 
 it('does not point at a panel it did not create with --no-panel', function (): void {

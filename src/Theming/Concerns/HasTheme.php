@@ -25,6 +25,7 @@ use Closure;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Foundation\Vite;
 use Illuminate\Foundation\ViteException;
+use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 
 /**
@@ -447,7 +448,7 @@ trait HasTheme
             return '<link rel="preload" href="'.e($url).'" as="font"'.($type !== null ? ' type="'.$type.'"' : '').' crossorigin>';
         }, $this->getFontPreload());
 
-        return new \Illuminate\Support\HtmlString(implode("\n", $tags));
+        return new HtmlString(implode("\n", $tags));
     }
 
     private function fontCss(?string $font): ?string
@@ -593,7 +594,17 @@ trait HasTheme
     public function renderViteTags(): Htmlable
     {
         try {
-            return app(Vite::class)($this->getViteEntries());
+            $vite = app(Vite::class);
+            $entries = $this->getViteEntries();
+            $tags = $vite($entries);
+
+            // Under `npm run dev`, @vitejs/plugin-react needs its preamble before any JSX
+            // module (a generated field, `withApp`), or the page stays blank. Null when built.
+            $usesJsx = collect($entries)->contains(fn (string $entry): bool => preg_match('/\.[jt]sx$/', $entry) === 1);
+            $refresh = $usesJsx ? $vite->reactRefresh() : null;
+
+            // Strings, not toHtml(): tests swap Vite for a fake that returns plain strings.
+            return new HtmlString(($refresh === null ? '' : (string) $refresh).$tags);
         } catch (ViteException $exception) {
             throw new ViteException($exception->getMessage().' Build the frontend with `npm run build` (or keep `npm run dev` running while developing); `php artisan alfakit:doctor` checks the setup.', previous: $exception);
         }

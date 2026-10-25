@@ -843,7 +843,11 @@ abstract class Page
 
     public function render(): InertiaResponse
     {
-        $component = static::$component ?? (string) config('alfakit.inertia.page_component', 'Alfakit/Page');
+        // A starter kit resolves Inertia components from its own `resources/js/pages`, which
+        // has only `Alfakit/Page`: that page renders the custom component (`view`) itself.
+        $component = static::$component !== null && ! $this->getPanel()->isStarterKit()
+            ? static::$component
+            : (string) config('alfakit.inertia.page_component', 'Alfakit/Page');
 
         $lazy = $this->getLazyComponentTargets();
         $debug = SchemaDebugger::shouldInclude($this->getPanel(), request());

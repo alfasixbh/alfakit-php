@@ -27,6 +27,8 @@ class UndoPostResource extends Resource
 
     public static bool $canUpdate = true;
 
+    public static bool $canPublish = true;
+
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
@@ -43,6 +45,7 @@ class UndoPostResource extends Resource
                 EditAction::make()->form([TextInput::make('title')->required(), TextInput::make('status')])->undoable(),
                 DeleteAction::make()->undoable(),
                 Action::make('publish')
+                    ->authorize(fn (): bool => static::$canPublish)
                     ->action(function (Post $record, Action $action): void {
                         $action->undoData(['previous' => $record->status]);
                         $record->update(['status' => 'published']);

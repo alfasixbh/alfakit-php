@@ -155,7 +155,7 @@ class TextColumn extends Column
             default => null,
         };
 
-        return ['editState' => $value, 'disabled' => $this->isDisabled() ?: null];
+        return ['editState' => $value, 'disabled' => $this->isDisabledForRecord() ?: null];
     }
 
     /**

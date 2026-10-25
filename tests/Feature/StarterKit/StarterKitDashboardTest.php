@@ -87,6 +87,17 @@ it('shares nothing on other pages, for guests or for users who may not open the 
     expect(inertiaProps(inertiaGet($this, '/dashboard'))['alfakitWidgets'])->toBeNull();
 });
 
+it('leaves the widgets off while a plugin hides them (Billing for users who must subscribe first)', function (): void {
+    $state = new ArrayObject(['hidden' => true]);
+    starterKitDashboardPanel('kitw', fn (Panel $panel): Panel => $panel->hideStarterKitDashboardWhen(fn (): bool => $state['hidden']));
+    $this->actingAs(starterKitDashboardUser());
+
+    expect(inertiaProps(inertiaGet($this, '/dashboard'))['alfakitWidgets'])->toBeNull();
+
+    $state['hidden'] = false;
+    expect(inertiaProps(inertiaGet($this, '/dashboard'))['alfakitWidgets'])->toHaveCount(1);
+});
+
 it('follows starterKitDashboard() and leaves out panels without widgets', function (): void {
     starterKitDashboardPanel('kitf', fn (Panel $panel): Panel => $panel->starterKitDashboard('profile.*'));
     $this->actingAs(starterKitDashboardUser());

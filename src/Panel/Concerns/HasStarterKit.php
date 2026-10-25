@@ -52,6 +52,9 @@ trait HasStarterKit
     /** @var array<string, Closure> Plugins' header components (`starterKitWidget()`), by name. */
     protected array $starterKitWidgets = [];
 
+    /** @var list<Closure(): bool> */
+    protected array $starterKitDashboardHiddenWhen = [];
+
     /**
      * Run the panel inside a Laravel starter kit app: the host's authentication, root view and
      * layout. Turns Alfakit's own login, registration, password reset and profile pages off
@@ -115,7 +118,28 @@ trait HasStarterKit
             return null;
         }
 
+        foreach ($this->starterKitDashboardHiddenWhen as $callback) {
+            if ($callback()) {
+                return null;
+            }
+        }
+
         return \AlfaSix\Alfakit\Standalone\StarterKitDashboard::payloadFor($this);
+    }
+
+    /**
+     * Leave the panel's widgets off the starter kit's dashboard while the callback returns
+     * true. For plugins whose auth middleware refuses some users the panel's own requests:
+     * their widgets would otherwise never load (Billing's `requiresSubscription()` for a
+     * user without a subscription).
+     *
+     * @param  Closure(): bool  $callback
+     */
+    public function hideStarterKitDashboardWhen(Closure $callback): static
+    {
+        $this->starterKitDashboardHiddenWhen[] = $callback;
+
+        return $this;
     }
 
     /**

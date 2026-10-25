@@ -30,7 +30,8 @@ function setupSandbox(object $test, array $packages = []): string
 
     file_put_contents("{$sandbox}/bootstrap/providers.php", "<?php\n\nreturn [\n    App\\Providers\\AppServiceProvider::class,\n];\n");
     file_put_contents("{$sandbox}/.env", "APP_NAME=Demo\n");
-    file_put_contents("{$sandbox}/package.json", json_encode(['dependencies' => ['@inertiajs/react' => '^2.0', 'react' => '^19.0']]));
+    // The renderer is installed (the npm step of an earlier run, or `npm install` with --no-install).
+    file_put_contents("{$sandbox}/package.json", json_encode(['dependencies' => ['@inertiajs/react' => '^2.0', 'react' => '^19.0', '@alfakit/react' => '^0.1']]));
     // An Inertia app: the adapter package and the root view (standalone installs need both).
     $files->ensureDirectoryExists("{$sandbox}/resources/views");
     file_put_contents("{$sandbox}/resources/views/app.blade.php", '@inertia');
@@ -167,6 +168,19 @@ it('reports an existing users resource as already set up on a re-run, without as
     Illuminate\Support\Facades\Artisan::call('alfakit:setup', ['--no-install' => true, '--no-interaction' => true]);
 
     expect(preg_replace('/\e\[[0-9;]*m/', '', Illuminate\Support\Facades\Artisan::output()))->toMatch('/Users resource[ .]*already set up/');
+});
+
+it('runs the installer again when the renderer npm package was never installed (an interrupted first run)', function (): void {
+    $sandbox = setupSandbox($this);
+    $this->artisan('make:alfakit-panel', ['id' => 'admin'])->assertSuccessful();
+    file_put_contents("{$sandbox}/package.json", json_encode(['dependencies' => ['@inertiajs/react' => '^2.0', 'react' => '^19.0']]));
+
+    $this->artisan('alfakit:setup', ['--mode' => 'panel', '--no-interaction' => true])
+        // The installer runs again and offers the missing npm step (answered no: no real npm here).
+        ->expectsConfirmation('Install @alfakit/react with npm?', 'no')
+        ->expectsConfirmation('Build the frontend now (npm run build)?', 'no')
+        ->doesntExpectOutputToContain('Install (panel) .. already')
+        ->assertSuccessful();
 });
 
 it('installs roles through Shield: composer, the plugin, its installer and HasRoles on the user model', function (): void {

@@ -45,6 +45,7 @@ it('wires Alfakit into the starter kit, idempotently', function (string $kit, st
         StarterKitInstaller::files($kit)['header'] => 'updated',
         StarterKitInstaller::files($kit)['dashboard'] => 'updated',
         'resources/css/app.css' => 'updated',
+        'resources/views/app.blade.php' => 'updated',
         StarterKitInstaller::files($kit)['entry'] => 'unchanged',
         'app/Providers/Alfakit/AdminPanelProvider.php' => 'created',
         'bootstrap/providers.php' => 'updated',
@@ -189,6 +190,26 @@ it('skips a sidebar it does not recognise', function (): void {
     (new Filesystem)->deleteDirectory($app);
 });
 
+it('names only the header components a re-run added', function (): void {
+    $app = starterKitApp('react');
+    (new StarterKitInstaller($app, 'react'))->install('admin', 'admin');
+
+    // A header from 0.1.7: everything but the language switcher.
+    foreach (['app-sidebar-header.tsx', 'app-header.tsx'] as $file) {
+        $path = $app.'/resources/js/components/'.$file;
+        file_put_contents($path, (string) preg_replace('/^[ \t]*<AlfakitLanguageSwitcher \/>\n/m', '', str_replace('AlfakitLanguageSwitcher, ', '', (string) file_get_contents($path))));
+    }
+
+    $changes = collect((new StarterKitInstaller($app, 'react'))->install('admin', 'admin'))->keyBy('path');
+
+    expect($changes['resources/js/components/app-sidebar-header.tsx']['status'])->toBe('updated')
+        ->and($changes['resources/js/components/app-sidebar-header.tsx']['note'])->toBe('added <AlfakitLanguageSwitcher /> to the header')
+        ->and($changes['resources/js/components/app-header.tsx']['note'])->toBe('added <AlfakitLanguageSwitcher /> before the user menu')
+        ->and(StarterKitInstaller::addedComponents('<X />', "<AlfakitSearch />\n<AlfakitNotifications />\n<AlfakitCopilot />\n"))->toBe('<AlfakitSearch />, <AlfakitNotifications /> and <AlfakitCopilot />');
+
+    (new Filesystem)->deleteDirectory($app);
+});
+
 it('leaves the headers alone with --no-header-widgets', function (): void {
     $app = starterKitApp('react');
     $header = (string) file_get_contents($app.'/resources/js/components/app-sidebar-header.tsx');
@@ -283,4 +304,14 @@ it('gives a header set up before the language switcher existed <AlfakitLanguageS
 
     $this->app->setBasePath($original);
     (new Filesystem)->deleteDirectory($app);
+});
+
+it('renders the plugin assets in the starter kit root view, once, before @vite', function (): void {
+    $view = "<head>\n        @viteReactRefresh\n        @vite(['resources/css/app.css'])\n    </head>\n";
+    $updated = (string) StarterKitInstaller::addAssetsToRootView($view);
+
+    expect($updated)->toContain('Assets::renderTags(alfakit()->getCurrentPanel()?->getId()')
+        ->and(strpos($updated, 'Assets::renderTags('))->toBeLessThan(strpos($updated, '@viteReactRefresh'))
+        ->and(StarterKitInstaller::addAssetsToRootView($updated))->toBe($updated)
+        ->and(StarterKitInstaller::addAssetsToRootView('<head></head>'))->toBeNull();
 });

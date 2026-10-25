@@ -88,6 +88,6 @@ class ToggleColumn extends Column
 
     protected function getCellProps(): array
     {
-        return ['disabled' => $this->isDisabled() ?: null];
+        return ['disabled' => $this->isDisabledForRecord() ?: null];
     }
 }

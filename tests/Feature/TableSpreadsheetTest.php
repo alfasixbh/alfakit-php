@@ -132,6 +132,20 @@ it('only validates on a dry run', function (): void {
         ->and(Post::query()->find(1)->title)->toBe('Alpha');
 });
 
+it('disables the editable cells of records the user may not update, as the server refuses them', function (): void {
+    Gate::policy(Post::class, SsPostPolicy::class);
+    ssSetUp($this);
+    $beta = (string) Post::query()->where('title', 'Beta')->value('id');
+    $alpha = (string) Post::query()->where('title', 'Alpha')->value('id');
+    SsPostPolicy::$denied = [(int) $beta];
+
+    $records = collect(inertiaProps(inertiaGet($this, '/tp/posts'))['page']['content'][0]['records'])->keyBy(fn (array $record): string => (string) $record['key']);
+
+    expect($records[$beta]['cells']['is_published']['disabled'] ?? null)->toBeTrue()
+        ->and($records[$beta]['cells']['title']['disabled'] ?? null)->toBeTrue()
+        ->and($records[$alpha]['cells']['is_published']['disabled'] ?? null)->toBeNull();
+});
+
 it('saves the valid cells of a non-atomic batch and reports the rest', function (): void {
     $token = ssSetUp($this, static fn (Table $table): Table => $table
         ->columns([TextInputColumn::make('title')->rules(['required'])])

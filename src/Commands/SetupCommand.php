@@ -149,7 +149,12 @@ class SetupCommand extends Command
                 $this->installPlugin($files, $slug, $panelId);
             }
 
-            $this->brand($files, $panelId);
+            // A starter kit panel uses the app's own theme: brand colour, logo and font do nothing there.
+            if ($mode === 'starter-kit') {
+                $this->record('Branding', 'skipped', 'the starter kit\'s own theme applies');
+            } else {
+                $this->brand($files, $panelId);
+            }
         }
 
         if ($this->wants('demo', 'Add demo data (a seeder with an admin and sample users)?', 'For local trying-out only; never seeded in production.')) {
@@ -326,7 +331,12 @@ class SetupCommand extends Command
 
     protected function install(string $mode, string $panelId, ?string $adapter): bool
     {
-        if ($this->isInstalled($mode, $panelId)) {
+        // Installed, unless the renderer's npm package is missing (the npm step was declined or
+        // interrupted): then run the installer again, which skips what exists and installs it.
+        $renderer = $adapter ?? AppEnvironment::adapter();
+        $rendererMissing = ! $this->option('no-install') && $renderer !== null && ! AppEnvironment::hasNpmPackage("@alfakit/{$renderer}");
+
+        if ($this->isInstalled($mode, $panelId) && ! $rendererMissing) {
             $this->record('Install ('.$mode.')', 'already');
 
             return true;

@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\Crypt;
 beforeEach(function (): void {
     UndoPostResource::$canDelete = true;
     UndoPostResource::$canUpdate = true;
+    UndoPostResource::$canPublish = true;
 
     Panels::register('undo', fn (Panel $panel): Panel => $panel->resources([UndoPostResource::class]));
     $this->user = User::query()->create(['name' => 'Ann', 'email' => 'ann@example.com', 'password' => 'secret']);
@@ -168,6 +169,20 @@ it('runs undoUsing() for custom actions with the data the handler kept', functio
     inertiaPost($this, '/undo/_alfakit/actions/undo', ['undo' => $undo['token']])->assertRedirect();
 
     expect($post->fresh()->status)->toBe('review');
+});
+
+it('says a custom action can no longer be undone when it is not allowed any more, instead of a 403 page', function (): void {
+    $post = undoPost(['status' => 'review']);
+
+    $undo = runUndoable($this, ['token' => undoListToken($this), 'component' => 'table', 'action' => 'publish', 'record' => $post->id]);
+
+    // The ability depends on what the action changed (a published post may not be published again).
+    UndoPostResource::$canPublish = false;
+
+    inertiaPost($this, '/undo/_alfakit/actions/undo', ['undo' => $undo['token']])->assertRedirect();
+
+    expect($post->fresh()->status)->toBe('published');
+    Notification::assertNotified(__('alfakit::actions.undo.expired'));
 });
 
 it('offers no undo for actions that are not undoable', function (): void {

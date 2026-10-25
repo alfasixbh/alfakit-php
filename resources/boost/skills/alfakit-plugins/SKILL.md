@@ -315,6 +315,8 @@ class MeetingsCalendar extends CalendarWidget
 
     protected static ?string $endAttribute = 'ends_at';
 
+    protected static ?string $recordTitleAttribute = 'subject';   // names the record in the event modals
+
     protected ?string $heading = 'Meetings';
 
     public function fetchEvents(array $info): array

@@ -78,6 +78,13 @@ class InstallCommand extends Command
                 $this->callSilently('vendor:publish', ['--tag' => 'alfakit-import-export-migrations', '--force' => $force]);
                 $this->components->task('Published the import/export migrations (run php artisan migrate)');
             }
+
+            // Adding import/export to an app that already has AlfaKit (any mode): the migrations
+            // are all it needs. Going on would install an admin panel's entry next to a starter
+            // kit or standalone setup.
+            if (! $this->option('standalone') && ! $this->option('starter-kit') && ! $this->option('scaffold') && glob(app_path('Providers/Alfakit/*.php')) !== []) {
+                return self::SUCCESS;
+            }
         }
 
         if ($this->option('standalone')) {
@@ -205,7 +212,7 @@ class InstallCommand extends Command
         $this->newLine();
         $this->components->info('Alfakit is installed for use outside panels.');
         $this->components->bulletList([
-            "Add a route: Route::inertia('/contact', '{$pageName}', ['form' => \\App\\Alfakit\\Standalone\\ContactForm::make()]);",
+            "Add a route: Route::get('/contact', fn () => Inertia::render('{$pageName}', ['form' => \\App\\Alfakit\\Standalone\\ContactForm::make()])); (a closure, so php artisan optimize can cache the routes)",
             'Generate more: php artisan make:alfakit-table OrdersTable --model=Order, make:alfakit-infolist, make:alfakit-component',
             'Place <AlfakitToaster /> once in your app layout for notifications (rendered automatically otherwise)',
             'Docs: '.config('alfakit.docs_url').'/standalone/overview',

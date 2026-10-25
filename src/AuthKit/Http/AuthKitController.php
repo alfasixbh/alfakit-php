@@ -103,6 +103,15 @@ class AuthKitController
         return redirect()->intended($panel->getUrl());
     }
 
+    /**
+     * Fortify's password confirmation page (`password.confirm`), which Fortify only registers
+     * with its views on; its form posts to Fortify's `password.confirm.store`.
+     */
+    public function confirmPassword(): mixed
+    {
+        return app(AuthKitPanel::FORTIFY_CONFIRM_PASSWORD_VIEW);
+    }
+
     public function account(): Response
     {
         $panel = $this->panel();

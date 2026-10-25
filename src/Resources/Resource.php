@@ -738,7 +738,12 @@ abstract class Resource
         Route::prefix(static::getRoutePrefix())
             ->name(static::getRouteBaseName().'.')
             ->group(static function () use ($panel, $configuration): void {
-                foreach (static::getPages() as $name => $registration) {
+                // Laravel matches routes in the order they are registered: register fixed paths
+                // (`/reports`) before parameterised ones (`/{record}`), wherever getPages() lists them.
+                $pages = static::getPages();
+                $fixed = array_filter($pages, static fn (PageRegistration $registration): bool => ! str_contains($registration->path, '{'));
+
+                foreach ($fixed + $pages as $name => $registration) {
                     $route = $registration->register($panel, $name);
 
                     // The page activates its registration from this route default.

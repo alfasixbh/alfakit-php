@@ -74,6 +74,22 @@ trait CanUpdateState
     }
 
     /**
+     * Disabled for the cell being rendered: `disabled()`, or the user may not `update` this
+     * record (the server refuses that edit anyway; the control shouldn't look editable).
+     */
+    public function isDisabledForRecord(): bool
+    {
+        if ($this->isDisabled()) {
+            return true;
+        }
+
+        $record = $this->getRecord();
+        $table = $this->getTable();
+
+        return $record instanceof Model && $table !== null && ! $table->authorizes('update', $record);
+    }
+
+    /**
      * Whether the cells can be edited in the table's spreadsheet mode (`Table::spreadsheet()`).
      * Inline-editable columns are by default (`editable(false)` leaves one out); a
      * `TextColumn` opts in with `editable()`, with its own `rules()`.

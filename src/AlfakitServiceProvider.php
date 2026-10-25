@@ -96,6 +96,11 @@ class AlfakitServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // `@alfakitPwa` / `@alfakitPwa('admin')` in a starter kit's `app.blade.php`: the head
+        // tags of a `pwa()` panel (manifest, theme colours, iOS icon), which only AlfaKit's own
+        // root view adds by itself.
+        \Illuminate\Support\Facades\Blade::directive('alfakitPwa', static fn (string $expression): string => '<?php echo \\AlfaSix\\Alfakit\\Support\\PwaTags::render('.($expression === '' ? 'null' : $expression).'); ?>');
+
         $this->loadTranslationsFrom(__DIR__.'/../resources/lang', 'alfakit');
         $this->loadViewsFrom(__DIR__.'/../resources/views', 'alfakit');
 

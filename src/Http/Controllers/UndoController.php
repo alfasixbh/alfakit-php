@@ -161,7 +161,11 @@ class UndoController extends ActionController
 
         $action = $this->resolveAction($page, $component, (string) ($payload['action'] ?? ''), $request);
 
-        abort_unless($action->isAuthorized() && $action->getUndoUsing() !== null, 403);
+        // Authorisation is checked against the record as it is now: an action whose ability
+        // depends on what it changed may no longer be allowed. Say so instead of a raw 403.
+        if (! $action->isAuthorized() || $action->getUndoUsing() === null) {
+            throw new UndoConflict(__('alfakit::actions.undo.expired'));
+        }
 
         DB::transaction(static fn () => $action->runUndo($payload));
     }

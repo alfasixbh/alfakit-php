@@ -484,7 +484,7 @@ class SelectColumn extends Column
     protected function getCellProps(): array
     {
         return [
-            'disabled' => $this->isDisabled() ?: null,
+            'disabled' => $this->isDisabledForRecord() ?: null,
             'optionLabel' => $this->hasRemoteOptions() ? $this->getPageOptionLabel($this->getState()) : null,
         ];
     }

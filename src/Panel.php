@@ -2187,6 +2187,7 @@ class Panel
             'schemaContract' => SchemaContract::VERSION,
             'path' => $this->path,
             'url' => $this->safeUrl(),
+            'dashboardUrl' => $this->getShortcutDashboardUrl(),
             'brandName' => $this->getBrandName(),
             'brandLogo' => $this->evaluate($this->brandLogo),
             'darkModeBrandLogo' => $this->evaluate($this->darkModeBrandLogo),
@@ -2279,6 +2280,26 @@ class Panel
             'pwa' => $this->getPwaSchema($user),
             ...$this->getPanelOptionsSchema(),
         ]);
+    }
+
+    /**
+     * Where "G then D" goes when that isn't the panel's home: a starter kit panel without a
+     * dashboard page of its own shows its widgets on the app's `dashboard` route, so the
+     * shortcut goes there rather than to the panel's first page.
+     */
+    public function getShortcutDashboardUrl(): ?string
+    {
+        if (! $this->isStarterKit() || ! Route::has('dashboard')) {
+            return null;
+        }
+
+        foreach ($this->getPages() as $page) {
+            if (is_a($page, Dashboard::class, true)) {
+                return null;
+            }
+        }
+
+        return route('dashboard');
     }
 
     protected function safeUrl(): ?string

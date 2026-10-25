@@ -149,6 +149,26 @@ it('explains how to rebuild when the Vite manifest has no panel entries', functi
     }
 });
 
+it('adds the React refresh preamble under a Vite dev server, so JSX modules can run', function (): void {
+    $hot = sys_get_temp_dir().'/alfakit-hot-'.uniqid();
+    file_put_contents($hot, 'http://127.0.0.1:5173');
+    $original = app(Illuminate\Foundation\Vite::class);
+    app()->instance(Illuminate\Foundation\Vite::class, (new Illuminate\Foundation\Vite)->useHotFile($hot));
+
+    try {
+        $panel = alfakit()->getPanel('admin');
+        $react = collect($panel->getViteEntries())->contains(fn (string $entry): bool => str_ends_with($entry, '.tsx'));
+        $tags = $panel->renderViteTags()->toHtml();
+
+        expect($react)->toBeTrue()
+            ->and($tags)->toContain('@react-refresh')
+            ->and(strpos($tags, '@react-refresh'))->toBeLessThan(strpos($tags, '@vite/client'));
+    } finally {
+        @unlink($hot);
+        app()->instance(Illuminate\Foundation\Vite::class, $original);
+    }
+});
+
 it('gives every theme its own structure, not just colours', function (): void {
     $panel = alfakit()->getPanel('admin');
     $designs = [];

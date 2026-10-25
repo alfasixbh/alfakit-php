@@ -147,7 +147,7 @@ class TextInputColumn extends Column
         $suffix = $this->evaluate($this->suffix);
 
         return [
-            'disabled' => $this->isDisabled() ?: null,
+            'disabled' => $this->isDisabledForRecord() ?: null,
             'prefix' => $prefix === null || $prefix === '' ? null : (string) $prefix,
             'suffix' => $suffix === null || $suffix === '' ? null : (string) $suffix,
         ];

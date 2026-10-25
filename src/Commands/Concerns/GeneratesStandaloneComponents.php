@@ -46,8 +46,9 @@ trait GeneratesStandaloneComponents
             'class' => $name,
             'heading' => Str::headline($name),
             'modelImport' => $modelClass === null ? '' : "use {$modelClass};\n",
-            'modelProperty' => $modelBasename === null ? '' : "    public {$modelBasename} \${$variable};\n\n",
-            'modelParameter' => $variable === null ? '' : "['{$variable}' => \${$variable}]",
+            // A table lists the model's records (`Model::query()`): it takes no record of its own.
+            'modelProperty' => $modelBasename === null || $kind === 'table' ? '' : "    public {$modelBasename} \${$variable};\n\n",
+            'modelParameter' => $variable === null || $kind === 'table' ? '' : "['{$variable}' => \${$variable}]",
             'query' => $modelBasename === null ? '/* Model::query() */' : "{$modelBasename}::query()",
             'recordParameter' => $variable === null ? '' : "['record' => \${$variable}]",
         ], (bool) $this->option('force'));
@@ -55,7 +56,7 @@ trait GeneratesStandaloneComponents
         if ($written) {
             $prop = Str::camel($name);
             $arguments = match (true) {
-                $variable === null => '',
+                $variable === null, $kind === 'table' => '',
                 in_array($kind, ['form', 'infolist'], true) => "['record' => \${$variable}]",
                 default => "['{$variable}' => \${$variable}]",
             };

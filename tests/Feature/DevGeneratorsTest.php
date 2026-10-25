@@ -351,6 +351,8 @@ it('generates a plugin package with a frontend', function (): void {
     $composer = json_decode(file_get_contents("{$root}/composer.json"), true);
 
     expect($composer['name'])->toBe('acme/blog-tools')
+        // The same PHP floor as AlfaKit itself (^8.4); ^8.3 promised an install AlfaKit refuses.
+        ->and($composer['require']['php'])->toBe(json_decode((string) file_get_contents(dirname(__DIR__, 2).'/composer.json'), true)['require']['php'])
         ->and($composer['autoload']['psr-4'])->toBe(['Acme\\BlogTools\\' => 'src/'])
         ->and($composer['extra']['laravel']['providers'])->toBe(['Acme\\BlogTools\\BlogToolsServiceProvider'])
         ->and(json_decode(file_get_contents("{$root}/package.json"), true)['name'])->toBe('@acme/blog-tools')

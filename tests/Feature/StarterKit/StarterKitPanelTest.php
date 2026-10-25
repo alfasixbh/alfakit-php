@@ -115,3 +115,25 @@ it('offers embedded() as an alias', function (): void {
         ->and($panel->getStarterKitLoginRoute())->toBe('sign-in')
         ->and(Panel::make('y')->isStarterKit())->toBeFalse();
 });
+
+it('sends "G then D" to the app dashboard when the starter kit panel has no dashboard page', function (): void {
+    $panel = starterKitPanel();
+
+    expect($panel->getShortcutDashboardUrl())->toBe(url('/dashboard'))
+        ->and($panel->toSchema()['dashboardUrl'] ?? null)->toBe(url('/dashboard'));
+
+    // A regular panel keeps its own home.
+    $admin = Panels::register('plain', fn (Panel $panel): Panel => $panel->resources([PostResource::class]));
+
+    expect($admin->getShortcutDashboardUrl())->toBeNull();
+});
+
+it('renders a pwa() panel\'s head tags in the host root view with @alfakitPwa', function (): void {
+    starterKitPanel(fn (Panel $panel): Panel => $panel->pwa());
+
+    $html = Illuminate\Support\Facades\Blade::render('@alfakitPwa');
+
+    expect($html)->toContain('rel="manifest"')->toContain('manifest.webmanifest')->toContain('name="theme-color"')
+        ->and(Illuminate\Support\Facades\Blade::render("@alfakitPwa('kit')"))->toBe($html)
+        ->and(Illuminate\Support\Facades\Blade::render("@alfakitPwa('missing')"))->toBe('');
+});

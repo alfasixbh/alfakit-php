@@ -42,6 +42,8 @@ final class StarterKitInstaller
     /** Marks the dashboard widgets the installer adds to the host's dashboard (`<AlfakitWidgets>`). */
     public const DASHBOARD_MARKER = 'alfakit:widgets';
 
+    public const ASSETS_MARKER = 'alfakit:assets';
+
     /** @var list<array{status: 'created'|'updated'|'unchanged'|'skipped', path: string, note: string}> */
     private array $changes = [];
 
@@ -130,8 +132,8 @@ final class StarterKitInstaller
         $this->writeFile($files['nav'], self::stub("{$this->kit}/nav"), 'the panel navigation for the app sidebar');
         $this->patchFile($files['sidebar'], fn (string $contents): ?string => self::addNavToSidebar($contents, $this->kit), 'added <AlfakitNav /> after <NavMain />');
         if ($headerWidgets) {
-            $this->patchFile($files['sidebarHeader'], fn (string $contents): ?string => self::addWidgetsToHeader($contents, $this->kit, sidebarLayout: true), 'added <AlfakitSearch />, <AlfakitNotifications />, <AlfakitCopilot /> and <AlfakitLanguageSwitcher /> to the header');
-            $this->patchFile($files['header'], fn (string $contents): ?string => self::addWidgetsToHeader($contents, $this->kit, sidebarLayout: false), 'added <AlfakitSearch />, <AlfakitNotifications />, <AlfakitCopilot /> and <AlfakitLanguageSwitcher /> before the user menu');
+            $this->patchFile($files['sidebarHeader'], fn (string $contents): ?string => self::addWidgetsToHeader($contents, $this->kit, sidebarLayout: true), 'added {added} to the header');
+            $this->patchFile($files['header'], fn (string $contents): ?string => self::addWidgetsToHeader($contents, $this->kit, sidebarLayout: false), 'added {added} before the user menu');
         }
 
         if ($dashboardWidgets) {
@@ -139,10 +141,35 @@ final class StarterKitInstaller
         }
 
         $this->patchFile($files['css'], fn (string $contents): string => self::addStyles($contents, $this->kit), 'imported the Alfakit starter kit styles');
+        $this->patchFile('resources/views/app.blade.php', fn (string $contents): ?string => self::addAssetsToRootView($contents), 'added the plugin stylesheets and scripts (Assets::renderTags()) before @vite');
         $this->record('unchanged', $files['entry'], 'no change needed: Inertia resolves '.$files['page'].' like the app\'s other pages');
         $this->installPanelProvider($panelId, $path ?? $panelId);
 
         return $this->changes;
+    }
+
+    /**
+     * Plugins' stylesheets and scripts (`Assets::register()`) go in the page head; the panel's
+     * own view renders them, a starter kit's `app.blade.php` doesn't. Added once, before
+     * the first `@vite`; null when there is none.
+     */
+    public static function addAssetsToRootView(string $contents): ?string
+    {
+        if (str_contains($contents, 'Assets::renderTags(')) {
+            return $contents;
+        }
+
+        $updated = preg_replace_callback(
+            '/^([ \t]*)@vite(ReactRefresh)?\b/m',
+            static fn (array $matches): string => $matches[1].'{{-- '.self::ASSETS_MARKER.': plugin stylesheets and scripts (php artisan alfakit:install --starter-kit) --}}'."\n"
+                .$matches[1].'{!! \\AlfaSix\\Alfakit\\Support\\Assets\\Assets::renderTags(alfakit()->getCurrentPanel()?->getId(), \\Illuminate\\Support\\Facades\\Vite::cspNonce()) !!}'."\n"
+                .$matches[0],
+            $contents,
+            1,
+            $count,
+        );
+
+        return $updated === null || $count !== 1 ? null : $updated;
     }
 
     /**
@@ -514,7 +541,7 @@ final class StarterKitInstaller
         $updated = $patch($contents);
 
         if ($updated === null) {
-            $this->record('skipped', $relative, 'unexpected contents, '.$note.' yourself');
+            $this->record('skipped', $relative, 'unexpected contents, '.str_replace('{added}', '<AlfakitSearch />, <AlfakitNotifications />, <AlfakitCopilot /> and <AlfakitLanguageSwitcher />', $note).' yourself');
 
             return;
         }
@@ -526,7 +553,30 @@ final class StarterKitInstaller
         }
 
         file_put_contents($path, $updated);
-        $this->record('updated', $relative, $note);
+        $this->record('updated', $relative, str_replace('{added}', self::addedComponents($contents, $updated), $note));
+    }
+
+    /**
+     * The header components a patch added, as "<A />, <B /> and <C />": a re-run that only
+     * adds the language switcher names only the switcher.
+     */
+    public static function addedComponents(string $before, string $after): string
+    {
+        $added = [];
+
+        foreach (['AlfakitSearch', 'AlfakitNotifications', 'AlfakitCopilot', 'AlfakitTenantSwitcher', 'AlfakitLanguageSwitcher'] as $component) {
+            if (substr_count($after, '<'.$component.' ') + substr_count($after, '<'.$component.'/') > substr_count($before, '<'.$component.' ') + substr_count($before, '<'.$component.'/')) {
+                $added[] = '<'.$component.' />';
+            }
+        }
+
+        if ($added === []) {
+            return 'the AlfaKit header components';
+        }
+
+        $last = array_pop($added);
+
+        return $added === [] ? $last : implode(', ', $added).' and '.$last;
     }
 
     /**

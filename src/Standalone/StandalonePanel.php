@@ -114,6 +114,11 @@ class StandalonePanel extends Panel
                     $router->post('/table/reorder', [TableController::class, 'reorder'])->name('table.reorder');
                     $router->post('/table/columns', [TableController::class, 'reorderColumns'])->name('table.columns');
                     $router->post('/table/totals', [TableController::class, 'totals'])->name('table.totals');
+                    // The same table features as in panels: spreadsheet saves, saved views and
+                    // `deferLoading()` components (without them those requests had nowhere to go).
+                    $router->post('/table/cells', [TableController::class, 'updateCells'])->name('table.cells');
+                    $router->post('/table/views', [\AlfaSix\Alfakit\Http\Controllers\TableViewsController::class, 'handle'])->name('table.views');
+                    $router->post('/schema/deferred', \AlfaSix\Alfakit\Http\Controllers\DeferredSchemaController::class)->name('schema.deferred');
                     // Fresh schemas of lazy and polled components (the host page has no
                     // `alfakitPoll` prop to partially reload).
                     $router->get('/standalone/components', [StandaloneController::class, 'components'])->name('standalone.components');
@@ -155,6 +160,9 @@ class StandalonePanel extends Panel
             'tableReorder' => $endpoint('table.reorder'),
             'tableColumns' => $endpoint('table.columns'),
             'tableTotals' => $endpoint('table.totals'),
+            'tableCells' => $endpoint('table.cells'),
+            'tableViews' => $endpoint('table.views'),
+            'schemaDeferred' => $endpoint('schema.deferred'),
             'upload' => $endpoint('uploads.store'),
             'uploadDestroy' => $endpoint('uploads.destroy'),
             'uploadChunks' => $endpoint('uploads.chunks.start'),

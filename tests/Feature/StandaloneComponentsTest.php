@@ -66,6 +66,10 @@ it('serialises a form into an Inertia prop with everything the renderer needs', 
         ->and($form['content'][0]['actions'][0]['label'])->toBe('Submit')
         ->and($form['endpoints']['action'])->toBe('http://localhost/_alfakit/actions')
         ->and($form['endpoints']['components'])->toBe('http://localhost/_alfakit/standalone/components')
+        // A spreadsheet table, saved views and deferLoading() outside panels have somewhere to post.
+        ->and($form['endpoints']['tableCells'])->toBe('http://localhost/_alfakit/table/cells')
+        ->and($form['endpoints']['tableViews'])->toBe('http://localhost/_alfakit/table/views')
+        ->and($form['endpoints']['schemaDeferred'])->toBe('http://localhost/_alfakit/schema/deferred')
         ->and($form['endpoints'])->not->toHaveKeys(['logout', 'notifications', 'globalSearch'])
         ->and($form['localization']['code'])->toBe('en')
         ->and($form['translations']['save'])->toBe('Save')
