@@ -493,7 +493,9 @@ class Builder extends Repeater
 
         foreach (array_keys($items) as $index) {
             foreach ($this->getItemFields($index, withHidden: true) as $field) {
-                $field->hydrateState($useDefaults || ! Arr::has($root->getRawState(), $field->getStatePath()));
+                // Item values the field's own `default()` lists are kept; only missing
+                // ones (new items, `defaultItems()`) take the item fields' defaults.
+                $field->hydrateState(! Arr::has($root->getRawState(), $field->getStatePath()));
             }
         }
 

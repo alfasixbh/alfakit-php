@@ -144,3 +144,20 @@ it('renders a masked numeric input as text so the mask separators can be typed',
         ->and($ownMode->toSchema()['inputMode'])->toBe('tel')
         ->and($schema->getState()['amount'])->toBe(1234567);
 });
+
+it('keeps maxLength() and minLength() off masked numeric inputs, where Laravel would read them as values', function (): void {
+    // TextInput::configureUsing(fn ($input) => $input->maxLength(255)) from the forms docs, on a masked amount.
+    $masked = TextInput::make('amount')->mask('9,999,999')->stripCharacters(',')->numeric()->maxLength(255)->minLength(2);
+    $maskedInteger = TextInput::make('count')->mask('999 999')->integer()->maxLength(255);
+    $text = TextInput::make('title')->maxLength(255)->minLength(2);
+
+    schema([$masked, $maskedInteger, $text]);
+
+    expect($masked->getValidationRules())->toContain('numeric')->not->toContain('max:255')->not->toContain('min:2')
+        ->and($maskedInteger->getValidationRules())->toContain('integer')->not->toContain('max:255')
+        ->and($text->getValidationRules())->toContain('max:255', 'min:2');
+
+    $validator = validator(['amount' => 1234567], ['amount' => $masked->getValidationRules()]);
+
+    expect($validator->passes())->toBeTrue();
+});

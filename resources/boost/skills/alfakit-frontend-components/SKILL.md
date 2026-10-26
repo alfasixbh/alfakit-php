@@ -30,7 +30,7 @@ void createAlfakit({
 })
 ```
 
-`createAlfakit()` registers the panel layouts (`layout:app`, `layout:auth`, `layout:blank`, `layout:fullscreen`) from the exported `panelLayouts`; `PageShell` never imports them, so a registry built by hand for `AlfakitPage` needs `createDefaultRegistry().registerMany(panelLayouts)` (without it a page renders bare). Starter kit pages use the host's layout (plus the panel's auth layout) and load the fullscreen layout on demand: don't import panel chrome (`AppLayout`, `AppSidebar`, `Topbar`) from code that starter kit pages run, `pnpm bundle:budget` (`starter-kit:<renderer>`) fails on it.
+`createAlfakit()` registers the panel layouts (`layout:app`, `layout:auth`, `layout:blank`, `layout:fullscreen`) from the exported `panelLayouts`; `PageShell` never imports them, so a registry built by hand for `AlfakitPage` needs `createDefaultRegistry().registerMany(panelLayouts)` (without it a page renders bare). Starter kit pages use the host's layout (plus the panel's auth layout); a `fullscreen` page there renders `StarterKitFullscreenLayout` (the content area, no AlfaKit header; replace `layout:fullscreen` in `createStarterKitPage({ components })`): don't import panel chrome (`AppLayout`, `AppSidebar`, `Topbar`) from code that starter kit pages run, `pnpm bundle:budget` (`starter-kit:<renderer>`) fails on it.
 
 Keys come from the path. The file name is used exactly as written, and sub-folders don't change it except under `pages/`:
 

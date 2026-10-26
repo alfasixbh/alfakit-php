@@ -60,7 +60,10 @@ class StarterKitDashboard extends Widgets
             return SetPanelLocale::using($panel, static function () use ($panel): ?array {
                 $component = static::make(['panelId' => $panel->getId()]);
 
-                return $component->getAllWidgetInstances() === [] ? null : $component->toPayload();
+                // A customizable dashboard keeps its toolbar when the user hid every widget.
+                $empty = $component->getAllWidgetInstances() === [] && $component->getCustomizableDashboard() === null;
+
+                return $empty ? null : $component->toPayload();
             });
         } finally {
             if ($previous !== $panel) {
@@ -113,6 +116,64 @@ class StarterKitDashboard extends Widgets
     public function widgets(): array
     {
         return $this->getDashboard()?->getWidgets() ?? $this->getPanel()->getWidgets();
+    }
+
+    /**
+     * The panel's main dashboard when it is customizable for this user
+     * (`Dashboard::customizable()` or the panel's `customizableDashboards()`): the host's
+     * dashboard then shows the user's layout and offers "Edit dashboard", saving the same
+     * layout as the panel's dashboard.
+     */
+    public function getCustomizableDashboard(): ?Dashboard
+    {
+        $dashboard = $this->getDashboard();
+
+        return $dashboard !== null && $dashboard->isCustomizable() ? $dashboard : null;
+    }
+
+    /**
+     * On a customizable dashboard: every library widget the user may see (lazy loading
+     * fetches them by id), arranged by the user's layout (visible ones, their order and
+     * spans).
+     *
+     * @return array<string, \AlfaSix\Alfakit\Widgets\Widget>
+     */
+    public function getAllWidgetInstances(): array
+    {
+        $dashboard = $this->getCustomizableDashboard();
+
+        if ($dashboard === null) {
+            return parent::getAllWidgetInstances();
+        }
+
+        return $this->cachedWidgets ??= $dashboard->applyDashboardLayout(
+            $this->instantiateWidgets($dashboard->getAvailableWidgets()),
+        );
+    }
+
+    /**
+     * A customizable dashboard's widgets are one customizable block instead of the header
+     * widgets.
+     *
+     * @return array<class-string<\AlfaSix\Alfakit\Widgets\Widget>|\AlfaSix\Alfakit\Widgets\Widget>
+     */
+    protected function getHeaderWidgets(): array
+    {
+        return $this->getCustomizableDashboard() === null ? parent::getHeaderWidgets() : [];
+    }
+
+    /**
+     * @return array<array<string, mixed>>
+     */
+    protected function getContentBlocks(): array
+    {
+        $dashboard = $this->getCustomizableDashboard();
+
+        if ($dashboard === null) {
+            return parent::getContentBlocks();
+        }
+
+        return [$dashboard->serializeCustomizableWidgetsWith($this->getAllWidgetInstances(), $this->rendersLazyPlaceholders())];
     }
 
     public function widgetColumns(): int|array

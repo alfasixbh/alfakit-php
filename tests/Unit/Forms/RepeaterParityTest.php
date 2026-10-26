@@ -172,3 +172,22 @@ it('offers fixIndistinctState() on toggles, checkboxes and radios', function ():
         expect($field->fixIndistinctState()->shouldFixIndistinctState())->toBeTrue();
     }
 });
+
+it('keeps the item values of a repeater or builder default() on create', function (): void {
+    $repeater = Repeater::make('sections')
+        ->schema([TextInput::make('heading'), TextInput::make('note')->default('n/a')])
+        ->default([['heading' => 'One'], ['heading' => 'Two', 'note' => 'kept']]);
+    $builder = Builder::make('content')
+        ->blocks([Block::make('heading')->schema([TextInput::make('text')])])
+        ->default([['type' => 'heading', 'data' => ['text' => 'Hello']]]);
+    $counted = Repeater::make('items')->schema([TextInput::make('sku')->default('SKU-1')])->defaultItems(2);
+
+    $schema = schema([$repeater, $builder, $counted])->operation('create')->fill();
+
+    expect($schema->getRawState()['sections'])->toBe([
+        ['heading' => 'One', 'note' => 'n/a'],
+        ['heading' => 'Two', 'note' => 'kept'],
+    ])
+        ->and($schema->getRawState()['content'])->toBe([['type' => 'heading', 'data' => ['text' => 'Hello']]])
+        ->and($schema->getRawState()['items'])->toBe([['sku' => 'SKU-1'], ['sku' => 'SKU-1']]);
+});

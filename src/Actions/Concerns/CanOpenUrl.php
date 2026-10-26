@@ -14,6 +14,8 @@ trait CanOpenUrl
 
     protected bool|Closure $shouldPostToUrl = false;
 
+    protected bool|Closure $isUrlDownload = false;
+
     public function url(string|Closure|null $url, bool|Closure $shouldOpenInNewTab = false): static
     {
         $this->url = $url;
@@ -38,6 +40,23 @@ trait CanOpenUrl
         $this->shouldPostToUrl = $condition;
 
         return $this;
+    }
+
+    /**
+     * The URL serves a file to save (e.g. a signed download route): it is opened as a plain
+     * link with the `download` attribute instead of an Inertia visit, which would fetch the
+     * file in the background and discard it.
+     */
+    public function download(bool|Closure $condition = true): static
+    {
+        $this->isUrlDownload = $condition;
+
+        return $this;
+    }
+
+    public function isUrlDownload(): bool
+    {
+        return (bool) $this->evaluate($this->isUrlDownload);
     }
 
     public function shouldPostToUrl(): bool

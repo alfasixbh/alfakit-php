@@ -111,7 +111,7 @@ trait GeneratesFrontendComponents
 
         $hasAppEntry = collect(['tsx', 'ts', 'jsx', 'js'])->contains(static fn (string $extension): bool => file_exists(resource_path("js/alfakit/app.{$extension}")));
 
-        if ($hasAppEntry || AppEnvironment::starterKitPageEntry() === null) {
+        if ($hasAppEntry || (AppEnvironment::starterKitPageEntry() === null && ! AppEnvironment::usesStandaloneStyles())) {
             $this->components->info('Skip this step next time: add `discover: '.$this->discoveryGlob($adapter).'` to createAlfakit() in resources/js/alfakit/app.* (and createAlfakitServer() in ssr.*), and every file in fields/, columns/, entries/, widgets/, pages/, components/ and blocks/ registers itself.');
         }
 
@@ -174,6 +174,12 @@ trait GeneratesFrontendComponents
                 $factory = $adapter === 'svelte' ? 'createStarterKitLayout' : 'createStarterKitPage';
 
                 $this->components->warn("{$file} doesn't auto-register components. Add `discover: ".static::starterKitDiscoveryGlob($adapter)."` to {$factory}() there, or register this one yourself:\n\nimport {$component} from '{$starterKitImport}'\n\n{$factory}({ layout: AppLayout, {$section}: { '{$key}': {$component} } })");
+            } elseif ($entryName === 'app' && AppEnvironment::usesStandaloneStyles()) {
+                // Outside panels there is no createAlfakit(): components are registered once
+                // in the app's own entry with configureAlfakit().
+                $appImport = './alfakit/'.Str::after($import, './');
+
+                $this->components->warn("Outside panels, register the component once in your app entry (resources/js/app.*), or per page with the `components` prop of <AlfakitComponent>:\n\nimport { configureAlfakit } from '@alfakit/{$adapter}'\nimport {$component} from '{$appImport}'\n\nconfigureAlfakit({ {$section}: { '{$key}': {$component} } })");
             } elseif ($entryName === 'app') {
                 $this->components->warn("No resources/js/alfakit/app entry found. Register the component yourself:\n\n{$snippet}");
             }

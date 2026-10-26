@@ -365,7 +365,11 @@ class TextInput extends Field
             $rules[] = 'url';
         }
 
-        $isNumber = in_array($this->getInputType(), ['number'], true);
+        // Laravel reads `min`/`max` next to `numeric`/`integer` as values, not lengths, so the
+        // length rules stay off numbers, including masked ones rendered as text inputs.
+        $isNumber = in_array($this->getInputType(), ['number'], true)
+            || $this->evaluate($this->isInteger)
+            || $this->evaluate($this->isNumeric);
 
         if (($min = $this->evaluate($this->minLength)) !== null && ! $isNumber) {
             $rules[] = "min:{$min}";

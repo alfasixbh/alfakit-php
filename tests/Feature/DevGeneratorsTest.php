@@ -441,6 +441,17 @@ it('gives the Vue and Svelte field stubs the input slot the themes style', funct
     @unlink(app_path('Alfakit/Forms/Components/SlotProbe.php'));
 })->with([['vue', 'vue'], ['svelte', 'svelte']]);
 
+it('points apps outside panels at configureAlfakit() instead of createAlfakit() (W-V3-27)', function (string $adapter, string $import): void {
+    writeSandbox('resources/css/app.css', "@import 'tailwindcss';\n@import '@alfakit/{$adapter}/standalone.css';\n");
+
+    expect(Illuminate\Support\Facades\Artisan::call('make:alfakit-field', ['name' => 'RatingInput', '--adapter' => $adapter]))->toBe(0);
+    $output = preg_replace('/\s+/', ' ', Illuminate\Support\Facades\Artisan::output());
+
+    expect($output)
+        ->toContain("import { configureAlfakit } from '@alfakit/{$adapter}' import RatingInput from '{$import}' configureAlfakit({ components: { 'RatingInput': RatingInput } })")
+        ->not->toContain('createAlfakit(');
+})->with([['react', './alfakit/fields/RatingInput'], ['vue', './alfakit/fields/RatingInput.vue'], ['svelte', './alfakit/fields/RatingInput.svelte']]);
+
 it('points starter kit apps at the host page instead of a createAlfakit() they do not have', function (): void {
     writeSandbox('resources/js/pages/Alfakit/Page.tsx', "import { createStarterKitPage } from '@alfakit/react';\nimport AppLayout from '@/layouts/app-layout';\n\nexport default createStarterKitPage({ layout: AppLayout });\n");
 

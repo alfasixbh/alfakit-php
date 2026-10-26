@@ -149,3 +149,50 @@ it('builds the shared widgets and navigation in the panel language while the hos
         ->and($props['appLocale'])->toBe('en')
         ->and(app()->getLocale())->toBe('en');
 });
+
+it("offers the customizable dashboard's editor on the host dashboard and saves the panel dashboard's layout (W-38)", function (): void {
+    (require __DIR__.'/../../../database/migrations/0001_01_01_000200_create_alfakit_dashboard_layouts_table.php')->up();
+    Panels::register('kitc', fn (Panel $panel): Panel => $panel->starterKit()
+        ->pages([AlfaSix\Alfakit\Tests\Fixtures\Customizable\CustomDashboard::class])
+        ->customizableDashboards()
+        ->availableDashboardWidgets([AlfaSix\Alfakit\Tests\Fixtures\Customizable\LibraryChart::class]));
+    StarterKitNavigation::register(alfakit());
+    $this->actingAs(starterKitDashboardUser());
+    [$a, $b, $library] = [
+        AlfaSix\Alfakit\Widgets\Widget::idFromClass(AlfaSix\Alfakit\Tests\Fixtures\Customizable\StatsA::class),
+        AlfaSix\Alfakit\Widgets\Widget::idFromClass(AlfaSix\Alfakit\Tests\Fixtures\Customizable\StatsB::class),
+        AlfaSix\Alfakit\Widgets\Widget::idFromClass(AlfaSix\Alfakit\Tests\Fixtures\Customizable\LibraryChart::class),
+    ];
+
+    $component = inertiaProps(inertiaGet($this, '/dashboard'))['alfakitWidgets'][0]['component'];
+    $block = $component['content'][0];
+
+    expect($component['content'])->toHaveCount(1)
+        ->and($block['type'])->toBe('Widgets')
+        ->and(array_column($block['widgets'], 'id'))->toBe([$a, $b])
+        ->and($block['customize']['endpoint'])->toBe('http://localhost/kitc/_alfakit/dashboard/layout')
+        ->and(array_column($block['customize']['library'], 'id'))->toBe([$a, $b, $library]);
+
+    // "Edit dashboard" saves the panel dashboard's layout with its own token.
+    $this->postJson('/kitc/_alfakit/dashboard/layout', ['token' => $block['customize']['token'], 'layout' => [
+        ['id' => $library, 'span' => 2],
+        ['id' => $b],
+        ['id' => $a, 'hidden' => true],
+    ]])->assertOk()->assertJsonPath('customized', true);
+
+    $component = inertiaProps(inertiaGet($this, '/dashboard'))['alfakitWidgets'][0]['component'];
+    $block = $component['content'][0];
+
+    expect(array_column($block['widgets'], 'id'))->toBe([$library, $b])
+        ->and($block['widgets'][0]['lazy'])->toBeTrue()
+        ->and($block['customize']['customized'])->toBeTrue()
+        ->and($component['lazy'])->toBe(["widget:{$library}"]);
+
+    // The added library widget loads lazily through the host dashboard's token, in the user's span.
+    $fresh = $this->getJson('/kitc/_alfakit/standalone/components?'.http_build_query(['token' => $component['token'], 'targets' => "widget:{$library}"]))
+        ->assertOk()
+        ->json("widget:{$library}");
+
+    expect($fresh['stats'][0]['label'])->toBe('Library')
+        ->and($fresh['columnSpan'])->toBe(['default' => 'full', 'lg' => 'full']);
+});

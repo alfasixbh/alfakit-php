@@ -339,3 +339,16 @@ it('defers relation group badges with deferBadge()', function (): void {
         P3PostResource::$relationsOverride = null;
     }
 });
+
+it('skips a nested global search result whose parent is gone instead of failing the search (V5 observation)', function (): void {
+    $orphan = $this->post->comments()->create(['author_name' => 'Orphan Ann', 'body' => 'orphan']);
+
+    // SQLite checks deferred keys at commit; the test transaction is rolled back.
+    Illuminate\Support\Facades\DB::statement('PRAGMA defer_foreign_keys = ON');
+    $orphan->newQuery()->whereKey($orphan->getKey())->update(['post_id' => 999999]);
+
+    $groups = $this->getJson('/p3/_alfakit/global-search?search=Ann')->assertOk()->json('groups');
+    $comments = collect($groups)->flatMap(fn (array $group): array => $group['results'])->pluck('title')->all();
+
+    expect($comments)->toContain('Ann')->not->toContain('Orphan Ann');
+});

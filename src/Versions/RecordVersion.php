@@ -40,6 +40,12 @@ class RecordVersion extends Model
     /** A "Restore this version" from the history (`restored_from_id` names the version). */
     public const EVENT_REVERTED = 'reverted';
 
+    /**
+     * The values a record had before its first version: written before the first tracked
+     * update of a record that existed before `HasRecordVersions` was added.
+     */
+    public const EVENT_BASELINE = 'baseline';
+
     protected $table = 'alfakit_record_versions';
 
     protected $guarded = [];

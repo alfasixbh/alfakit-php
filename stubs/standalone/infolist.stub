@@ -11,7 +11,7 @@ use AlfaSix\Alfakit\Standalone\Infolist;
 {{ modelImport }}
 /**
  * Render it from a controller: `'details' => {{ class }}::make({{ recordParameter }})`, then
- * `<AlfakitComponent component={details} />` in the page (`:component` in Vue).
+ * {{ componentTag }} in the page.
  */
 class {{ class }} extends Infolist
 {

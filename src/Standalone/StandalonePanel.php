@@ -107,6 +107,8 @@ class StandalonePanel extends Panel
                     $router->post('/actions', [ActionController::class, 'execute'])->name('actions.execute');
                     // The toast's Undo button and Ctrl/Cmd+Z of `undoable()` actions.
                     $router->post('/actions/undo', [UndoController::class, 'undo'])->name('actions.undo');
+                    // Files returned by action handlers, fetched once from a signed link (ActionDownload).
+                    $router->get('/actions/download/{download}', \AlfaSix\Alfakit\Http\Controllers\ActionDownloadController::class)->name('actions.download')->middleware('signed');
                     // Field actions send the form's state, which can be too large for a query string, so the
                     // modal endpoint also takes POST. One route (not a GET and a POST route on the same URI)
                     // keeps Laravel Wayfinder's generated actions valid in starter kit apps.

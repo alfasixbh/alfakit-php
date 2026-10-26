@@ -8,6 +8,7 @@ use AlfaSix\Alfakit\Actions\Exceptions\Cancel;
 use AlfaSix\Alfakit\Actions\Exceptions\Halt;
 use AlfaSix\Alfakit\Pages\Page;
 use AlfaSix\Alfakit\Schemas\SchemaDiff;
+use AlfaSix\Alfakit\Support\ActionDownload;
 use AlfaSix\Alfakit\Support\Serializable;
 use Illuminate\Contracts\Support\Responsable;
 use Illuminate\Http\JsonResponse;
@@ -80,7 +81,17 @@ trait HandlesFieldActions
             return response()->json(['status' => 'success', 'redirect' => \AlfaSix\Alfakit\Support\Url::sanitize($result->getTargetUrl())]);
         }
 
-        if ($result instanceof Response || $result instanceof Responsable) {
+        if ($result instanceof Responsable) {
+            $result = $result->toResponse($request);
+        }
+
+        // Field actions answer with JSON, which cannot carry a file: the browser fetches it
+        // from a one-time link.
+        $download = $result instanceof Response && ActionDownload::isDownload($result)
+            ? ActionDownload::store($result, $request)
+            : null;
+
+        if ($download === null && $result instanceof Response) {
             return $result;
         }
 
@@ -89,6 +100,7 @@ trait HandlesFieldActions
         return response()->json([
             'status' => 'success',
             'result' => is_scalar($result) || is_array($result) || $result === null ? Serializable::value($result) : null,
+            'download' => $download,
             'closeModal' => $action->shouldCloseModal(),
             'redirect' => \AlfaSix\Alfakit\Support\Url::sanitize($action->getSuccessRedirectUrl()),
             'form' => SchemaDiff::respond($schema->toPayload(), is_array($fingerprints) ? $fingerprints : null, $state),

@@ -181,3 +181,30 @@ it('shows the component tag in the app renderer\'s syntax', function (): void {
         ->expectsOutputToContain('<AlfakitComponent :component="postsTable" />')
         ->assertSuccessful();
 });
+
+it('writes the component tag of the app renderer into the generated class docblocks (W-V3-05)', function (string $package, string $form, string $overview): void {
+    file_put_contents($this->sandbox.'/package.json', json_encode(['dependencies' => [$package => '^3.0']]));
+
+    $this->artisan('make:alfakit-form', ['name' => 'ContactForm'])->assertSuccessful();
+    $this->artisan('make:alfakit-component', ['name' => 'AccountOverview'])->assertSuccessful();
+
+    expect(file_get_contents($this->sandbox.'/app/Alfakit/Standalone/ContactForm.php'))->toContain("`{$form}` in the page.")->not->toContain('in Vue')
+        ->and(file_get_contents($this->sandbox.'/app/Alfakit/Standalone/AccountOverview.php'))->toContain("then `{$overview}`.");
+})->with([
+    'vue' => ['@inertiajs/vue3', '<AlfakitComponent :component="form" />', '<AlfakitComponent :component="overview" />'],
+    'svelte' => ['@inertiajs/svelte', '<AlfakitComponent component={form} />', '<AlfakitComponent component={overview} />'],
+    'react' => ['@inertiajs/react', '<AlfakitComponent component={form} />', '<AlfakitComponent component={overview} />'],
+]);
+
+it('says that --ssr changes nothing in a standalone install instead of ignoring it silently (W-G-17)', function (): void {
+    file_put_contents($this->sandbox.'/resources/css/app.css', "@import 'tailwindcss';\n");
+    file_put_contents($this->sandbox.'/package.json', json_encode(['dependencies' => ['@inertiajs/vue3' => '^3.0']]));
+    (new Filesystem)->ensureDirectoryExists($this->sandbox.'/resources/views');
+    file_put_contents($this->sandbox.'/resources/views/app.blade.php', '@inertia');
+
+    $this->artisan('alfakit:install', ['--standalone' => true, '--ssr' => true, '--no-npm' => true])
+        ->expectsOutputToContain('--ssr only sets up the SSR entry of a panel install')
+        ->assertSuccessful();
+
+    expect(file_exists($this->sandbox.'/resources/js/alfakit/ssr.ts'))->toBeFalse();
+});

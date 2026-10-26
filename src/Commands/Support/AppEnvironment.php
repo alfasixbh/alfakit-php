@@ -90,6 +90,17 @@ final class AppEnvironment
     }
 
     /**
+     * Whether the app uses AlfaKit outside panels: `resources/css/app.css` imports a
+     * renderer's `standalone.css` (written by `alfakit:install --standalone`).
+     */
+    public static function usesStandaloneStyles(): bool
+    {
+        $css = resource_path('css/app.css');
+
+        return is_file($css) && str_contains((string) file_get_contents($css), 'standalone.css');
+    }
+
+    /**
      * The Inertia adapter the app uses: react, vue, svelte or null.
      */
     public static function adapter(): ?string

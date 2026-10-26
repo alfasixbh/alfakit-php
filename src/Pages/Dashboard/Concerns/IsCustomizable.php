@@ -191,16 +191,28 @@ trait IsCustomizable
      */
     protected function getVisibleLayoutWidgets(): array
     {
-        $library = $this->getLibraryWidgets();
+        return $this->applyDashboardLayout($this->getLibraryWidgets());
+    }
+
+    /**
+     * The user's layout applied to widget instances (by id): the visible ones in the user's
+     * order, with their chosen spans. A starter kit's host dashboard (`<AlfakitWidgets />`)
+     * applies it to its own instances of the library widgets.
+     *
+     * @param  array<string, Widget>  $instances
+     * @return array<string, Widget>
+     */
+    public function applyDashboardLayout(array $instances): array
+    {
         $columns = $this->getDashboardGridColumns();
         $widgets = [];
 
         foreach ($this->getDashboardLayout() as $entry) {
-            if ($entry['hidden'] || ! isset($library[$entry['id']])) {
+            if ($entry['hidden'] || ! isset($instances[$entry['id']])) {
                 continue;
             }
 
-            $widget = $library[$entry['id']];
+            $widget = $instances[$entry['id']];
 
             if ($entry['span'] !== null) {
                 $widget->columnSpan($this->spanToColumnSpan($entry['span'], $columns));
@@ -220,8 +232,24 @@ trait IsCustomizable
      */
     protected function serializeCustomizableWidgets(): array
     {
+        return $this->serializeCustomizableWidgetsWith(
+            array_intersect_key($this->getAllWidgetInstances(), $this->getVisibleLayoutWidgets()),
+            $this->rendersLazyPlaceholders(),
+        );
+    }
+
+    /**
+     * The customizable `Widgets` block with these visible widget instances (in order, from
+     * `applyDashboardLayout()`): the dashboard's own, or a starter kit host dashboard's, whose
+     * widgets load and run actions under its own token while "Edit dashboard" saves this
+     * dashboard's layout.
+     *
+     * @param  array<string, Widget>  $visible
+     * @return array<string, mixed>
+     */
+    public function serializeCustomizableWidgetsWith(array $visible, bool $lazyPlaceholders): array
+    {
         $columns = $this->getDashboardGridColumns();
-        $visible = array_intersect_key($this->getAllWidgetInstances(), $this->getVisibleLayoutWidgets());
         $defaults = array_column($this->getDefaultDashboardLayout(), 'id');
 
         return [
@@ -229,7 +257,7 @@ trait IsCustomizable
             'key' => 'widgets',
             'columns' => $columns,
             'widgets' => array_values(array_map(
-                fn (Widget $widget): array => $this->rendersLazyPlaceholders() && $widget::isLazy() ? $widget->toLazySchema() : $widget->toSchema(),
+                static fn (Widget $widget): array => $lazyPlaceholders && $widget::isLazy() ? $widget->toLazySchema() : $widget->toSchema(),
                 $visible,
             )),
             'customize' => [

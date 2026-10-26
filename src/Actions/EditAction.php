@@ -19,6 +19,9 @@ class EditAction extends Action
 
     protected ?Closure $saveUsing = null;
 
+    /** The built-in save; replaced by a custom `action()`. */
+    protected ?Closure $saveAction = null;
+
     public static function make(string $name = 'edit'): static
     {
         return parent::make($name);
@@ -44,7 +47,7 @@ class EditAction extends Action
             ? $this->resourceAuthorizes('viewAny')
             : $this->resourceAuthorizes('update', $record));
 
-        $this->action(function (array $data, ?Model $record, EditAction $action): Model {
+        $this->action($this->saveAction = function (array $data, ?Model $record, EditAction $action): Model {
             // Offered without a record (see above), it only ever runs on one.
             abort_if($record === null, 404);
 
@@ -80,6 +83,25 @@ class EditAction extends Action
         });
 
         $this->after(fn () => $this->sendSuccessNotification());
+    }
+
+    /**
+     * Without a form (or other modal content), a page to link to (a resource's edit page),
+     * `using()` or its own `action()`, there is nothing to edit: the action is hidden instead of "saving"
+     * nothing (e.g. `EditAction::make()` in a table outside a resource).
+     */
+    public function isHidden(): bool
+    {
+        if (parent::isHidden()) {
+            return true;
+        }
+
+        return ! $this->isOfferedBeforeRecord
+            && $this->action === $this->saveAction
+            && $this->saveUsing === null
+            && ! $this->hasModal()
+            && $this->getExtraModalFooterActions() === []
+            && $this->getUrl() === null;
     }
 
     public function mutateDataUsing(?Closure $callback): static

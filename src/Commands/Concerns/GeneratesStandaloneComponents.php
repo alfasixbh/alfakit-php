@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AlfaSix\Alfakit\Commands\Concerns;
 
+use AlfaSix\Alfakit\Commands\Support\AppEnvironment;
 use AlfaSix\Alfakit\Commands\Support\ModelInspector;
 use AlfaSix\Alfakit\Commands\Support\ResourceCodeBuilder;
 use Illuminate\Database\Eloquent\Model;
@@ -38,6 +39,9 @@ trait GeneratesStandaloneComponents
 
         [$components, $columns, $imports] = $this->standaloneBody($kind, $modelClass);
 
+        // The prop name the stub's docblock uses (`'form' => ContactForm::make()`).
+        $stubProp = ['form' => 'form', 'table' => 'table', 'infolist' => 'details'][$kind] ?? 'overview';
+
         $written = $this->writeStub("standalone/{$kind}", $path, [
             'components' => $components,
             'columns' => $columns,
@@ -51,6 +55,9 @@ trait GeneratesStandaloneComponents
             'modelParameter' => $variable === null || $kind === 'table' ? '' : "['{$variable}' => \${$variable}]",
             'query' => $modelBasename === null ? '/* Model::query() */' : "{$modelBasename}::query()",
             'recordParameter' => $variable === null ? '' : "['record' => \${$variable}]",
+            'componentTag' => AppEnvironment::adapter() === null
+                ? '`'.static::componentTag($stubProp, 'react').'` (`:component` in Vue)'
+                : '`'.static::componentTag($stubProp, AppEnvironment::adapter()).'`',
         ], (bool) $this->option('force'));
 
         if ($written) {
@@ -61,17 +68,20 @@ trait GeneratesStandaloneComponents
                 default => "['{$variable}' => \${$variable}]",
             };
 
-            // The component tag as the app's renderer writes it.
-            $tag = match (\AlfaSix\Alfakit\Commands\Support\AppEnvironment::adapter()) {
-                'vue' => "<AlfakitComponent :component=\"{$prop}\" />",
-                'svelte' => "<AlfakitComponent component={{$prop}} />",
-                default => "<AlfakitComponent component={{$prop}} />",
-            };
+            $tag = static::componentTag($prop, AppEnvironment::adapter());
 
             $this->components->info("Render it from a controller: Inertia::render('YourPage', ['{$prop}' => \\{$namespace}\\{$name}::make({$arguments})]) and show it with {$tag}.");
         }
 
         return self::SUCCESS;
+    }
+
+    /** The component tag as the app's renderer writes it (React and Svelte: `component={…}`). */
+    protected static function componentTag(string $prop, ?string $adapter): string
+    {
+        return $adapter === 'vue'
+            ? "<AlfakitComponent :component=\"{$prop}\" />"
+            : "<AlfakitComponent component={{$prop}} />";
     }
 
     /**

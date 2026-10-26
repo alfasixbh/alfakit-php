@@ -189,3 +189,14 @@ it('keeps a hidden label as the tooltip and accessible name (W-V5-01)', function
     expect(Action::make('hidden')->label('Hidden label')->icon('eye-off')->tooltip('Hide it')->hiddenLabel()->toSchema())
         ->toMatchArray(['tooltip' => 'Hide it']);
 });
+
+it('hides an EditAction with nothing to edit: no form, no page to link to (W-V5-06)', function (): void {
+    $post = Post::query()->create(['title' => 'Old', 'slug' => 'old-'.uniqid()]);
+
+    expect(EditAction::make()->record($post)->isVisible())->toBeFalse()
+        ->and(EditAction::make()->record($post)->form([TextInput::make('title')])->isVisible())->toBeTrue()
+        ->and(EditAction::make()->record($post)->url('/posts/1/edit')->isVisible())->toBeTrue()
+        ->and(EditAction::make()->record($post)->using(fn () => null)->isVisible())->toBeTrue()
+        ->and(EditAction::make()->record($post)->action(fn () => null)->isVisible())->toBeTrue()
+        ->and(EditAction::make()->offeredBeforeRecord()->isVisible())->toBeTrue();
+});

@@ -182,6 +182,7 @@ class HistoryAction extends Action
             RecordVersion::EVENT_DELETED => __('alfakit::actions.history.events.deleted'),
             RecordVersion::EVENT_RESTORED => __('alfakit::actions.history.events.restored'),
             RecordVersion::EVENT_REVERTED => __('alfakit::actions.history.events.reverted'),
+            RecordVersion::EVENT_BASELINE => __('alfakit::actions.history.events.baseline'),
             default => __('alfakit::actions.history.events.updated'),
         };
     }

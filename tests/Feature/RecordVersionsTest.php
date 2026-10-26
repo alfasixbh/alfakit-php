@@ -99,6 +99,27 @@ it('pauses versioning with withoutVersions()', function (): void {
     expect($post->recordVersions()->count())->toBe(0);
 });
 
+it('keeps a baseline of a record that existed before versioning, so its first change shows old and new (W-B-11)', function (): void {
+    versionsPanel();
+    $ada = versionsUser();
+    $this->actingAs($ada);
+    // Created before the model used HasRecordVersions: no versions.
+    $post = VersionedPost::withoutVersions(fn () => versionedPost($ada, ['title' => 'Published one']));
+
+    $post->update(['title' => 'Published one v2']);
+    $post->update(['title' => 'Published one v3']);
+
+    expect(RecordVersion::query()->orderBy('id')->pluck('event')->all())->toBe(['baseline', 'updated', 'updated']);
+
+    $versions = historyModal($this, "/versions/versioned-posts/{$post->getKey()}/edit")['content'][0]['versions'];
+
+    expect(array_column($versions, 'event'))->toBe(['updated', 'updated', 'baseline'])
+        ->and($versions[2]['eventLabel'])->toBe('Before the history started')
+        ->and($versions[2])->not->toHaveKey('author')
+        ->and(collect($versions[1]['changes'])->firstWhere('attribute', 'title'))
+        ->toMatchArray(['old' => 'Published one', 'new' => 'Published one v2']);
+});
+
 // ---------------------------------------------------------------- History slide-over
 
 it('adds a History action with field-by-field diffs to edit and view pages', function (): void {

@@ -47,6 +47,12 @@ trait HasChildComponents
 
     public function hasChildComponents(): bool
     {
+        // A `schema()` closure may be expensive: reuse the memoised child schema instead of
+        // running it again on every traversal of the tree.
+        if ($this->childComponents instanceof Closure) {
+            return $this->getChildSchema()->getComponents(withHidden: true) !== [];
+        }
+
         return $this->getChildComponents() !== [];
     }
 

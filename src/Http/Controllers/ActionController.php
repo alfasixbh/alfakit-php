@@ -14,6 +14,7 @@ use AlfaSix\Alfakit\Http\Controllers\Concerns\ResolvesContext;
 use AlfaSix\Alfakit\Pages\Page;
 use AlfaSix\Alfakit\Panel;
 use AlfaSix\Alfakit\Resources\RelationManagers\RelationManager;
+use AlfaSix\Alfakit\Support\ActionDownload;
 use AlfaSix\Alfakit\Tables\Table;
 use Illuminate\Contracts\Support\Responsable;
 use Illuminate\Http\JsonResponse;
@@ -105,7 +106,16 @@ class ActionController
             return back();
         }
 
-        if ($result instanceof Response || $result instanceof Responsable) {
+        if ($result instanceof Responsable) {
+            $result = $result->toResponse($request);
+        }
+
+        // An Inertia visit cannot carry a file: the browser fetches it from a one-time link.
+        $download = $result instanceof Response && $request->header('X-Inertia') && ActionDownload::isDownload($result)
+            ? ActionDownload::store($result, $request)
+            : null;
+
+        if ($download === null && $result instanceof Response) {
             return $result;
         }
 
@@ -123,6 +133,7 @@ class ActionController
             'cancelParentActions' => $action->getParentActionsToCancel(),
             'parentData' => $this->filledParentData($action) ?: null,
             'replaceMountedAction' => $replacement,
+            'download' => $download,
         ], static fn (mixed $value): bool => $value !== null));
 
         $redirect = \AlfaSix\Alfakit\Support\Url::sanitize($action->getSuccessRedirectUrl());

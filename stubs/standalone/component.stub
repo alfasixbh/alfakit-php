@@ -14,7 +14,7 @@ use AlfaSix\Alfakit\Standalone\Component;
 /**
  * A headless page: combine `form()`, `table()`, `infolist()`, `content()`, `actions()` and
  * `widgets()` as needed. Render it from a controller:
- * `'overview' => {{ class }}::make({{ modelParameter }})`, then `<AlfakitComponent component={overview} />`.
+ * `'overview' => {{ class }}::make({{ modelParameter }})`, then {{ componentTag }}.
  */
 class {{ class }} extends Component
 {

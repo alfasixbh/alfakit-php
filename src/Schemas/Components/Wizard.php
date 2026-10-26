@@ -22,6 +22,7 @@ class Wizard extends Component
     use Concerns\CanDeferLoading {
         shouldRenderDeferredPlaceholder as protected shouldRenderOwnDeferredPlaceholder;
     }
+    use Concerns\PreparesActions;
 
     protected int|Closure $startStep = 1;
 
@@ -240,7 +241,8 @@ class Wizard extends Component
     }
 
     /**
-     * The submit action, so pages resolve it by name like section header actions.
+     * The submit action, so pages resolve it by name like section header actions. It is bound
+     * to the wizard's field context too, so `$get` / `$set` / `$component` work.
      *
      * @return array<Action>
      */
@@ -248,7 +250,29 @@ class Wizard extends Component
     {
         $action = $this->getSubmitAction();
 
-        return $action instanceof Action ? [$action->schemaComponent($this)] : [];
+        return $action instanceof Action ? [$this->prepareAction($action, withFieldContext: true)] : [];
+    }
+
+    /**
+     * Inside a form the submit action runs through the field action endpoint
+     * (`field:{schema}::{key}`), like section header actions, so `$set` reaches the form.
+     *
+     * @return array<string, Action>
+     */
+    public function getFieldActions(): array
+    {
+        $actions = [];
+
+        foreach ($this->getAllActions() as $action) {
+            $actions[$action->getName()] = $action;
+        }
+
+        return $actions;
+    }
+
+    public function getFieldAction(string $name): ?Action
+    {
+        return $this->getFieldActions()[$name] ?? null;
     }
 
     /**

@@ -26,6 +26,7 @@ use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Routing\Exceptions\UrlGenerationException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Route;
@@ -1102,12 +1103,22 @@ abstract class Resource
         }
 
         return $query->limit(static::getGlobalSearchResultsLimit())->get()
-            ->map(static fn (Model $record): ?GlobalSearchResult => static::getGlobalSearchResultUrl($record) === null ? null : new GlobalSearchResult(
-                title: static::getGlobalSearchResultTitle($record),
-                url: (string) static::getGlobalSearchResultUrl($record),
-                details: static::getGlobalSearchResultDetails($record),
-                actions: static::serializeGlobalSearchResultActions($record),
-            ))
+            ->map(static function (Model $record): ?GlobalSearchResult {
+                // A record without a URL (no edit/view page, or a nested record whose parent is
+                // gone) is skipped instead of failing the whole search.
+                try {
+                    $url = static::getGlobalSearchResultUrl($record);
+                } catch (UrlGenerationException) {
+                    $url = null;
+                }
+
+                return $url === null ? null : new GlobalSearchResult(
+                    title: static::getGlobalSearchResultTitle($record),
+                    url: $url,
+                    details: static::getGlobalSearchResultDetails($record),
+                    actions: static::serializeGlobalSearchResultActions($record),
+                );
+            })
             ->filter()
             ->values();
     }

@@ -9,7 +9,7 @@ use AlfaSix\Alfakit\Standalone\Table;
 {{ modelImport }}
 /**
  * Render it from a controller: `'table' => {{ class }}::make({{ modelParameter }})`, then
- * `<AlfakitComponent component={table} />` in the page (`:component` in Vue).
+ * {{ componentTag }} in the page.
  */
 class {{ class }} extends Table
 {

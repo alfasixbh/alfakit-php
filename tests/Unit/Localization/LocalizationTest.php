@@ -113,6 +113,22 @@ it('hydrates and dehydrates money inputs in major or minor units', function (): 
         ->and($field->toSchema())->toMatchArray(['type' => 'MoneyInput', 'currency' => 'BHD', 'decimals' => 3]);
 });
 
+it('reports a money amount below minValue() as a validation error, not a silent 0 (W-V3-11)', function (): void {
+    // The renderers send the amount as typed (no clamping); the server's min rule explains it.
+    $form = schema([MoneyInput::make('price')->currency('EUR')->minValue(0)->maxValue(100)]);
+
+    $form->fill(['price' => -5]);
+
+    try {
+        $form->validate();
+        $this->fail('A negative amount passed minValue(0).');
+    } catch (Illuminate\Validation\ValidationException $exception) {
+        expect($exception->errors())->toHaveKey('price');
+    }
+
+    expect($form->getFieldByStatePath('price')->toSchema())->toMatchArray(['min' => 0, 'max' => 100]);
+});
+
 it('converts date-times between the display and storage timezones', function (): void {
     config(['app.timezone' => 'UTC']);
 
@@ -198,4 +214,13 @@ it('reports missing keys and placeholder mistakes', function (): void {
     } finally {
         File::deleteDirectory($pack);
     }
+});
+
+it('translates the calendar month navigation labels in every pack (W-V3-06)', function (): void {
+    Translations::register(dirname(__DIR__, 4).'/translations/lang');
+
+    expect(__('alfakit::ui.form.previous_month'))->toBe('Previous month')
+        ->and(__('alfakit::ui.form.next_month'))->toBe('Next month')
+        ->and(__('alfakit::ui.form.previous_month', [], 'ar'))->toBe('الشهر السابق')
+        ->and(__('alfakit::ui.form.next_month', [], 'de'))->toBe('Nächster Monat');
 });

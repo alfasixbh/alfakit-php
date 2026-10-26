@@ -47,6 +47,12 @@ trait HasRecordVersions
         static::updated(static function (self $model): void {
             // Only when a tracked attribute changed (not e.g. a `views` counter).
             if (array_intersect(array_keys($model->getChanges()), $model->getVersionedAttributeNames()) !== []) {
+                // A record from before the trait was added has no versions yet: keep the values
+                // it had first, so its first change shows old → new.
+                if (! (static::$versioningPaused[static::class] ?? false) && $model->recordVersions()->doesntExist()) {
+                    $model->recordVersion(RecordVersion::EVENT_BASELINE, snapshot: $model->getVersionBaselineSnapshot());
+                }
+
                 $model->recordVersion(RecordVersion::EVENT_UPDATED);
             }
         });
@@ -171,21 +177,36 @@ trait HasRecordVersions
     }
 
     /**
-     * Write a version now (the Eloquent events call this).
+     * The tracked attributes as they were before the current save (raw stored values), for
+     * the baseline version.
+     *
+     * @return array<string, mixed>
      */
-    public function recordVersion(string $event, ?RecordVersion $restoredFrom = null): ?RecordVersion
+    public function getVersionBaselineSnapshot(): array
+    {
+        return array_intersect_key($this->getRawOriginal(), array_flip($this->getVersionedAttributeNames()));
+    }
+
+    /**
+     * Write a version now (the Eloquent events call this). `$snapshot` defaults to the
+     * current tracked attributes.
+     *
+     * @param  array<string, mixed>|null  $snapshot
+     */
+    public function recordVersion(string $event, ?RecordVersion $restoredFrom = null, ?array $snapshot = null): ?RecordVersion
     {
         if (static::$versioningPaused[static::class] ?? false) {
             return null;
         }
 
         $panel = alfakit()->getCurrentPanel();
-        $author = $panel?->auth()->user() ?? auth()->user();
+        // The baseline holds earlier values: nobody in this request wrote them.
+        $author = $event === RecordVersion::EVENT_BASELINE ? null : ($panel?->auth()->user() ?? auth()->user());
         $tenant = $panel?->hasTenancy() ? $panel->getTenant() : null;
 
         $version = $this->recordVersions()->create([
             'event' => $event,
-            'snapshot' => $this->getVersionSnapshot(),
+            'snapshot' => $snapshot ?? $this->getVersionSnapshot(),
             'author_type' => $author instanceof Model ? $author->getMorphClass() : null,
             'author_id' => $author instanceof Model ? (string) $author->getKey() : null,
             'tenant_type' => $tenant?->getMorphClass(),

@@ -2068,6 +2068,8 @@ class Panel
             $router->post('/pages/call', [PageMethodController::class, 'call'])->name('pages.call');
             // `Action::undoable()`: the undo token authorises itself (see UndoController).
             $router->post('/actions/undo', [Http\Controllers\UndoController::class, 'undo'])->name('actions.undo');
+            // Files returned by action handlers, fetched once from a signed link (ActionDownload).
+            $router->get('/actions/download/{download}', Http\Controllers\ActionDownloadController::class)->name('actions.download')->middleware('signed');
             // `Dashboard::customizable()`: save or reset the user's layout.
             $router->post('/dashboard/layout', [Http\Controllers\DashboardLayoutController::class, 'update'])->name('dashboard.layout');
             // Edit pages: what changed since the form was loaded (`detectConflicts()`).

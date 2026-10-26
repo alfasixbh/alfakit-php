@@ -643,6 +643,8 @@ class Action
             'url' => $url,
             'openUrlInNewTab' => $isUnauthorized ? null : ($this->shouldOpenUrlInNewTab() ?: null),
             'postToUrl' => $postsToUrl ?: null,
+            // `download()`: a plain link that saves the file, not an Inertia visit.
+            'download' => $isLink && ! $postsToUrl && $this->isUrlDownload() ? true : null,
             // A resolved URL makes the action a link: it navigates and is never executed
             // (e.g. CreateAction/EditAction pointing at the resource's own pages).
             'hasModal' => $isLink || $sendsNotification || $isClientSide ? null : ($this->hasModal() ?: null),

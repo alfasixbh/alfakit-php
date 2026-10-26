@@ -10,7 +10,7 @@ use AlfaSix\Alfakit\Standalone\Form;
 {{ modelImport }}
 /**
  * Render it from a controller: `'form' => {{ class }}::make({{ recordParameter }})`, then
- * `<AlfakitComponent component={form} />` in the page (`:component` in Vue).
+ * {{ componentTag }} in the page.
  */
 class {{ class }} extends Form
 {

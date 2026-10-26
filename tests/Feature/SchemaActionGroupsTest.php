@@ -180,3 +180,35 @@ it('gives callout, empty state and mixed-content actions $get and $set like sect
     expect($seen)->toBe(array_fill_keys($names, 'x'));
     SchemaActionsPage::reset();
 });
+
+it('gives a wizard submitAction() $get and $set like section header actions', function (): void {
+    $user = User::query()->create(['name' => 'Admin', 'email' => 'admin@example.com', 'password' => 'password']);
+    $this->actingAs($user);
+    SchemaActionsPage::reset();
+    SchemaActionsPage::$formUsing = fn (): array => [
+        TextInput::make('title'),
+        AlfaSix\Alfakit\Schemas\Components\Wizard::make([
+            AlfaSix\Alfakit\Schemas\Components\Wizard\Step::make('Cart')->schema([TextInput::make('item')]),
+        ])
+            ->key('checkout')
+            ->submitAction(Action::make('placeOrder')->action(function (AlfaSix\Alfakit\Schemas\Components\Utilities\Get $get, AlfaSix\Alfakit\Schemas\Components\Utilities\Set $set): void {
+                $set('title', 'ordered '.$get('item'));
+            })),
+    ];
+
+    $this->postJson('/admin/_alfakit/actions', [
+        'token' => SchemaActionsPage::token($user),
+        'component' => 'page',
+        'action' => 'placeOrder',
+        'state' => ['title' => 'x', 'item' => 'pen'],
+    ])->assertOk();
+
+    $response = $this->postJson('/admin/_alfakit/actions', [
+        'token' => SchemaActionsPage::token($user),
+        'component' => 'field:form::checkout',
+        'action' => 'placeOrder',
+        'state' => ['title' => 'x', 'item' => 'pen'],
+    ])->assertOk();
+
+    expect($response->json('form.state.title'))->toBe('ordered pen');
+});

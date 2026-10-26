@@ -58,6 +58,12 @@ class InstallCommand extends Command
         $this->banner();
         $this->components->info("Installing AlfaKit for {$adapter}…");
 
+        // --ssr writes the panel's own SSR entry. Starter kit and standalone pages render
+        // through the app's Inertia entry, so the app's own SSR setup renders them.
+        if ($this->option('ssr') && ($this->option('starter-kit') || $this->option('standalone'))) {
+            $this->components->warn('--ssr only sets up the SSR entry of a panel install, so nothing is changed for it here. With --'.($this->option('starter-kit') ? 'starter-kit' : 'standalone').', AlfaKit pages render through your app\'s own Inertia entry: your app\'s SSR (its SSR build and php artisan inertia:start-ssr) renders them too, with no AlfaKit setup.');
+        }
+
         // 1. Config
         $this->callSilently('vendor:publish', ['--tag' => 'alfakit-config', '--force' => $force]);
         $this->components->task('Published config/alfakit.php');

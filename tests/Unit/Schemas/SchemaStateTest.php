@@ -140,3 +140,26 @@ it('gives layout components keys that survive a rebuild', function (): void {
         ->toBe(['section-0', 'section-1', 'tabs-0'])
         ->and($first[0]['schema'][0]['key'])->toBe('section-0.section-0');
 });
+
+it('does not run a layout component schema() closure again on every walk of the tree', function (): void {
+    $runs = 0;
+
+    $schema = schema([
+        TextInput::make('title'),
+        Section::make('Statistics')
+            ->deferLoading()
+            ->schema(function () use (&$runs): array {
+                $runs++;
+
+                return [TextInput::make('total')];
+            }),
+    ])->fill();
+
+    $schema->toPayload();
+    $schema->getFlatFields();
+    $schema->getFlatFields();
+
+    // One run per state version is enough (fill() changes the state once per field).
+    expect($runs)->toBeLessThanOrEqual(3)
+        ->and(array_keys($schema->getFlatFields()))->toBe(['title', 'total']);
+});
