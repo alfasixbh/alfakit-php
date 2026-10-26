@@ -195,7 +195,11 @@ it('runs extra item actions with the item key and lets them change the state', f
     $props = schema((FormsBPage::$formUsing)())->fill($members)->toSchema()[0];
 
     expect(collect($props['items'][0]['actions'])->pluck('name')->all())->toBe(['shout', 'rename'])
-        ->and(collect($props['items'][2]['actions'])->pluck('name')->all())->toBe(['rename']);
+        ->and(collect($props['items'][2]['actions'])->pluck('name')->all())->toBe(['rename'])
+        // For items the browser adds: evaluated without an item (W-S2-04).
+        ->and(collect($props['extraItemActions'])->pluck('name')->all())->toBe(['shout', 'rename']);
+
+    expect(membersRepeater()->toSchema())->not->toHaveKey('extraItemActions');
 
     runItemAction('members', 'shout', $members, ['item' => '1'])
         ->assertOk()
@@ -247,4 +251,17 @@ it('customises the key-value add, delete and reorder actions', function (): void
         ->assertJsonPath('form.state.meta', [['key' => 'b', 'value' => '2'], ['key' => 'a', 'value' => '1']]);
     runItemAction('meta', 'add', ['meta' => ['a' => '1']])
         ->assertJsonPath('form.state.meta', [['key' => 'a', 'value' => '1'], ['key' => '', 'value' => '']]);
+});
+
+it('offers only server-run extra item actions to items added in the browser, and skips ones that need the item (W-S2-04)', function () use ($members): void {
+    $props = schema([
+        membersRepeater()->extraItemActions([
+            // As in Filament's docs: a URL built from the item's state.
+            Action::make('open')->url(fn (array $arguments, Repeater $component): string => '/people/'.$component->getRawItemState($arguments['item'])['name']),
+            Action::make('shout')->action(fn () => null),
+        ]),
+    ])->fill($members)->toSchema()[0];
+
+    expect(collect($props['items'][0]['actions'])->pluck('name')->all())->toBe(['open', 'shout'])
+        ->and(collect($props['extraItemActions'])->pluck('name')->all())->toBe(['shout']);
 });

@@ -59,6 +59,12 @@ class ReplicateAction extends Action
         $this->after(fn () => $this->sendSuccessNotification());
     }
 
+    /** The form fills the copy: `unique()` rules check against the original too (W-S5-06). */
+    public function getForm(): ?\AlfaSix\Alfakit\Schemas\Schema
+    {
+        return parent::getForm()?->forRecordCopy();
+    }
+
     /**
      * @param  array<string>|Closure|null  $attributes
      */

@@ -491,7 +491,7 @@ return [
         'turn_off' => 'Turn off',
         'turn_off_label' => 'Turn off the shortcut for :label',
         'reset' => 'Reset',
-        'reset_label' => 'Restore the default shortcut for :label',
+        'reset_label' => 'Reset the shortcut for :label',
     ],
     'versions' => [
         'list' => 'Versions',

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AlfaSix\Alfakit\Schemas;
 
+use AlfaSix\Alfakit\Forms\Components\DatePicker;
 use AlfaSix\Alfakit\Forms\Components\Field;
 use AlfaSix\Alfakit\Forms\Components\Repeater;
 use AlfaSix\Alfakit\Schemas\Components\Component;
@@ -12,6 +13,7 @@ use AlfaSix\Alfakit\Support\Concerns\EvaluatesClosures;
 use AlfaSix\Alfakit\Support\SchemaContext;
 use AlfaSix\Alfakit\Support\Serializable;
 use Closure;
+use DateTimeInterface;
 use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Contracts\Validation\Validator as ValidatorContract;
 use Illuminate\Database\Eloquent\Model;
@@ -57,6 +59,8 @@ class Schema
     protected ?Model $record = null;
 
     protected ?string $operation = null;
+
+    protected bool $forRecordCopy = false;
 
     /** @var array<string, mixed> */
     protected array $state = [];
@@ -371,6 +375,25 @@ class Schema
         $this->operation = $operation;
 
         return $this;
+    }
+
+    /**
+     * The form fills a copy of its record (`ReplicateAction`): `unique()` rules don't ignore
+     * the record, since the copy is a new row (W-S5-06).
+     *
+     * @internal
+     */
+    public function forRecordCopy(bool $condition = true): static
+    {
+        $this->forRecordCopy = $condition;
+
+        return $this;
+    }
+
+    /** @internal */
+    public function isForRecordCopy(): bool
+    {
+        return $this->getRootSchema()->forRecordCopy;
     }
 
     /**
@@ -996,6 +1019,13 @@ class Schema
         // Hidden fields' values (e.g. an admin-only note) never reach the browser.
         foreach ($root->getHiddenStatePaths() as $path) {
             Arr::forget($state, $path);
+        }
+
+        // Dates set after hydration, in the pickers' own format (W-S1-05).
+        foreach ($root->getFlatFields() as $path => $field) {
+            if ($field instanceof DatePicker && ($value = Arr::get($state, $path)) instanceof DateTimeInterface) {
+                Arr::set($state, $path, $field->formatStateForFrontend($value));
+            }
         }
 
         if (($readOnly = $root->getChangedReadOnlyState()) !== []) {

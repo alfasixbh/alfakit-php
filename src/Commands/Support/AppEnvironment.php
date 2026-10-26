@@ -399,12 +399,13 @@ final class AppEnvironment
      * Whether `vendor:publish --tag=…` (with an optional `--provider=…`) only publishes
      * migrations that the app already has under any timestamp, so running it again would
      * add a second copy (`publishesMigrations()` stamps a new date every time). False when
-     * the tag publishes anything else or isn't known to this process (a package installed
-     * a moment ago by a subprocess).
+     * the tag publishes anything else. A tag this process doesn't know (a package installed
+     * a moment ago by a composer subprocess) is checked against `$package`'s own
+     * `database/migrations` in vendor/, when given (W-S1-07: remove, then add again).
      *
      * @param  array<int, string>  $command
      */
-    public static function migrationsAlreadyPublished(array $command): bool
+    public static function migrationsAlreadyPublished(array $command, ?string $package = null): bool
     {
         if (($command[0] ?? null) !== 'vendor:publish') {
             return false;
@@ -428,6 +429,10 @@ final class AppEnvironment
 
         $paths = ServiceProvider::pathsToPublish($option('provider'), $tag);
         $migrations = rtrim(database_path('migrations'), '/');
+
+        if ($paths === [] && $package !== null && is_dir($source = base_path("vendor/{$package}/database/migrations"))) {
+            $paths = [$source => $migrations];
+        }
         $names = [];
 
         $isMigrationsDirectory = static fn (string $path): bool => ($path = rtrim($path, '/')) === $migrations || str_ends_with($path, '/database/migrations');

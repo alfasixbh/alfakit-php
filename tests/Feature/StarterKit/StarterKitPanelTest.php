@@ -133,6 +133,25 @@ it('does not share starter kit navigation on pages of other panels', function ()
         ->and($props['alfakit']['navigation'])->not->toBe([]);
 });
 
+it('shares starter kit navigation on host pages that render a standalone component or the auth kit', function (): void {
+    starterKitPanel();
+    AlfaSix\Alfakit\AuthKit\AuthKit::configure();
+    Route::middleware('web')->group(fn () => AlfaSix\Alfakit\AuthKit\AuthKit::routes());
+    Route::middleware(['web', 'auth'])->get('/contact', fn () => Inertia::render('Contact', ['form' => AlfaSix\Alfakit\Tests\Fixtures\Standalone\ContactForm::make()]));
+    app('router')->getRoutes()->refreshNameLookups();
+    app('router')->getRoutes()->refreshActionLookups();
+
+    $this->actingAs(starterKitUser());
+
+    // The hidden standalone and auth-kit panels render no sidebar of their own (W-S3-11).
+    foreach (['/contact', '/account'] as $url) {
+        $props = inertiaProps(inertiaGet($this, $url));
+
+        expect($props['alfakitNavigation'] ?? null)->toHaveCount(1)
+            ->and($props['alfakitNavigation'][0]['id'])->toBe('kit');
+    }
+});
+
 it('offers embedded() as an alias', function (): void {
     $panel = Panel::make('x')->embedded(rootView: 'host', loginRoute: 'sign-in');
 
@@ -152,6 +171,14 @@ it('sends "G then D" to the app dashboard when the starter kit panel has no dash
     $admin = Panels::register('plain', fn (Panel $panel): Panel => $panel->resources([PostResource::class]));
 
     expect($admin->getShortcutDashboardUrl())->toBeNull();
+
+    // A Dashboard page registered for a customisable layout doesn't take over (W-S1-22).
+    $panel->pages([AlfaSix\Alfakit\Pages\Dashboard::class]);
+    expect($panel->getShortcutDashboardUrl())->toBe(url('/dashboard'));
+
+    // Without widgets on the app's pages, the panel's own dashboard is the home.
+    $panel->starterKitDashboard(false);
+    expect($panel->getShortcutDashboardUrl())->toBeNull();
 });
 
 it('renders a pwa() panel\'s head tags in the host root view with @alfakitPwa', function (): void {

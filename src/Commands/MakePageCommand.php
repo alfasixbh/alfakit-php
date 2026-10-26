@@ -211,7 +211,19 @@ class MakePageCommand extends Command
             'title' => Str::headline($name),
         ], (bool) $this->option('force'));
 
-        $this->components->info("Add a route: Route::get('/".Str::kebab($name)."', fn () => \\AlfaSix\\Alfakit\\Facades\\Alfakit::render('{$page}', ['{$prop}' => \\{$class}::class]));");
+        $model = $this->option('model');
+        $model = is_string($model) && $model !== '' ? Str::studly($model) : null;
+        $route = '/'.Str::kebab($name);
+
+        if ($model === null) {
+            $this->components->info("Add a route: Route::get('{$route}', fn () => \\AlfaSix\\Alfakit\\Facades\\Alfakit::render('{$page}', ['{$prop}' => \\{$class}::class]));");
+        } else {
+            // The component has a `public {Model} ${model}` to fill: bind it from the route (W-S3-08).
+            $modelClass = str_contains($model, '\\') ? $model : 'App\\Models\\'.$model;
+            $variable = Str::camel(class_basename($modelClass));
+
+            $this->components->info("Add a route: Route::get('{$route}/{{$variable}}', fn (\\{$modelClass} \${$variable}) => \\AlfaSix\\Alfakit\\Facades\\Alfakit::render('{$page}', ['{$prop}' => [\\{$class}::class, ['{$variable}' => \${$variable}]]]));");
+        }
 
         return self::SUCCESS;
     }

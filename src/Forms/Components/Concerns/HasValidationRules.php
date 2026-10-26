@@ -113,6 +113,9 @@ trait HasValidationRules
 
             $ignorable = $this->evaluate($ignorable);
 
+            // A ReplicateAction form's record is the original: its copy must not take its value.
+            $ignoreRecord = $ignoreRecord && ! $this->getContainer()->isForRecordCopy();
+
             if ($ignorable === null && $ignoreRecord && ($record = $this->getRecord()) !== null && $this->isRecordOfRuleTable($record, (string) $table)) {
                 $ignorable = $record;
             }

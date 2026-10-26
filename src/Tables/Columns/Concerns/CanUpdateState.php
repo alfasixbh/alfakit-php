@@ -86,7 +86,8 @@ trait CanUpdateState
         $record = $this->getRecord();
         $table = $this->getTable();
 
-        return $record instanceof Model && $table !== null && ! $table->authorizes('update', $record);
+        // Custom `records()` rows are checked the same way the cell endpoint checks them.
+        return ($record instanceof Model || is_array($record)) && $table !== null && ! $table->authorizes('update', $record);
     }
 
     /**

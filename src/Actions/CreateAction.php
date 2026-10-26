@@ -90,7 +90,14 @@ class CreateAction extends Action
                         $resource::associateRecordWithUser($record);
                     }
 
-                    $record->save();
+                    // Tenancy panels: the new record belongs to the current tenant, as on create pages.
+                    $tenant = alfakit()->getTenant();
+
+                    if ($resource !== null && $tenant !== null && $resource::isScopedToTenant()) {
+                        $record = $resource::associateRecordWithTenant($record, $tenant);
+                    } else {
+                        $record->save();
+                    }
                 }
 
                 $action->getForm()?->record($record)->saveRelationships();

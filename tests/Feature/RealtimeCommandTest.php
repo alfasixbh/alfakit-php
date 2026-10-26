@@ -161,3 +161,37 @@ it('switches to reverb once laravel/reverb is installed', function (): void {
 
     expect(file_get_contents("{$this->sandbox}/.env"))->toContain('BROADCAST_CONNECTION=reverb');
 });
+
+it('writes an echo.ts that connects only when called, with laravel-echo and pusher-js loaded lazily (W-S5-04)', function (): void {
+    $this->artisan('alfakit:realtime', ['--no-install' => true])->assertSuccessful();
+
+    $echo = (string) file_get_contents("{$this->sandbox}/resources/js/alfakit/echo.ts");
+
+    expect($echo)->toContain('export default function connectEcho()')
+        ->toContain("import('laravel-echo')")->toContain("import('pusher-js')")
+        ->not->toMatch('/^connectEcho\(\);?\s*$/m')
+        ->not->toMatch("/^import Pusher from 'pusher-js'/m");
+});
+
+it('stops an earlier echo.ts from connecting on load and hands the factory to AlfaKit in a starter kit entry (W-S5-04)', function (): void {
+    unlink("{$this->sandbox}/resources/js/alfakit/app.tsx");
+    file_put_contents("{$this->sandbox}/package.json", json_encode(['dependencies' => ['@inertiajs/svelte' => '^3.0']]));
+    file_put_contents("{$this->sandbox}/resources/js/alfakit/echo.ts", "export default function connectEcho() {\n    return null;\n}\n\nconnectEcho();\n");
+    file_put_contents("{$this->sandbox}/resources/js/app.ts", "import './alfakit/echo';\nimport { createInertiaApp } from '@inertiajs/svelte';\n");
+
+    $this->artisan('alfakit:realtime', ['--no-install' => true])->assertSuccessful();
+
+    expect(file_get_contents("{$this->sandbox}/resources/js/alfakit/echo.ts"))->toBe("export default function connectEcho() {\n    return null;\n}\n")
+        ->and(file_get_contents("{$this->sandbox}/resources/js/app.ts"))
+        ->toContain("import { configureRealtime } from '@alfakit/svelte';")
+        ->toContain("configureRealtime(null, { echo: () => import('./alfakit/echo').then((module) => module.default()) });")
+        ->not->toContain("import './alfakit/echo';");
+
+    // Idempotent.
+    $this->artisan('alfakit:realtime', ['--no-install' => true])->assertSuccessful();
+
+    expect(substr_count((string) file_get_contents("{$this->sandbox}/resources/js/app.ts"), 'configureRealtime(null'))->toBe(1);
+
+    // The afterEach checks the panel entry; this app has none.
+    file_put_contents("{$this->sandbox}/resources/js/alfakit/app.tsx", "createAlfakit({\n    echo: () => import('./echo').then((module) => module.default()),\n});\n");
+});

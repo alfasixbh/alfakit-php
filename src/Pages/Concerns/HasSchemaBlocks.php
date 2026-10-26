@@ -221,7 +221,7 @@ trait HasSchemaBlocks
                     'operation' => $block->getOperation(),
                 ];
             } elseif ($block instanceof Schema) {
-                $blocks[] = ['type' => 'Infolist', 'key' => $component, 'components' => $block->toSchema()];
+                $blocks[] = ['type' => 'Infolist', 'key' => $component, 'components' => $block->toSchema(), 'columns' => $block->getColumns()];
             }
         }
 

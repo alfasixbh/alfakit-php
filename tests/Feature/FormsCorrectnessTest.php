@@ -66,6 +66,18 @@ it('ignores the bound record in unique() by default, unless ignoreRecord is fals
         ->and(formErrors(schema([TextInput::make('slug')->unique()], model: Post::class)->fill()->applyClientState(['slug' => 'hello'])))->toHaveKey('slug');
 });
 
+it('checks unique() against the original in a ReplicateAction form (W-S5-06)', function (): void {
+    $post = Post::query()->create(['title' => 'Hello', 'slug' => 'hello']);
+
+    $action = AlfaSix\Alfakit\Actions\ReplicateAction::make()->record($post)
+        ->form([TextInput::make('slug')->unique()]);
+    $form = $action->getForm()->fill(['slug' => 'hello']);
+
+    expect($form->isForRecordCopy())->toBeTrue()
+        ->and(formErrors($form))->toHaveKey('slug')
+        ->and(formErrors($action->getForm()->fill(['slug' => 'hello-copy'])))->toBe([]);
+});
+
 it('only ignores the bound record in unique() on its own table', function (): void {
     $post = Post::query()->create(['title' => 'Hello', 'slug' => 'hello']);
     Tag::query()->forceCreate(['id' => $post->id, 'name' => 'php']);

@@ -5,6 +5,7 @@ declare(strict_types=1);
 use AlfaSix\Alfakit\Panel;
 use AlfaSix\Alfakit\Tests\Fixtures\Models\Post;
 use AlfaSix\Alfakit\Tests\Fixtures\Models\User;
+use AlfaSix\Alfakit\Tests\Fixtures\Parity3\Discovery\CustomLogin;
 use AlfaSix\Alfakit\Tests\Fixtures\Parity3\Discovery\GateOnlyResource;
 use AlfaSix\Alfakit\Tests\Fixtures\Parity3\Discovery\GateOnlyResource as GateResource;
 use AlfaSix\Alfakit\Tests\Fixtures\Parity3\Discovery\HiddenDiscoveryPage;
@@ -35,6 +36,10 @@ it('skips resources, pages and widgets with $isDiscovered = false', function ():
         ->and($panel->getPages())->toContain(ShownDiscoveryPage::class)->not->toContain(HiddenDiscoveryPage::class)
         ->and($panel->getWidgets())->toContain(ShownDiscoveryWidget::class)->not->toContain(HiddenDiscoveryWidget::class)
         ->and($panel->getDiscoverableComponents()['widgets'])->not->toContain(HiddenDiscoveryWidget::class);
+});
+
+it('does not discover a custom auth page as a panel page (W-S1-15)', function (): void {
+    expect(parity3DiscoveryPanel()->login(CustomLogin::class)->getPages())->not->toContain(CustomLogin::class);
 });
 
 it('still registers undiscovered classes registered by hand', function (): void {

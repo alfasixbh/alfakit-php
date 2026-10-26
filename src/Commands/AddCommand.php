@@ -166,7 +166,7 @@ class AddCommand extends Command
         }
 
         $command->newLine();
-        $command->line('  <fg=gray>Try it live:</> '.PluginCatalog::demoUrl($slug).' <fg=gray>(demo@alfakit.dev / password)</>');
+        $command->line('  <fg=gray>Try it live:</> '.PluginCatalog::demoUrl($slug, AppEnvironment::adapter() ?? 'react').' <fg=gray>(demo@alfakit.dev / password)</>');
 
         foreach ($showcase['tour'] as $index => $step) {
             $command->line('    '.($index + 1).". {$step}");

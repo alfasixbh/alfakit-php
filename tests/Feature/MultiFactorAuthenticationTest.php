@@ -274,7 +274,9 @@ it('sets up the authenticator app from the profile page and shows recovery codes
     $security = collect($props['page']['content'])->firstWhere('type', 'Infolist');
 
     expect($security)->not->toBeNull()
-        ->and(json_encode($security))->toContain('setUpAppAuthentication')->toContain('setUpEmailAuthentication');
+        ->and(json_encode($security))->toContain('setUpAppAuthentication')->toContain('setUpEmailAuthentication')
+        // One column, so the "set up required" notice spans the card (W-S1-16).
+        ->and($security['columns'])->toBe(['default' => 1, 'lg' => 1]);
 
     $modal = $this->getJson('/secure/_alfakit/actions/modal?'.http_build_query(['token' => $token, 'action' => 'setUpAppAuthentication']))->assertOk()->json();
 

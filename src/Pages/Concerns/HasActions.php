@@ -76,7 +76,8 @@ trait HasActions
                 // Sections (header/footer actions) and components with `HasEmbeddedActions` (Callout, EmptyState).
                 if (method_exists($component, 'getAllActions') && ! $component->isHiddenInTree()) {
                     foreach ($component->getAllActions() as $action) {
-                        $actions[$action->getName()] = $this->prepareAction($action);
+                        // The page's own actions win: an embedded `create` must not replace the Create button (W-S2-10).
+                        $actions[$action->getName()] ??= $this->prepareAction($action);
                     }
                 }
             }

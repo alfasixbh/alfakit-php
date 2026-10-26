@@ -250,7 +250,13 @@ it('maps every Filament class to an AlfaKit class that exists', function (): voi
 });
 
 it('migrates the fixture Filament app with the built-in rewriter and reports what needs attention', function (): void {
+    // A view compiled while Livewire was installed (W-S1-11).
+    $this->files->ensureDirectoryExists($this->sandbox.'/storage/framework/views');
+    $this->files->put($compiled = $this->sandbox.'/storage/framework/views/0a1b2c.php', '<?php /* Livewire\\Mechanisms\\ExtendBlade */');
+
     runMigration($this)->assertSuccessful();
+
+    expect($this->files->exists($compiled))->toBeFalse();
 
     assertMigratedFixture($this, $this->sandbox);
 

@@ -1535,6 +1535,8 @@ class Repeater extends Field
             'addActionAlignment' => $this->getAddActionAlignment(),
             'itemNumbers' => $this->hasItemNumbers() ?: null,
             'itemActions' => $this->isReadOnly() ? null : $this->getFieldItemActionsSchema(),
+            // Extra item actions of items added in the browser, until the next response (W-S2-04).
+            'extraItemActions' => $this->getExtraItemActionsSchemaFor(null),
         ];
     }
 

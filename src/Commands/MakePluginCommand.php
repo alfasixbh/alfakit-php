@@ -6,6 +6,7 @@ namespace AlfaSix\Alfakit\Commands;
 
 use AlfaSix\Alfakit\Commands\Concerns\CanGenerateFiles;
 use AlfaSix\Alfakit\Commands\Concerns\WarnsAboutDeprecatedAliases;
+use AlfaSix\Alfakit\Commands\Support\AppEnvironment;
 use AlfaSix\Alfakit\Support\VersionConstraint;
 use Composer\InstalledVersions;
 use Illuminate\Console\Command;
@@ -96,12 +97,18 @@ class MakePluginCommand extends Command
 
         $relative = Str::after($directory, base_path().'/');
 
+        // A starter kit app registers components in its Alfakit/Page file, not createAlfakit() (W-S1-18).
+        $kitPage = AppEnvironment::starterKitPageEntry();
+        $registry = $kitPage === null
+            ? 'createAlfakit()'
+            : (str_ends_with($kitPage, '.svelte') ? 'createStarterKitLayout({ components })' : 'createStarterKitPage({ components })').' in '.Str::after($kitPage, base_path().'/');
+
         $this->components->info("Created the {$package} plugin in {$relative}.");
         $this->components->bulletList(array_values(array_filter([
             "Add a path repository to composer.json: {\"type\": \"path\", \"url\": \"{$relative}\"}",
             "composer require {$package}:@dev",
             "Register it on a panel: ->plugin(\\{$namespace}\\{$pluginClass}::make())",
-            $frontend !== 'none' ? "Add \"{$npmPackage}\": \"file:{$relative}\" to package.json and spread its components into createAlfakit()" : null,
+            $frontend !== 'none' ? "Add \"{$npmPackage}\": \"file:{$relative}\" to package.json and spread its components into {$registry}" : null,
         ])));
 
         return self::SUCCESS;

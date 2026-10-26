@@ -95,6 +95,15 @@ class MigrateFromFilamentCommand extends Command
             if ($installed && ! $dryRun && ($migrated || $discovery->allPackages() !== [])) {
                 $this->callSilently('alfakit:optimize-clear');
                 $migrator->report->action('Cleared the cached panel components (`alfakit:optimize-clear`).');
+
+                // Views compiled while Livewire was installed call its Blade precompiler, so
+                // the first `npm run build` (Wayfinder renders a Blade view) failed once
+                // Filament was gone (W-S1-11). Like `php artisan view:clear`.
+                foreach (glob($this->laravel->basePath('storage/framework/views/*.php')) ?: [] as $compiled) {
+                    @unlink($compiled);
+                }
+
+                $migrator->report->action('Cleared the compiled Blade views (`php artisan view:clear`).');
             }
 
             $reportPath = $migrator->writeReport($adapter);

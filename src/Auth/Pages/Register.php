@@ -22,6 +22,10 @@ use Illuminate\Validation\ValidationException;
 
 class Register extends Page
 {
+    // Registered by the panel's `login()`, `registration()`… only, never discovered as a page:
+    // a subclass in a discovered folder would otherwise also become a panel page (W-S1-15).
+    protected static bool $isDiscovered = false;
+
     protected static string $layout = 'auth';
 
     protected static bool $shouldRegisterNavigation = false;

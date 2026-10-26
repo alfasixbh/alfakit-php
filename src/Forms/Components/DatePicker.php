@@ -357,6 +357,24 @@ class DatePicker extends Field
         }
     }
 
+    /**
+     * A date object written into the state after hydration (`$set('published_at', now())`,
+     * `$component->state(…)`) in the format and timezone the picker edits, for the browser;
+     * JSON would otherwise send it as UTC ISO-8601, which no picker parses (W-S1-05).
+     */
+    public function formatStateForFrontend(mixed $state): mixed
+    {
+        if (! $state instanceof DateTimeInterface) {
+            return $state;
+        }
+
+        try {
+            return $this->normalizeDate($state);
+        } catch (Throwable) {
+            return $state;
+        }
+    }
+
     protected function mutateDehydratedState(mixed $state): mixed
     {
         if (blank($state)) {

@@ -230,37 +230,7 @@ class CreateRecord extends Page
 
     protected function associateRecordWithTenant(Model $record, Model $tenant): Model
     {
-        // `$tenantRelationshipName` on the resource: create through the tenant's relationship.
-        $tenantRelationship = static::getResource()::getTenantRelationship($tenant);
-
-        if ($tenantRelationship instanceof \Illuminate\Database\Eloquent\Relations\HasOneOrManyThrough) {
-            $record->save();
-
-            return $record;
-        }
-
-        if ($tenantRelationship instanceof \Illuminate\Database\Eloquent\Relations\HasOneOrMany || $tenantRelationship instanceof \Illuminate\Database\Eloquent\Relations\BelongsToMany) {
-            $tenantRelationship->save($record);
-
-            return $record;
-        }
-
-        $relationship = $record->{static::getResource()::getTenantOwnershipRelationshipName()}();
-
-        if ($relationship instanceof \Illuminate\Database\Eloquent\Relations\BelongsTo) {
-            $relationship->associate($tenant);
-            $record->save();
-
-            return $record;
-        }
-
-        $record->save();
-
-        if ($relationship instanceof \Illuminate\Database\Eloquent\Relations\BelongsToMany) {
-            $relationship->attach($tenant);
-        }
-
-        return $record;
+        return static::getResource()::associateRecordWithTenant($record, $tenant);
     }
 
     /**

@@ -95,9 +95,10 @@ return [
     'docs_url' => rtrim((string) env('ALFAKIT_DOCS_URL', 'https://alfakit.dev/docs'), '/'),
 
     /*
-    | The live demo that `alfakit:add --list <plugin>` links to (`{demo_url}/react/admin/…`).
+    | The live demo that `alfakit:add --list <plugin>` links to (`{demo_url}/{react|vue|svelte}/admin/…`,
+    | the app's renderer).
     */
-    'demo_url' => rtrim((string) env('ALFAKIT_DEMO_URL', 'http://alfakit-demo.localhost'), '/'),
+    'demo_url' => rtrim((string) env('ALFAKIT_DEMO_URL', 'https://demo.alfakit.dev'), '/'),
 
     /*
     |--------------------------------------------------------------------------

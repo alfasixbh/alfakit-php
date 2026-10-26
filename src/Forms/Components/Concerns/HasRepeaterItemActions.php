@@ -11,6 +11,7 @@ use AlfaSix\Alfakit\Support\Enums\Alignment;
 use AlfaSix\Alfakit\Support\Labels;
 use Closure;
 use Illuminate\Support\Arr;
+use Throwable;
 
 /**
  * The item actions of a Repeater (and Builder), customisable like Filament's:
@@ -428,11 +429,15 @@ trait HasRepeaterItemActions
     }
 
     /**
-     * The visible extra item actions of the item `$key`.
+     * The visible extra item actions of the item `$key`; with null, for items the browser
+     * added since the last response (the field-level `extraItemActions` prop, W-S2-04).
+     * Without an item, only actions that run on the server are offered (the click sends
+     * the item's key), and an action whose closures need the item (a `url()` built from
+     * `getRawItemState($arguments['item'])`) is left for the next response.
      *
      * @return array<int, array<string, mixed>>|null
      */
-    protected function getExtraItemActionsSchemaFor(string $key): ?array
+    protected function getExtraItemActionsSchemaFor(?string $key): ?array
     {
         if ($this->extraItemActions === [] || $this->isReadOnly()) {
             return null;
@@ -443,8 +448,22 @@ trait HasRepeaterItemActions
         foreach ($this->getExtraItemActions() as $action) {
             $action->arguments(['item' => $key]);
 
-            if ($action->isVisible()) {
-                $schemas[] = $action->toSchema();
+            if ($key !== null) {
+                if ($action->isVisible()) {
+                    $schemas[] = $action->toSchema();
+                }
+
+                continue;
+            }
+
+            try {
+                $schema = $action->isVisible() ? $action->toSchema() : null;
+            } catch (Throwable) {
+                $schema = null;
+            }
+
+            if ($schema !== null && ($schema['url'] ?? null) === null) {
+                $schemas[] = $schema;
             }
         }
 

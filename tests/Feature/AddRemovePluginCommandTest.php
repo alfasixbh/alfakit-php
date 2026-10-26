@@ -358,6 +358,17 @@ it('shows a plugin\'s highlights, demo tour and related plugins with --list <slu
     Process::assertNothingRan();
 });
 
+it('links --list <slug> to the public demo in the app\'s renderer (W-S1-06)', function (): void {
+    $sandbox = pluginSandbox($this);
+    file_put_contents($sandbox.'/package.json', json_encode(['dependencies' => ['@inertiajs/svelte' => '^3.0']]));
+    // The shipped default, not a maintainer's local demo host.
+    config(['alfakit.demo_url' => (require dirname(__DIR__, 2).'/config/alfakit.php')['demo_url']]);
+
+    $this->artisan('alfakit:add', ['plugin' => ['kanban'], '--list' => true])
+        ->expectsOutputToContain('https://demo.alfakit.dev/svelte/admin/manama/orders/board')
+        ->assertSuccessful();
+});
+
 it('shows the showcase of a plugin that is not installed yet, as in an app installed from Packagist', function (): void {
     $sandbox = pluginSandbox($this);
     PluginCatalog::$pluginsDirectory = $sandbox.'/no-plugins';
@@ -470,6 +481,24 @@ it('does not publish the migrations of an already installed plugin a second time
     expect(AppEnvironment::migrationsAlreadyPublished($command))->toBeTrue()
         ->and(AppEnvironment::migrationsAlreadyPublished(['vendor:publish', '--tag=unknown-tag']))->toBeFalse()
         ->and(AppEnvironment::migrationsAlreadyPublished(['alfakit-shield:install']))->toBeFalse();
+});
+
+it('does not publish a plugin\'s migrations again after a reinstall, before its provider is loaded (W-S1-07)', function (): void {
+    $sandbox = pluginSandbox($this);
+    $source = $sandbox.'/vendor/alfasix/alfakit-acme/database/migrations';
+    (new Filesystem)->ensureDirectoryExists($source);
+    (new Filesystem)->ensureDirectoryExists($sandbox.'/database/migrations');
+    file_put_contents($source.'/2026_01_01_000000_create_acme_tables.php', '<?php');
+
+    // Composer installed it in a subprocess: this process knows no paths for the tag.
+    $command = ['vendor:publish', '--tag=acme-reinstalled-migrations'];
+
+    expect(AppEnvironment::migrationsAlreadyPublished($command, 'alfasix/alfakit-acme'))->toBeFalse();
+
+    file_put_contents($sandbox.'/database/migrations/2026_10_19_083011_create_acme_tables.php', '<?php');
+
+    expect(AppEnvironment::migrationsAlreadyPublished($command, 'alfasix/alfakit-acme'))->toBeTrue()
+        ->and(AppEnvironment::migrationsAlreadyPublished($command))->toBeFalse();
 });
 
 it('does not ask to run the migrations when registering an installed plugin on another panel published nothing', function (): void {

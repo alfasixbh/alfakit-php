@@ -429,6 +429,28 @@ it('changes the password only with the current one', function (): void {
     $this->assertAuthenticatedAs($user);
 });
 
+it('lets a user whose email is not verified yet use the verification prompt and the account page', function (): void {
+    config()->set('auth.providers.users.model', VerifiableUser::class);
+    app('auth')->forgetGuards();
+    authKit();
+    $user = VerifiableUser::query()->create(['name' => 'Una', 'email' => 'una@example.com', 'password' => 'password']);
+
+    $this->actingAs($user);
+
+    // The routes only need a signed-in user, and so do their internal requests.
+    $resend = inertiaProps(inertiaGet($this, '/verify-email'))['component']['token'];
+    kitAction($this, $resend, 'resend')->assertRedirect();
+
+    $props = inertiaProps($this->get('/account', ['X-Inertia' => 'true', 'X-Inertia-Version' => '']));
+
+    kitAction($this, $props['sections']['password']['token'], 'submit', ['current_password' => 'password', 'password' => 'changed-pass-1', 'password_confirmation' => 'changed-pass-1'])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect();
+
+    expect(Hash::check('changed-pass-1', $user->fresh()->password))->toBeTrue()
+        ->and($user->fresh()->hasVerifiedEmail())->toBeFalse();
+});
+
 it('lists the browser sessions and signs out the other ones', function (): void {
     Schema::create('sessions', function (Blueprint $table): void {
         $table->string('id')->primary();

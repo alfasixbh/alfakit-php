@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AlfaSix\Alfakit\Commands;
 
 use AlfaSix\Alfakit\Commands\Concerns\GeneratesFrontendComponents;
+use AlfaSix\Alfakit\Commands\StarterKit\StarterKitInstaller;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
@@ -42,6 +43,8 @@ class MakeWidgetCommand extends Command
             'component' => $name,
         ], (bool) $this->option('force'));
 
+        $adapter = null;
+
         if ($type === 'custom' && ! $this->option('no-frontend')) {
             $adapter = $this->resolveAdapter();
 
@@ -54,7 +57,7 @@ class MakeWidgetCommand extends Command
 
         if ($resource !== null) {
             $this->components->info("List it in {$resource}::getWidgets() and return it from a page's getHeaderWidgets() or getFooterWidgets(): Widgets\\{$name}::class. On record pages it receives the \$record.");
-        } elseif (($hint = $this->starterKitDashboardHint($panelId)) !== null) {
+        } elseif (($hint = $this->starterKitDashboardHint($panelId, $adapter === null ? null : $name, $adapter)) !== null) {
             $this->components->info($hint);
         }
 
@@ -63,9 +66,11 @@ class MakeWidgetCommand extends Command
 
     /**
      * `starterKit()` panels have no dashboard of their own: their widgets appear on the
-     * host's dashboard through `<AlfakitWidgets />`.
+     * host's dashboard through `<AlfakitWidgets />`. A custom widget's frontend component
+     * (`$component`) is only auto-registered for AlfaKit pages, so the host's dashboard page
+     * must import it and pass it to `<AlfakitWidgets components>` (W-S3-04).
      */
-    protected function starterKitDashboardHint(?string $panelId): ?string
+    protected function starterKitDashboardHint(?string $panelId, ?string $component = null, ?string $adapter = null): ?string
     {
         $panel = $panelId === null ? null : (alfakit()->getPanels()[$panelId] ?? null);
 
@@ -83,6 +88,18 @@ class MakeWidgetCommand extends Command
         $where = ! str_contains($route, '*') && Route::has($route) ? parse_url(route($route), PHP_URL_PATH) : null;
         $where = is_string($where) && $where !== '' ? $where : "the {$route} route";
 
-        return "It appears on your app's dashboard ({$where}) through <AlfakitWidgets /> (php artisan alfakit:install --starter-kit adds it to the dashboard page). Sort it with \$sort and size it with \$columnSpan.";
+        $hint = "It appears on your app's dashboard ({$where}) through <AlfakitWidgets /> (php artisan alfakit:install --starter-kit adds it to the dashboard page). Sort it with \$sort and size it with \$columnSpan.";
+
+        if ($component === null || $adapter === null) {
+            return $hint;
+        }
+
+        $dashboard = StarterKitInstaller::files($adapter)['dashboard'];
+        $import = $adapter === 'react'
+            ? "import {$component} from '@/alfakit/widgets/{$component}'"
+            : "import {$component} from '@/alfakit/widgets/{$component}.".($adapter === 'vue' ? 'vue' : 'svelte')."'";
+        $tag = $adapter === 'vue' ? "<AlfakitWidgets :components=\"{ {$component} }\">" : "<AlfakitWidgets components={{ {$component} }}>";
+
+        return $hint." Your dashboard page doesn't load resources/js/alfakit, so pass the component there: add `{$import}` to {$dashboard} and render {$tag}.";
     }
 }

@@ -441,6 +441,46 @@ abstract class Resource
         return $relationship instanceof \Illuminate\Database\Eloquent\Relations\Relation ? $relationship : null;
     }
 
+    /**
+     * Give a new record to the current tenant, then save it: through `$tenantRelationshipName`
+     * on the tenant model when set, else through the ownership relationship (a `BelongsTo` is
+     * associated before saving, a `BelongsToMany` attached after). Used by create pages and
+     * by `CreateAction` (simple resources, modals on list pages).
+     */
+    public static function associateRecordWithTenant(Model $record, Model $tenant): Model
+    {
+        $tenantRelationship = static::getTenantRelationship($tenant);
+
+        if ($tenantRelationship instanceof \Illuminate\Database\Eloquent\Relations\HasOneOrManyThrough) {
+            $record->save();
+
+            return $record;
+        }
+
+        if ($tenantRelationship instanceof \Illuminate\Database\Eloquent\Relations\HasOneOrMany || $tenantRelationship instanceof \Illuminate\Database\Eloquent\Relations\BelongsToMany) {
+            $tenantRelationship->save($record);
+
+            return $record;
+        }
+
+        $relationship = $record->{static::getTenantOwnershipRelationshipName()}();
+
+        if ($relationship instanceof \Illuminate\Database\Eloquent\Relations\BelongsTo) {
+            $relationship->associate($tenant);
+            $record->save();
+
+            return $record;
+        }
+
+        $record->save();
+
+        if ($relationship instanceof \Illuminate\Database\Eloquent\Relations\BelongsToMany) {
+            $relationship->attach($tenant);
+        }
+
+        return $record;
+    }
+
     public static function getTenantRelationshipName(): string
     {
         return static::$tenantRelationshipName ?? Str::camel(Labels::pluralize(ModelLabel::guess(static::getModel()), 'en'));

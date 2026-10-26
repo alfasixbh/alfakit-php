@@ -69,6 +69,17 @@ it('associates created records with the current tenant', function (): void {
     expect(Project::query()->where('name', 'New project')->value('team_id'))->toBe($alpha->id);
 });
 
+it('associates records created with a CreateAction modal (simple resources) with the current tenant', function (): void {
+    [$user, $alpha] = tenantUser();
+
+    $props = inertiaProps(inertiaGet($this->actingAs($user), '/app/alpha/simple-projects'));
+
+    inertiaPost($this, '/app/alpha/_alfakit/actions', ['token' => $props['page']['token'], 'component' => 'page', 'action' => 'create', 'data' => ['name' => 'Modal project']])
+        ->assertSessionHasNoErrors();
+
+    expect(Project::query()->where('name', 'Modal project')->value('team_id'))->toBe($alpha->id);
+});
+
 it('limits relationship options and exists rules to the current tenant', function (): void {
     [$user, $alpha] = tenantUser();
     $this->actingAs($user);

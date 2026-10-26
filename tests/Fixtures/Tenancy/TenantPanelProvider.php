@@ -22,7 +22,7 @@ class TenantPanelProvider extends PanelProvider
             ->middleware(['web'])
             ->tenant(Team::class, slugAttribute: 'slug')
             ->tenantRegistration(RegisterTeam::class)
-            ->resources([ProjectResource::class])
+            ->resources([ProjectResource::class, SimpleProjectResource::class])
             ->pages([Dashboard::class]);
     }
 }

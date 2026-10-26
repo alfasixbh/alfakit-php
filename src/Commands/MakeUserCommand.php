@@ -30,7 +30,20 @@ class MakeUserCommand extends Command
         }
 
         $name = $this->option('name') ?? text('Name', required: true);
-        $email = $this->option('email') ?? text('Email address', required: true, validate: fn (string $value): ?string => filter_var($value, FILTER_VALIDATE_EMAIL) ? null : 'Invalid email address.');
+        $exists = static fn (string $value): bool => $model::query()->where('email', $value)->exists();
+        $email = $this->option('email') ?? text('Email address', required: true, validate: fn (string $value): ?string => match (true) {
+            ! filter_var($value, FILTER_VALIDATE_EMAIL) => 'Invalid email address.',
+            $exists($value) => 'A user with this email address already exists.',
+            default => null,
+        });
+
+        // `--email`, or demo data that already has the address (W-S1-02).
+        if ($exists((string) $email)) {
+            $this->components->error("A user with the email address {$email} already exists.");
+
+            return self::FAILURE;
+        }
+
         $passwordValue = $this->option('password') ?? password('Password', required: true);
 
         $user = $model::query()->create([

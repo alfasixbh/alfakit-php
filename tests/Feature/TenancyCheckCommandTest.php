@@ -35,7 +35,7 @@ it('passes a panel whose resources are all scoped', function (): void {
         ->expectsOutputToContain('scoped through team()')
         ->assertExitCode(0);
 
-    expect(collect(tenancyRows(['--panel' => 'app']))->pluck('subject')->all())->toBe(['ProjectResource → Project']);
+    expect(collect(tenancyRows(['--panel' => 'app']))->pluck('subject')->all())->toBe(['ProjectResource → Project', 'SimpleProjectResource → Project']);
 });
 
 it('reports resources that cannot be scoped, shared models and raw queries', function (): void {

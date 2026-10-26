@@ -2288,13 +2288,25 @@ class Panel
     }
 
     /**
-     * Where "G then D" goes when that isn't the panel's home: a starter kit panel without a
-     * dashboard page of its own shows its widgets on the app's `dashboard` route, so the
-     * shortcut goes there rather than to the panel's first page.
+     * Where "G then D" goes when that isn't the panel's home: a starter kit panel shows its
+     * widgets on the app's dashboard (`starterKitDashboard()`, the `dashboard` route), so the
+     * shortcut goes there, also when a `Dashboard` page is registered only to keep a
+     * customisable layout (W-S1-22). With `starterKitDashboard(false)` the panel's own
+     * dashboard page is the home, else the app's `dashboard` route.
      */
     public function getShortcutDashboardUrl(): ?string
     {
-        if (! $this->isStarterKit() || ! Route::has('dashboard')) {
+        if (! $this->isStarterKit()) {
+            return null;
+        }
+
+        $route = $this->getStarterKitDashboardRoutes()[0] ?? null;
+
+        if ($route !== null && ! str_contains($route, '*') && Route::has($route)) {
+            return route($route);
+        }
+
+        if (! Route::has('dashboard')) {
             return null;
         }
 

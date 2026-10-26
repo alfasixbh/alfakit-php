@@ -214,6 +214,8 @@ trait InteractsWithSchemas
             'type' => 'Infolist',
             'key' => 'infolist',
             'components' => $infolist->toSchema(),
+            // `columns(1)` and the like (W-S1-16: the profile's MFA notice in half a column).
+            'columns' => $infolist->getColumns(),
         ];
     }
 }

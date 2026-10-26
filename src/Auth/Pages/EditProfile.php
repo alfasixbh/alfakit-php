@@ -22,6 +22,10 @@ class EditProfile extends Page
 {
     use Concerns\ManagesAccountSecurity;
 
+    // Registered by the panel's `login()`, `registration()`… only, never discovered as a page:
+    // a subclass in a discovered folder would otherwise also become a panel page (W-S1-15).
+    protected static bool $isDiscovered = false;
+
     protected static bool $shouldRegisterNavigation = false;
 
     public static function getRelativeRouteName(): string

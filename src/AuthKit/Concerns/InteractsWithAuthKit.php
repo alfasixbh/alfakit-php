@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AlfaSix\Alfakit\AuthKit\Concerns;
 
 use AlfaSix\Alfakit\AuthKit\AuthKitPanel;
+use AlfaSix\Alfakit\Http\Middleware\Authenticate;
 use AlfaSix\Alfakit\Panel;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Model;
@@ -18,6 +19,20 @@ trait InteractsWithAuthKit
     public function getPanel(): Panel
     {
         return alfakit()->getAuthKitPanel();
+    }
+
+    /**
+     * The auth kit routes its pages with its own `Authenticate` middleware only: the
+     * verification prompt and the account page must work before the email address is
+     * verified (resend the link, fix a mistyped address). Their internal requests run the
+     * same instead of the panel's auth middleware, whose `EnsureEmailIsVerified` would turn
+     * every action of an unverified user away with a 403.
+     *
+     * @return array<int, mixed>
+     */
+    public static function getPanelAuthMiddleware(Panel $panel): array
+    {
+        return [Authenticate::class.':'.$panel->getId()];
     }
 
     public function getAuthKit(): AuthKitPanel

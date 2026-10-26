@@ -94,7 +94,7 @@ trait ManagesPlugins
             // Migrations the app already has: a plugin installed earlier (only registered now),
             // or core tables another plugin of the same run published (forms and analytics
             // both publish the import/export tables).
-            if (AppEnvironment::migrationsAlreadyPublished($command)) {
+            if (AppEnvironment::migrationsAlreadyPublished($command, $plugin['package'])) {
                 continue;
             }
 

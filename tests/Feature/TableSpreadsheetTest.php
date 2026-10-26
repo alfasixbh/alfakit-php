@@ -276,3 +276,25 @@ it('only edits records of the current tenant', function (): void {
         ->and($foreign->fresh()->name)->toBe('B1')
         ->and($own->fresh()->name)->toBe('A1');
 });
+
+it('disables the editable cells of custom records() rows when the server would refuse their edits', function (): void {
+    Gate::policy(Post::class, SsPostPolicy::class);
+    $user = User::query()->create(['name' => 'Sheet', 'email' => 'sheet@example.com', 'password' => 'x']);
+    $this->actingAs($user);
+
+    // A records() table over a model whose update policy needs a record: the cell endpoint
+    // checks `update` without a model (a class-level check, refused), so the cell must not look editable.
+    $table = Table::make()
+        ->query(Post::query())
+        ->records(fn (): array => [1 => ['id' => 1, 'price' => 9]])
+        ->columns([TextInputColumn::make('price')]);
+    $column = $table->getColumn('price')->record(['id' => 1, 'price' => 9]);
+
+    expect($table->authorizes('update', ['id' => 1, 'price' => 9]))->toBeFalse()
+        ->and($column->isDisabledForRecord())->toBeTrue();
+
+    // Without a policy that refuses, custom rows stay editable.
+    $open = Table::make()->records(fn (): array => [1 => ['id' => 1, 'price' => 9]])->columns([TextInputColumn::make('price')]);
+
+    expect($open->getColumn('price')->record(['id' => 1, 'price' => 9])->isDisabledForRecord())->toBeFalse();
+});

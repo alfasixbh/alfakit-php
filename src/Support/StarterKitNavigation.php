@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AlfaSix\Alfakit\Support;
 
 use AlfaSix\Alfakit\AlfakitManager;
+use AlfaSix\Alfakit\Standalone\StandalonePanel;
 use Inertia\Inertia;
 
 /**
@@ -37,7 +38,9 @@ final class StarterKitNavigation
 
     /**
      * One entry per starter kit panel the user may open. Null for guests, and on pages of
-     * other (standalone) panels, which render their own sidebar.
+     * other panels, which render their own sidebar. The hidden standalone and auth-kit panels
+     * (current while a host page builds a standalone component or the auth kit's /account)
+     * render none, so the host's sidebar keeps the links there.
      *
      * @return list<array<string, mixed>>|null
      */
@@ -45,7 +48,7 @@ final class StarterKitNavigation
     {
         $current = $manager->getCurrentPanel();
 
-        if ($current !== null && ! $current->isStarterKit()) {
+        if ($current !== null && ! $current->isStarterKit() && ! $current instanceof StandalonePanel) {
             return null;
         }
 

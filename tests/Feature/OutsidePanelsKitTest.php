@@ -85,6 +85,14 @@ it('generates a standalone page: the component and the Inertia page for each ada
     'svelte' => ['svelte', 'OrdersOverview.svelte', '<AlfakitComponent component={ordersOverview} />'],
 ]);
 
+it('prints a standalone page route that binds the --model record (W-S3-08)', function (): void {
+    $this->artisan('make:alfakit-page', ['name' => 'Orders', '--standalone' => true, '--model' => 'Order', '--adapter' => 'svelte'])
+        ->expectsOutputToContain("Route::get('/orders/{order}', fn (\\App\\Models\\Order \$order) => \\AlfaSix\\Alfakit\\Facades\\Alfakit::render('Orders', ['orders' => [\\App\\Alfakit\\Standalone\\Orders::class, ['order' => \$order]]]));")
+        ->assertSuccessful();
+
+    expect((string) file_get_contents($this->sandbox.'/app/Alfakit/Standalone/Orders.php'))->toContain('public Order $order;');
+});
+
 it('refuses the auth kit in an app without an Inertia frontend, and writes nothing', function (): void {
     file_put_contents($this->sandbox.'/package.json', json_encode(['devDependencies' => ['vite' => '^7.0']]));
 

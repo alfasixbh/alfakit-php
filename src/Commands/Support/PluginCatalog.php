@@ -202,7 +202,7 @@ final class PluginCatalog
             return null;
         }
 
-        $base = rtrim((string) config('alfakit.demo_url', 'http://alfakit-demo.localhost'), '/');
+        $base = rtrim((string) config('alfakit.demo_url', 'https://demo.alfakit.dev'), '/');
 
         return "{$base}/{$renderer}/admin/".self::DEMO_TENANT.'/'.$showcase['demoPath'];
     }

@@ -49,3 +49,34 @@ it('runs schema-embedded actions in page tests', function (): void {
         ->callAction('publish')
         ->assertNotified('Published');
 });
+
+it('keeps the page action when an embedded schema action has the same name (W-S2-10)', function (): void {
+    SchemaActionsPage::$headerActionsUsing = fn (): array => [
+        Action::make('create')->action(fn () => Notification::make()->title('Page create')->send()),
+    ];
+    SchemaActionsPage::$formUsing = fn (): array => [
+        AlfaSix\Alfakit\Schemas\Components\EmptyState::make('No orders yet')
+            ->actions([Action::make('create')->action(fn () => Notification::make()->title('Empty state create')->send())]),
+    ];
+
+    alfakit()->testPage(SchemaActionsPage::class, panel: 'schemaacts')
+        ->callAction('create')
+        ->assertNotified('Page create');
+});
+
+it('sends a date set with $set() in the picker format and panel timezone (W-S1-05)', function (): void {
+    alfakit()->getPanel('schemaacts')->timezone('Asia/Karachi');
+    Illuminate\Support\Carbon::setTestNow(Illuminate\Support\Carbon::parse('2026-10-25 12:18:17.322610', 'UTC'));
+
+    SchemaActionsPage::$formUsing = fn (): array => [
+        AlfaSix\Alfakit\Forms\Components\Select::make('status')->options(['draft' => 'Draft', 'published' => 'Published'])->live()
+            ->afterStateUpdated(fn (Set $set, ?string $state) => $state === 'published' ? $set('published_at', now()) : null),
+        AlfaSix\Alfakit\Forms\Components\DateTimePicker::make('published_at'),
+    ];
+
+    alfakit()->testPage(SchemaActionsPage::class, panel: 'schemaacts')
+        ->fillForm(['status' => 'published'])
+        ->assertFormSet(['published_at' => '2026-10-25 17:18']);
+
+    Illuminate\Support\Carbon::setTestNow();
+});

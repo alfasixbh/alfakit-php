@@ -218,6 +218,11 @@ class RealtimeCommand extends Command
             $files->put($echo, $files->get($this->stubPath('realtime/echo')));
             $written[] = $echo;
             $this->steps[] = ['resources/js/alfakit/echo.ts', '<fg=green>created</>'];
+        } elseif (($upgraded = self::withoutConnectOnLoad($files->get($echo))) !== null) {
+            // An echo.ts from 0.1.11 or earlier connected as soon as it loaded (W-S5-04).
+            $files->put($echo, $upgraded);
+            $written[] = $echo;
+            $this->steps[] = ['resources/js/alfakit/echo.ts', '<fg=green>no longer connects on load</>'];
         } else {
             $this->steps[] = ['resources/js/alfakit/echo.ts', '<fg=gray>exists</>'];
         }
@@ -237,8 +242,15 @@ class RealtimeCommand extends Command
 
             $relative = Str::after($entry, base_path().'/');
             $contents = $files->get($entry);
+            $factory = str_contains($files->get($echo), 'export default');
             // An echo.ts from an earlier version (no `connectEcho()` default export) stays imported.
-            $updated = $import === './echo' && str_contains($files->get($echo), 'export default') ? self::loadEchoInPanelEntry($contents) : null;
+            $updated = match (true) {
+                ! $factory => null,
+                $import === './echo' => self::loadEchoInPanelEntry($contents),
+                // Starter kits and standalone apps: AlfaKit calls the factory when a page with
+                // `->realtime()` needs Echo, instead of every page connecting (W-S5-04).
+                default => self::loadEchoInAppEntry($contents, AppEnvironment::adapter() ?? 'react'),
+            };
 
             if ($updated !== null && $updated !== $contents) {
                 $files->put($entry, $updated);
@@ -290,6 +302,55 @@ class RealtimeCommand extends Command
         }
 
         return (string) preg_replace('/^import [\'"]\.\/echo[\'"];?[ \t]*\n/m', '', $updated, 1);
+    }
+
+    /**
+     * The host entry of a starter kit or standalone app hands the `echo.ts` factory to
+     * AlfaKit (`configureRealtime(null, { echo })`, from the renderer package so it is the
+     * copy AlfaKit's components use), which calls it only on pages with `->realtime()`. An
+     * entry with the bare `import './alfakit/echo'` of an earlier version is upgraded.
+     */
+    public static function loadEchoInAppEntry(string $contents, string $adapter): string
+    {
+        if (str_contains($contents, "import('./alfakit/echo')")) {
+            return $contents;
+        }
+
+        $setup = "import { configureRealtime } from '@alfakit/{$adapter}';\n\n"
+            ."configureRealtime(null, { echo: () => import('./alfakit/echo').then((module) => module.default()) });\n";
+
+        // Without the earlier bare import: after the entry's last import statement.
+        $contents = (string) preg_replace('/^import [\'"]\.\/alfakit\/echo[\'"];?[ \t]*\n/m', '', $contents, 1);
+        $lines = explode("\n", $contents);
+        $after = 0;
+
+        foreach ($lines as $index => $line) {
+            if (preg_match('/^import\b/', $line) === 1) {
+                $after = $index + 1;
+
+                // A multi-line import: up to its `from '…'` line.
+                while (preg_match('/[\'"];?\s*$/', $lines[$after - 1]) !== 1 && $after < count($lines)) {
+                    $after++;
+                }
+            }
+        }
+
+        [$imports, $setupCall] = explode("\n\n", $setup, 2);
+        array_splice($lines, $after, 0, $after === 0 ? [$imports, '', rtrim($setupCall), ''] : [$imports, '', rtrim($setupCall)]);
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * An `echo.ts` from 0.1.11 or earlier without its trailing `connectEcho();`, which
+     * connected on every page; null when it has none.
+     */
+    public static function withoutConnectOnLoad(string $contents): ?string
+    {
+        $count = 0;
+        $updated = (string) preg_replace('/\n+connectEcho\(\);?\s*$/', "\n", $contents, 1, $count);
+
+        return $count === 1 ? $updated : null;
     }
 
     protected function installNpmPackages(bool $install): void

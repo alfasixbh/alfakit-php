@@ -127,6 +127,23 @@ it('tells where a starter kit panel widget appears', function (): void {
         ->doesntExpectOutputToContain('<AlfakitWidgets />')
         ->assertSuccessful();
 
+    // A custom widget's component is not loaded by the kit's dashboard page (W-S3-04).
+    $this->artisan('make:alfakit-widget', ['name' => 'BlogStats', '--type' => 'stats', '--panel' => 'kith', '--force' => true])
+        ->doesntExpectOutputToContain('pass the component there')
+        ->assertSuccessful();
+
+    $this->artisan('make:alfakit-widget', ['name' => 'Welcome', '--type' => 'custom', '--panel' => 'kith', '--adapter' => 'svelte'])
+        ->expectsOutputToContain("add `import Welcome from '@/alfakit/widgets/Welcome.svelte'` to resources/js/pages/Dashboard.svelte and render <AlfakitWidgets components={{ Welcome }}>")
+        ->assertSuccessful();
+
+    $this->artisan('make:alfakit-widget', ['name' => 'Hello', '--type' => 'custom', '--panel' => 'kith', '--adapter' => 'vue'])
+        ->expectsOutputToContain("add `import Hello from '@/alfakit/widgets/Hello.vue'` to resources/js/pages/Dashboard.vue and render <AlfakitWidgets :components=\"{ Hello }\">")
+        ->assertSuccessful();
+
+    $this->artisan('make:alfakit-widget', ['name' => 'Hi', '--type' => 'custom', '--panel' => 'kith', '--adapter' => 'react'])
+        ->expectsOutputToContain("add `import Hi from '@/alfakit/widgets/Hi'` to resources/js/pages/dashboard.tsx and render <AlfakitWidgets components={{ Hi }}>")
+        ->assertSuccessful();
+
     (new Illuminate\Filesystem\Filesystem)->deleteDirectory($base);
 });
 

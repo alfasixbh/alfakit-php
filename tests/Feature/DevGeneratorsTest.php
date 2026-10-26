@@ -379,6 +379,20 @@ it('generates a plugin package with a frontend', function (): void {
     expect(file_exists(public_path('vendor/alfakit/acme/blog-tools/blog-tools.css')))->toBeTrue();
 });
 
+it('tells a starter kit app to register a plugin\'s components in its Alfakit page (W-S1-18)', function (): void {
+    $page = resource_path('js/pages/Alfakit/Page.svelte');
+    (new Filesystem)->ensureDirectoryExists(dirname($page));
+    file_put_contents($page, '<script></script>');
+
+    try {
+        $this->artisan('make:alfakit-plugin', ['name' => 'Blog', '--vendor' => 'acme', '--frontend' => 'svelte'])
+            ->expectsOutputToContain('spread its components into createStarterKitLayout({ components }) in resources/js/pages/Alfakit/Page.svelte')
+            ->assertSuccessful();
+    } finally {
+        @unlink($page);
+    }
+});
+
 it('generates a PHP-only plugin', function (): void {
     $this->artisan('make:alfakit-plugin', ['name' => 'Audit', '--vendor' => 'acme', '--frontend' => 'none', '--path' => 'plugins'])->assertSuccessful();
 
