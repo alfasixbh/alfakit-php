@@ -27,7 +27,9 @@ trait HasContentLayout
 
     /**
      * Show records as cards in a responsive grid: `contentGrid(['md' => 2, 'xl' => 3])`.
-     * An integer is the column count from `lg` up.
+     * An integer is the column count from `lg` up. The breakpoints follow the table's own
+     * width (a CSS container query), and a count only applies once each card can be 15rem
+     * wide; container keys (`'@lg' => 2`) are used as given.
      *
      * @param  int|array<string, int|null>|Closure|null  $grid
      */
