@@ -13,6 +13,7 @@ use AlfaSix\Alfakit\Tests\Fixtures\Panel\Resources\PostResource\Pages\CreatePost
 use AlfaSix\Alfakit\Tests\Fixtures\Panel\Resources\PostResource\Pages\EditPost;
 use AlfaSix\Alfakit\Tests\Fixtures\Panel\Resources\PostResource\Pages\ListPosts;
 use AlfaSix\Alfakit\Tests\Fixtures\Testing\HelperActionsPage;
+use AlfaSix\Alfakit\Tests\Fixtures\Testing\HelperBulkActionsPage;
 use AlfaSix\Alfakit\Tests\Fixtures\Testing\HelpersPanelProvider;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
@@ -215,6 +216,48 @@ it('runs every filtered record with a select-all bulk action', function (): void
         ->searchTable()
         ->assertCanSeeTableRecords([$kept])
         ->assertCountTableRecords(1);
+});
+
+it('fills the modal form of a bulk action with the selection, as the browser does', function (): void {
+    HelpersPanelProvider::registerPanel();
+    HelperBulkActionsPage::$runs = [];
+    $user = testerUser();
+    [$a, $b, $c] = [testerPost($user), testerPost($user), testerPost($user)];
+    $this->actingAs($user);
+
+    // Every filled field refreshes the form, which must address the bulk action and its
+    // selected records (it answered 404 without them).
+    alfakit()->testPage(HelperBulkActionsPage::class, panel: 'helpers')
+        ->callTableBulkAction('approveSelected', [$a, $b], ['comment' => 'Photos checked'])
+        ->assertHasNoActionErrors()
+        ->mountTableBulkAction('approveSelected', [$c])
+        ->fillForm(['summary' => 'Late'])
+        ->assertFormSet(['comment' => 'Re: Late'])
+        ->callMountedAction()
+        ->assertHasNoActionErrors();
+
+    expect(HelperBulkActionsPage::$runs)->toBe([
+        ['ids' => [$a->id, $b->id], 'data' => ['comment' => 'Photos checked', 'summary' => null]],
+        ['ids' => [$c->id], 'data' => ['comment' => 'Re: Late', 'summary' => 'Late']],
+    ]);
+});
+
+it('fills the modal form of a select-all bulk action', function (): void {
+    HelpersPanelProvider::registerPanel();
+    HelperBulkActionsPage::$runs = [];
+    $user = testerUser();
+    testerPost($user, ['title' => 'Keep me']);
+    $first = testerPost($user, ['title' => 'Drop one']);
+    $second = testerPost($user, ['title' => 'Drop two']);
+    $this->actingAs($user);
+
+    alfakit()->testPage(HelperBulkActionsPage::class, panel: 'helpers')
+        ->searchTable('Drop')
+        ->callTableBulkAction('approveSelected', null, ['comment' => 'All of them'])
+        ->assertHasNoActionErrors();
+
+    expect(HelperBulkActionsPage::$runs[0]['ids'])->toEqualCanonicalizing([$first->id, $second->id])
+        ->and(HelperBulkActionsPage::$runs[0]['data']['comment'])->toBe('All of them');
 });
 
 // ---------------------------------------------------------------- Page actions

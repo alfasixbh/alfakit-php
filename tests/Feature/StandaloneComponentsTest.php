@@ -5,6 +5,7 @@ declare(strict_types=1);
 use AlfaSix\Alfakit\Notifications\Notification;
 use AlfaSix\Alfakit\Standalone\StandalonePanel;
 use AlfaSix\Alfakit\Support\SchemaContext;
+use AlfaSix\Alfakit\Tests\Fixtures\Models\MfaUser;
 use AlfaSix\Alfakit\Tests\Fixtures\Models\Post;
 use AlfaSix\Alfakit\Tests\Fixtures\Models\User;
 use AlfaSix\Alfakit\Tests\Fixtures\Standalone\ContactForm;
@@ -209,6 +210,24 @@ it('denies the page and internal requests when authorize() fails', function (): 
 
     $this->get('/secure')->assertForbidden();
     $this->postJson('/_alfakit/actions', ['token' => $token, 'action' => 'submit', 'data' => ['name' => 'x']])->assertForbidden();
+});
+
+it('does not ask CanAccessPanel about the hidden standalone panel', function (): void {
+    // `canAccessPanel()` is false for banned users (no panel at all): the application's own
+    // pages are still theirs, and the component's `authorize()` decides.
+    $customer = MfaUser::query()->create(['name' => 'Customer', 'email' => 'customer@example.com', 'password' => 'password', 'role' => 'banned']);
+    $other = MfaUser::query()->create(['name' => 'Other', 'email' => 'other@example.com', 'password' => 'password', 'role' => 'banned']);
+
+    $token = inertiaProps(inertiaGet($this->actingAs($customer), '/secure'))['form']['token'];
+
+    inertiaPost($this->actingAs($customer), '/_alfakit/actions', ['token' => $token, 'action' => 'submit', 'data' => ['name' => 'x']])->assertRedirect();
+
+    // The token stays bound to its user, and `authorize()` still runs on every request.
+    $this->actingAs($other)->postJson('/_alfakit/actions', ['token' => $token, 'action' => 'submit', 'data' => ['name' => 'x']])->assertForbidden();
+
+    SecureForm::$allow = false;
+
+    $this->actingAs($customer)->postJson('/_alfakit/actions', ['token' => $token, 'action' => 'submit', 'data' => ['name' => 'x']])->assertForbidden();
 });
 
 // ---------------------------------------------------------------- Uploads
