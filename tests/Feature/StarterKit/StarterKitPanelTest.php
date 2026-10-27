@@ -2,7 +2,9 @@
 
 declare(strict_types=1);
 
+use AlfaSix\Alfakit\Localization\LocaleResolver;
 use AlfaSix\Alfakit\Panel;
+use AlfaSix\Alfakit\Support\StarterKitDocument;
 use AlfaSix\Alfakit\Support\StarterKitNavigation;
 use AlfaSix\Alfakit\Tests\Fixtures\AuthTenancy\Panels;
 use AlfaSix\Alfakit\Tests\Fixtures\Models\User;
@@ -121,6 +123,41 @@ it('leaves the user menu out of the shared navigation when the panel has no entr
     expect(inertiaProps(inertiaGet($this, '/dashboard'))['alfakitNavigation'][0])->not->toHaveKey('userMenu');
 });
 
+it('shares the document language and direction with every page, so a right-to-left panel language flips the whole page', function (): void {
+    starterKitPanel(fn (Panel $panel): Panel => $panel->locales(['en', 'ar']));
+    Route::middleware('web')->get('/welcome', fn () => Inertia::render('welcome'));
+    app('router')->getRoutes()->refreshNameLookups();
+
+    // Guests too (the kit's login page), in the panel's default language.
+    expect(inertiaProps(inertiaGet($this, '/welcome'))['alfakitDocument'])->toBe(['tag' => 'en', 'direction' => 'ltr'])
+        ->and(StarterKitDocument::direction())->toBe('ltr');
+
+    $this->actingAs(starterKitUser());
+    $this->withSession([LocaleResolver::SESSION_KEY => 'ar']);
+
+    // The app's own page keeps its language (`lang`) and takes the panel language's direction.
+    expect(inertiaProps(inertiaGet($this, '/dashboard'))['alfakitDocument'])->toBe(['tag' => 'en', 'direction' => 'rtl'])
+        // AlfaKit's pages are in the panel language.
+        ->and(inertiaProps(inertiaGet($this, '/kit/posts'))['alfakitDocument'])->toBe(['tag' => 'ar', 'direction' => 'rtl'])
+        // The kit's root view (`<html dir="{{ StarterKitDocument::direction() }}">`) on app pages.
+        ->and(StarterKitDocument::direction())->toBe('rtl');
+
+    $this->withSession([LocaleResolver::SESSION_KEY => 'en']);
+
+    expect(inertiaProps(inertiaGet($this, '/dashboard'))['alfakitDocument'])->toBe(['tag' => 'en', 'direction' => 'ltr']);
+});
+
+it('renders <html dir> in the starter kit root view from the panel language', function (): void {
+    starterKitPanel(fn (Panel $panel): Panel => $panel->locales(['en', 'ar']));
+    $this->app['view']->addLocation(__DIR__.'/views/document');
+
+    $this->actingAs(starterKitUser());
+    $this->withSession([LocaleResolver::SESSION_KEY => 'ar']);
+
+    $this->get('/kit/posts')->assertOk()->assertSee('<html lang="ar" dir="rtl">', false);
+    $this->get('/dashboard')->assertOk()->assertSee('<html lang="en" dir="rtl">', false);
+});
+
 it('does not share starter kit navigation on pages of other panels', function (): void {
     starterKitPanel();
 
@@ -129,6 +166,8 @@ it('does not share starter kit navigation on pages of other panels', function ()
     $props = inertiaProps(inertiaGet($this, '/admin/posts'));
 
     expect($props['alfakitNavigation'] ?? null)->toBeNull()
+        // That panel sets `<html lang dir>` itself.
+        ->and($props['alfakitDocument'] ?? null)->toBeNull()
         ->and($props['alfakit'])->not->toHaveKey('starterKit')
         ->and($props['alfakit']['navigation'])->not->toBe([]);
 });

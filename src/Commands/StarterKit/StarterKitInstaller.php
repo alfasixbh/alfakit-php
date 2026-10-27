@@ -26,6 +26,9 @@ use Illuminate\Support\Str;
  * - `resources/js/pages/dashboard.tsx` (`Dashboard.vue`, `Dashboard.svelte`): the row of
  *   placeholder boxes wrapped in `<AlfakitWidgets>`, so the panel's widgets show on the
  *   app's dashboard, in a marked block (`--no-dashboard-widgets` skips it).
+ * - `resources/views/app.blade.php` and the app sidebar: `<html dir>` and the sidebar's `side`
+ *   follow the panel language's direction, so the whole page mirrors in a right-to-left
+ *   language; the kit's logo, user info and menus get logical margins and alignment.
  * - `resources/css/app.css`: the starter kit stylesheet (`standalone.css`, no shadcn palette,
  *   so the host's tokens stay) and the `@source` of the renderer's compiled components.
  * - `app/Providers/Alfakit/{Id}PanelProvider.php` with `->starterKit()`, registered in
@@ -46,6 +49,12 @@ final class StarterKitInstaller
 
     /** Marks the user menu entries the installer added to the kit's user menu. */
     public const USER_MENU_MARKER = 'alfakit:user-menu';
+
+    /** Marks the document direction the installer adds to the root view and the app sidebar. */
+    public const DIRECTION_MARKER = 'alfakit:direction';
+
+    /** What the root view's `<html dir>` calls. */
+    public const DIRECTION_CALL = '\AlfaSix\Alfakit\Support\StarterKitDocument::direction()';
 
     /** @var list<array{status: 'created'|'updated'|'unchanged'|'skipped', path: string, note: string}> */
     private array $changes = [];
@@ -144,9 +153,10 @@ final class StarterKitInstaller
         $this->writeFile($files['nav'], self::stub("{$this->kit}/nav"), 'the panel navigation for the app sidebar');
         $this->patchFile($files['sidebar'], fn (string $contents): ?string => self::addNavToSidebar($contents, $this->kit), 'added <AlfakitNav /> after <NavMain />');
         $this->writeFile($files['userMenuItems'], self::stub("{$this->kit}/user-menu-items"), 'the panel\'s user menu entries (userMenuItems(), Billing…) for the app user menu');
-        $this->patchFile($files['userMenu'], fn (string $contents): ?string => self::addUserMenuItems($contents, $this->kit), 'added <AlfakitUserMenuItems /> before Log out');
+        // With logical margins in its icons, like the sidebar header's trigger below.
+        $this->patchFile($files['userMenu'], fn (string $contents): ?string => self::withLogicalClasses(self::addUserMenuItems($contents, $this->kit), $this->kit), 'added <AlfakitUserMenuItems /> before Log out');
         if ($headerWidgets) {
-            $this->patchFile($files['sidebarHeader'], fn (string $contents): ?string => self::addWidgetsToHeader($contents, $this->kit, sidebarLayout: true), 'added {added} to the header');
+            $this->patchFile($files['sidebarHeader'], fn (string $contents): ?string => self::withLogicalClasses(self::addWidgetsToHeader($contents, $this->kit, sidebarLayout: true), $this->kit), 'added {added} to the header');
             $this->patchFile($files['header'], fn (string $contents): ?string => self::addWidgetsToHeader($contents, $this->kit, sidebarLayout: false), 'added {added} before the user menu');
         }
 
@@ -156,6 +166,13 @@ final class StarterKitInstaller
 
         $this->patchFile($files['css'], fn (string $contents): string => self::addStyles($contents, $this->kit), 'imported the Alfakit starter kit styles');
         $this->patchFile('resources/views/app.blade.php', fn (string $contents): ?string => self::addAssetsToRootView($contents), 'added the plugin stylesheets and scripts (Assets::renderTags()) before @vite');
+        $this->patchFile('resources/views/app.blade.php', fn (string $contents): ?string => self::addDirectionToRootView($contents), 'added dir="{{ '.self::DIRECTION_CALL.' }}" to <html>: the page follows the panel language\'s direction from the first paint');
+        $this->patchFile($files['sidebar'], fn (string $contents): ?string => self::addDirectionToSidebar($contents, $this->kit), 'docked the sidebar on the end of the line (side follows useAlfakitDirection()): the right in a right-to-left language');
+
+        foreach (self::logicalClassFiles($this->kit) as $relative) {
+            $this->patchFile($relative, fn (string $contents): string => self::useLogicalClasses($contents, $this->kit), 'logical margins and alignment (ms-, me-, text-start), so it mirrors in a right-to-left language');
+        }
+
         $this->record('unchanged', $files['entry'], 'no change needed: Inertia resolves '.$files['page'].' like the app\'s other pages');
         $this->installPanelProvider($panelId, $path ?? $panelId);
 
@@ -184,6 +201,153 @@ final class StarterKitInstaller
         );
 
         return $updated === null || $count !== 1 ? null : $updated;
+    }
+
+    /**
+     * `<html dir>` in the kit's root view, from the panel language's direction
+     * (`StarterKitDocument::direction()`), so a right-to-left language mirrors the first paint
+     * and SSR, before the renderer keeps it in step. Added once, after the `lang` attribute,
+     * with a marker comment above the tag. Null when there is no `<html>` tag or it already
+     * has a `dir` of its own; unchanged when the call is there.
+     */
+    public static function addDirectionToRootView(string $contents): ?string
+    {
+        if (str_contains($contents, 'StarterKitDocument::direction(')) {
+            return $contents;
+        }
+
+        if (preg_match('/^([ \t]*)<html\b/m', $contents, $match, PREG_OFFSET_CAPTURE) !== 1) {
+            return null;
+        }
+
+        $indent = $match[1][0];
+        $start = $match[0][1] + strlen($indent);
+        $head = stripos($contents, '<head', $start);
+        // Everything up to `<head>`: the kit's `@class(['dark' => …])` holds a `>`.
+        $tag = substr($contents, $start, ($head === false ? strlen($contents) : $head) - $start);
+
+        if (preg_match('/\sdir\s*=/i', $tag) === 1) {
+            return null;
+        }
+
+        $offset = preg_match('/^<html\s+lang="[^"]*"/', $tag, $lang) === 1 ? strlen($lang[0]) : strlen('<html');
+        $updated = substr_replace($contents, ' dir="{{ '.self::DIRECTION_CALL.' }}"', $start + $offset, 0);
+        $comment = $indent.'{{-- '.self::DIRECTION_MARKER.': <html dir> follows the panel language (php artisan alfakit:install --starter-kit) --}}'."\n";
+
+        return substr_replace($updated, $comment, $match[0][1], 0);
+    }
+
+    /**
+     * Dock the kit's shadcn `<Sidebar>` on the end of the line: its `side` is physical, so it
+     * follows `useAlfakitDirection()` (the right in a right-to-left panel language; the
+     * container, rail, border and the mobile sheet all key off it). Adds the hook's import, a
+     * marked `const direction = useAlfakitDirection()` in the component and the `side` prop.
+     * Null when the sidebar does not have the starter kit's shape or sets `side` itself;
+     * unchanged when the hook is there.
+     */
+    public static function addDirectionToSidebar(string $contents, string $kit): ?string
+    {
+        if (str_contains($contents, 'useAlfakitDirection')) {
+            return $contents;
+        }
+
+        if (preg_match('/<Sidebar(\s[^>]*)?>/', $contents, $tag, PREG_OFFSET_CAPTURE) !== 1) {
+            return null;
+        }
+
+        $attributes = $tag[1][0] ?? '';
+
+        if (preg_match('/(^|\s)(:|bind:)?side\s*=/', $attributes) === 1) {
+            return null;
+        }
+
+        $side = match ($kit) {
+            'vue' => ':side="direction === \'rtl\' ? \'right\' : \'left\'"',
+            'svelte' => 'side={direction.current === \'rtl\' ? \'right\' : \'left\'}',
+            default => 'side={direction === \'rtl\' ? \'right\' : \'left\'}',
+        };
+        $end = $tag[0][1] + strlen($tag[0][0]) - (str_ends_with($tag[0][0], '/>') ? 2 : 1);
+        $updated = rtrim(substr($contents, 0, $end)).' '.$side.substr($contents, $end);
+        $comment = '// '.self::DIRECTION_MARKER.': the sidebar docks on the right in a right-to-left language (php artisan alfakit:install --starter-kit)';
+
+        if ($kit === 'react') {
+            $updated = preg_replace_callback(
+                '/^([ \t]*)export (?:default )?function AppSidebar\([^)]*\)[^{\n]*\{[ \t]*\n/m',
+                static fn (array $matches): string => $matches[0]
+                    .$matches[1].'    '.$comment."\n"
+                    .$matches[1]."    const direction = useAlfakitDirection();\n\n",
+                $updated,
+                1,
+                $count,
+            );
+
+            if ($updated === null || $count !== 1) {
+                return null;
+            }
+        } else {
+            // At the end of the component's script (Vue's `<script setup>`, Svelte's instance
+            // script), with the indentation of its first line.
+            $open = $kit === 'vue' ? '/<script\b[^>]*\bsetup\b[^>]*>\n/' : '/<script(?![^>]*\bmodule\b)[^>]*>\n/';
+
+            if (preg_match($open, $updated, $script, PREG_OFFSET_CAPTURE) !== 1) {
+                return null;
+            }
+
+            $bodyStart = $script[0][1] + strlen($script[0][0]);
+            $close = strpos($updated, '</script>', $bodyStart);
+
+            if ($close === false) {
+                return null;
+            }
+
+            $indent = preg_match('/^([ \t]*)\S/m', substr($updated, $bodyStart, $close - $bodyStart), $first) === 1 ? $first[1] : '';
+            $body = rtrim(substr($updated, $bodyStart, $close - $bodyStart))."\n\n"
+                .$indent.$comment."\n"
+                .$indent."const direction = useAlfakitDirection();\n";
+            $updated = substr($updated, 0, $bodyStart).$body.substr($updated, $close);
+        }
+
+        return self::addNamedImport($updated, $kit, 'useAlfakitDirection');
+    }
+
+    /**
+     * The kit's sidebar components that use physical margins or alignment (the logo, the user
+     * info, the user button). The user menu and the sidebar header get logical classes with
+     * their own patches.
+     *
+     * @return list<string>
+     */
+    public static function logicalClassFiles(string $kit): array
+    {
+        $names = $kit === 'react' ? ['app-logo', 'user-info', 'nav-user'] : ['AppLogo', 'UserInfo', 'NavUser'];
+        $extension = $kit === 'react' ? 'tsx' : $kit;
+
+        return array_map(static fn (string $name): string => "resources/js/components/{$name}.{$extension}", $names);
+    }
+
+    /**
+     * The starter kits' physical margins and alignment (`ml-1 … text-left`, `ml-auto`,
+     * `-ml-1`, `mr-2`) as their logical twins, which are the same left to right and mirror
+     * right to left. Only these exact class lists change; others are left as they are.
+     */
+    public static function useLogicalClasses(string $contents, string $kit): string
+    {
+        $attribute = $kit === 'react' ? 'className' : 'class';
+
+        return strtr($contents, [
+            '"ml-1 grid flex-1 text-left text-sm"' => '"ms-1 grid flex-1 text-start text-sm"',
+            '"grid flex-1 text-left text-sm leading-tight"' => '"grid flex-1 text-start text-sm leading-tight"',
+            '"flex items-center gap-2 px-1 py-1.5 text-left text-sm"' => '"flex items-center gap-2 px-1 py-1.5 text-start text-sm"',
+            "<ChevronsUpDown {$attribute}=\"ml-auto " => "<ChevronsUpDown {$attribute}=\"ms-auto ",
+            "<SidebarTrigger {$attribute}=\"-ml-1\"" => "<SidebarTrigger {$attribute}=\"-ms-1\"",
+            "<LogOut {$attribute}=\"mr-2" => "<LogOut {$attribute}=\"me-2",
+            "<Settings {$attribute}=\"mr-2" => "<Settings {$attribute}=\"me-2",
+        ]);
+    }
+
+    private static function withLogicalClasses(?string $contents, string $kit): ?string
+    {
+        return $contents === null ? null : self::useLogicalClasses($contents, $kit);
     }
 
     /**

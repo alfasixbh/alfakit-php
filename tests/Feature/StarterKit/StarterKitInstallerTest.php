@@ -48,6 +48,7 @@ it('wires Alfakit into the starter kit, idempotently', function (string $kit, st
         StarterKitInstaller::files($kit)['dashboard'] => 'updated',
         'resources/css/app.css' => 'updated',
         'resources/views/app.blade.php' => 'updated',
+        ...collect(StarterKitInstaller::logicalClassFiles($kit))->mapWithKeys(fn (string $file): array => [$file => 'updated'])->all(),
         StarterKitInstaller::files($kit)['entry'] => 'unchanged',
         'app/Providers/Alfakit/AdminPanelProvider.php' => 'created',
         'bootstrap/providers.php' => 'updated',
@@ -73,6 +74,38 @@ it('wires Alfakit into the starter kit, idempotently', function (string $kit, st
         ->toContain(StarterKitInstaller::MARKER)
         ->and(substr_count($sidebarContents, '<AlfakitNav />'))->toBe(1)
         ->and(strpos($sidebarContents, '<AlfakitNav />'))->toBeGreaterThan(strpos($sidebarContents, '<NavMain'));
+
+    // The sidebar docks on the end of the line: `side` follows the panel language's direction.
+    $side = [
+        'react' => "side={direction === 'rtl' ? 'right' : 'left'}",
+        'vue' => ":side=\"direction === 'rtl' ? 'right' : 'left'\"",
+        'svelte' => "side={direction.current === 'rtl' ? 'right' : 'left'}",
+    ][$kit];
+
+    expect($sidebarContents)->toContain(StarterKitInstaller::DIRECTION_MARKER)
+        ->toContain('<Sidebar collapsible="icon" variant="inset" '.$side.'>')
+        ->toContain(($kit === 'svelte' ? '    ' : '')."import { useAlfakitDirection } from '@alfakit/{$kit}';\n")
+        ->and(substr_count($sidebarContents, 'const direction = useAlfakitDirection();'))->toBe(1)
+        ->and(strpos($sidebarContents, 'const direction = useAlfakitDirection();'))->toBeLessThan(strpos($sidebarContents, '<Sidebar '));
+
+    if ($kit === 'react') {
+        expect(strpos($sidebarContents, 'const direction'))->toBeGreaterThan(strpos($sidebarContents, 'export function AppSidebar() {'));
+    } else {
+        expect(strpos($sidebarContents, 'const direction'))->toBeLessThan(strpos($sidebarContents, '</script>'));
+    }
+
+    // The root view's <html> gets the direction from the first paint (and in SSR).
+    expect(file_get_contents($app.'/resources/views/app.blade.php'))
+        ->toContain(StarterKitInstaller::DIRECTION_MARKER)
+        ->toContain('<html lang="{{ str_replace(\'_\', \'-\', app()->getLocale()) }}" dir="{{ '.StarterKitInstaller::DIRECTION_CALL.' }}"');
+
+    // Logical margins and alignment in the kit's logo, user info and menus.
+    foreach ([...StarterKitInstaller::logicalClassFiles($kit), StarterKitInstaller::files($kit)['sidebarHeader'], StarterKitInstaller::files($kit)['userMenu']] as $file) {
+        expect((string) file_get_contents($app.'/'.$file))
+            ->not->toContain('text-left text-sm')
+            ->not->toContain('"-ml-1"')
+            ->not->toMatch('/(ChevronsUpDown|LogOut|Settings) (class|className)="m[lr]-/');
+    }
 
     // The user menu gains the panel's entries (userMenuItems(), Billing…) in a marked block
     // before the separator above Log out, built from the app's own dropdown items.
@@ -187,13 +220,13 @@ it('wires Alfakit into the starter kit, idempotently', function (string $kit, st
         ->and(file_get_contents($app.'/bootstrap/providers.php'))->toContain('use App\\Providers\\Alfakit\\AdminPanelProvider;')->toContain('    AdminPanelProvider::class,');
 
     // A second run changes nothing.
-    $snapshot = collect([$page, $nav, $sidebar, StarterKitInstaller::files($kit)['userMenu'], StarterKitInstaller::files($kit)['userMenuItems'], StarterKitInstaller::files($kit)['sidebarHeader'], StarterKitInstaller::files($kit)['header'], StarterKitInstaller::files($kit)['dashboard'], 'resources/css/app.css', 'bootstrap/providers.php'])
+    $snapshot = collect([$page, $nav, $sidebar, StarterKitInstaller::files($kit)['userMenu'], StarterKitInstaller::files($kit)['userMenuItems'], StarterKitInstaller::files($kit)['sidebarHeader'], StarterKitInstaller::files($kit)['header'], StarterKitInstaller::files($kit)['dashboard'], 'resources/css/app.css', 'bootstrap/providers.php', 'resources/views/app.blade.php'])
         ->mapWithKeys(fn (string $file): array => [$file => file_get_contents($app.'/'.$file)]);
 
     $again = (new StarterKitInstaller($app, $kit))->install('admin', 'admin');
 
     expect(collect($again)->pluck('status')->unique()->values()->all())->toBe(['unchanged'])
-        ->and($snapshot->map(fn (string $contents, string $file): bool => file_get_contents($app.'/'.$file) === $contents)->filter()->count())->toBe(10);
+        ->and($snapshot->map(fn (string $contents, string $file): bool => file_get_contents($app.'/'.$file) === $contents)->filter()->count())->toBe(11);
 
     (new Filesystem)->deleteDirectory($app);
 })->with('starter kits');
@@ -368,3 +401,80 @@ it('renders the plugin assets in the starter kit root view, once, before @vite',
         ->and(StarterKitInstaller::addAssetsToRootView($updated))->toBe($updated)
         ->and(StarterKitInstaller::addAssetsToRootView('<head></head>'))->toBeNull();
 });
+
+it('adds <html dir> to the starter kit root view, once, after lang', function (): void {
+    $dir = 'dir="{{ '.StarterKitInstaller::DIRECTION_CALL.' }}"';
+    $html = '<html lang="{{ str_replace(\'_\', \'-\', app()->getLocale()) }}" @class([\'dark\' => ($appearance ?? \'system\') == \'dark\'])>';
+    $view = "<!DOCTYPE html>\n{$html}\n    <head>\n";
+    $updated = (string) StarterKitInstaller::addDirectionToRootView($view);
+
+    expect($updated)->toBe("<!DOCTYPE html>\n{{-- ".StarterKitInstaller::DIRECTION_MARKER.": <html dir> follows the panel language (php artisan alfakit:install --starter-kit) --}}\n"
+        .'<html lang="{{ str_replace(\'_\', \'-\', app()->getLocale()) }}" '.$dir.' @class([\'dark\' => ($appearance ?? \'system\') == \'dark\'])>'."\n    <head>\n")
+        ->and(StarterKitInstaller::addDirectionToRootView($updated))->toBe($updated)
+        // Without lang: right after the tag name.
+        ->and(StarterKitInstaller::addDirectionToRootView("<html>\n<head>"))->toContain('<html '.$dir.'>')
+        // An app that sets dir itself, or has no <html>, is left alone (and told so).
+        ->and(StarterKitInstaller::addDirectionToRootView("<html lang=\"en\" dir=\"{{ \$dir }}\">\n<head>"))->toBeNull()
+        ->and(StarterKitInstaller::addDirectionToRootView('<div></div>'))->toBeNull();
+});
+
+it('leaves a sidebar that sets its own side alone, with a note', function (): void {
+    expect(StarterKitInstaller::addDirectionToSidebar("<script setup lang=\"ts\">\nimport { Sidebar } from '@/components/ui/sidebar';\n</script>\n<template><Sidebar side=\"right\" /></template>", 'vue'))->toBeNull()
+        ->and(StarterKitInstaller::addDirectionToSidebar('export const AppSidebar = () => <Sidebar />', 'react'))->toBeNull();
+
+    $app = starterKitApp('react');
+    $sidebar = $app.'/resources/js/components/app-sidebar.tsx';
+    file_put_contents($sidebar, str_replace('variant="inset">', 'variant="inset" side="right">', (string) file_get_contents($sidebar)));
+
+    $changes = collect((new StarterKitInstaller($app, 'react'))->install())->where('path', 'resources/js/components/app-sidebar.tsx')->values();
+
+    // The navigation still goes in; the side is the app's.
+    expect($changes[0]['status'])->toBe('updated')
+        ->and($changes[1]['status'])->toBe('skipped')
+        ->and($changes[1]['note'])->toContain('yourself')
+        ->and(file_get_contents($sidebar))->not->toContain('useAlfakitDirection')->toContain('<AlfakitNav />');
+
+    (new Filesystem)->deleteDirectory($app);
+});
+
+it('reminds an app set up before the page followed the panel language direction, and adds it when the installer runs again', function (string $kit, string $inertia): void {
+    $app = starterKitApp($kit);
+    (new Filesystem)->ensureDirectoryExists($app.'/vendor/composer');
+    (new Filesystem)->ensureDirectoryExists($app.'/public');
+    file_put_contents($app.'/package.json', json_encode(['dependencies' => [$inertia => '^3.0']]));
+    $original = $this->app->basePath();
+    $this->app->setBasePath($app);
+    $view = $app.'/resources/views/app.blade.php';
+    $sidebar = $app.'/'.StarterKitInstaller::files($kit)['sidebar'];
+    $viewBefore = (string) file_get_contents($view);
+    $sidebarBefore = (string) file_get_contents($sidebar);
+
+    $this->artisan('alfakit:install', ['--starter-kit' => true, '--no-npm' => true, '--no-composer-script' => true])->assertSuccessful();
+
+    $installedView = (string) file_get_contents($view);
+    $installedSidebar = (string) file_get_contents($sidebar);
+
+    // An app installed by an earlier version: the kit's own <html> and <Sidebar>.
+    file_put_contents($view, (string) StarterKitInstaller::addAssetsToRootView($viewBefore));
+    file_put_contents($sidebar, (string) StarterKitInstaller::addNavToSidebar($sidebarBefore, $kit));
+
+    $this->artisan('alfakit:upgrade')
+        ->expectsOutputToContain('does not follow the panel language\'s direction yet')
+        ->assertSuccessful();
+
+    $this->artisan('alfakit:install', ['--starter-kit' => true, '--no-npm' => true, '--no-composer-script' => true])->assertSuccessful();
+
+    expect(file_get_contents($view))->toBe($installedView)
+        ->and(file_get_contents($sidebar))->toBe($installedSidebar);
+
+    $this->artisan('alfakit:upgrade')
+        ->doesntExpectOutputToContain('direction yet')
+        ->assertSuccessful();
+
+    $this->app->setBasePath($original);
+    (new Filesystem)->deleteDirectory($app);
+})->with([
+    'react' => ['react', '@inertiajs/react'],
+    'vue' => ['vue', '@inertiajs/vue3'],
+    'svelte' => ['svelte', '@inertiajs/svelte'],
+]);
