@@ -53,6 +53,12 @@ return [
         'invalid_dimensions' => 'The image dimensions are not allowed.',
         'invalid_aspect_ratio' => 'The image aspect ratio is not allowed.',
         'chunk_failed' => 'The upload is incomplete. Upload the file again.',
+        'types' => [
+            'images' => 'Images',
+            'videos' => 'Videos',
+            'audio' => 'Audio',
+            'text' => 'Text files',
+        ],
     ],
     'tags_input' => [
         'placeholder' => 'Add a tag…',
