@@ -36,6 +36,44 @@ class FileUpload extends Field
     /** Detected types `mimeTypeMap()` may override with the type of the file's extension. */
     public const GENERIC_MIME_TYPES = ['application/octet-stream', 'application/zip', 'text/plain', 'application/x-empty'];
 
+    /**
+     * Short names shown in the drop zone for common accepted types; other types fall back
+     * to their upper-cased subtype (`application/x-rar` is "RAR").
+     */
+    protected const FILE_TYPE_LABELS = [
+        'image/png' => 'PNG',
+        'image/jpeg' => 'JPG',
+        'image/jpg' => 'JPG',
+        'image/pjpeg' => 'JPG',
+        'image/webp' => 'WebP',
+        'image/gif' => 'GIF',
+        'image/svg+xml' => 'SVG',
+        'image/x-icon' => 'ICO',
+        'image/vnd.microsoft.icon' => 'ICO',
+        'image/avif' => 'AVIF',
+        'image/heic' => 'HEIC',
+        'image/bmp' => 'BMP',
+        'image/tiff' => 'TIFF',
+        'application/pdf' => 'PDF',
+        'application/zip' => 'ZIP',
+        'application/json' => 'JSON',
+        'text/plain' => 'TXT',
+        'text/csv' => 'CSV',
+        'text/markdown' => 'Markdown',
+        'application/msword' => 'DOC',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'DOCX',
+        'application/vnd.ms-excel' => 'XLS',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'XLSX',
+        'application/vnd.oasis.opendocument.text' => 'ODT',
+        'application/vnd.oasis.opendocument.spreadsheet' => 'ODS',
+        'application/vnd.oasis.opendocument.presentation' => 'ODP',
+        'application/vnd.ms-powerpoint' => 'PPT',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation' => 'PPTX',
+        'audio/mpeg' => 'MP3',
+        'video/mp4' => 'MP4',
+        'video/quicktime' => 'MOV',
+    ];
+
     protected string|Closure|null $disk = null;
 
     protected string|Closure|null $directory = null;
@@ -741,6 +779,69 @@ class FileUpload extends Field
         }
 
         return $types;
+    }
+
+    /**
+     * The accepted types as short, deduplicated names for the drop zone hint:
+     * `['image/png', 'image/jpeg', 'image/x-icon']` is "PNG, JPG, ICO" and `image/*` is "Images".
+     */
+    public function getAcceptedFileTypesLabel(): ?string
+    {
+        $types = $this->getAcceptedFileTypes();
+
+        if ($types === null || $types === []) {
+            return null;
+        }
+
+        $extensions = array_flip(array_reverse($this->getMimeTypeMap(), true));
+        $labels = [];
+
+        foreach ($types as $type) {
+            $type = strtolower(trim((string) $type));
+
+            if ($type !== '') {
+                $labels[] = self::fileTypeLabel($type, $extensions);
+            }
+        }
+
+        return $labels === [] ? null : implode(', ', array_unique($labels));
+    }
+
+    /**
+     * @param  array<string, string>  $extensions  MIME type => extension from `mimeTypeMap()`
+     */
+    protected static function fileTypeLabel(string $type, array $extensions): string
+    {
+        if (isset(self::FILE_TYPE_LABELS[$type])) {
+            return self::FILE_TYPE_LABELS[$type];
+        }
+
+        if (isset($extensions[$type])) {
+            return strtoupper($extensions[$type]);
+        }
+
+        // An extension such as `.csv`.
+        if (! str_contains($type, '/')) {
+            return strtoupper(ltrim($type, '.'));
+        }
+
+        [$group, $subtype] = explode('/', $type, 2);
+
+        if ($subtype === '*') {
+            return match ($group) {
+                'image' => __('alfakit::forms.file_upload.types.images'),
+                'video' => __('alfakit::forms.file_upload.types.videos'),
+                'audio' => __('alfakit::forms.file_upload.types.audio'),
+                'text' => __('alfakit::forms.file_upload.types.text'),
+                default => strtoupper($group),
+            };
+        }
+
+        // `application/vnd.sketchup.skp` is "SKP", `image/x-tga` is "TGA", `image/svg+xml` is "SVG".
+        $subtype = Str::before($subtype, '+');
+        $subtype = Str::afterLast($subtype, '.');
+
+        return strtoupper(str_starts_with($subtype, 'x-') ? substr($subtype, 2) : $subtype);
     }
 
     /**
@@ -1474,6 +1575,7 @@ class FileUpload extends Field
             'image' => $this->evaluate($this->isImage) ?: null,
             'avatar' => $this->evaluate($this->isAvatar) ?: null,
             'acceptedFileTypes' => $this->getAcceptedFileTypes(),
+            'acceptedFileTypesLabel' => $this->getAcceptedFileTypesLabel(),
             'maxSize' => $this->evaluate($this->maxSize),
             'minSize' => $this->evaluate($this->minSize),
             'maxFiles' => $this->isMultiple() ? $this->evaluate($this->maxFiles) : 1,

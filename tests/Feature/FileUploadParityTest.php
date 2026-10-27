@@ -242,6 +242,21 @@ it('maps extensions the server cannot detect to MIME types', function (): void {
     expect(fn () => $form->validate())->toThrow(ValidationException::class);
 });
 
+it('labels the accepted types with short, deduplicated, translated names', function (): void {
+    $label = fn (FileUpload $field): ?string => schema([$field])->fill()->toSchema()[0]['acceptedFileTypesLabel'] ?? null;
+
+    expect($label(FileUpload::make('favicon')->acceptedFileTypes(['image/png', 'image/jpeg', 'image/webp', 'image/x-icon', 'image/vnd.microsoft.icon'])))->toBe('PNG, JPG, WebP, ICO')
+        ->and($label(FileUpload::make('photo')->image()))->toBe('Images')
+        ->and($label(FileUpload::make('file')))->toBeNull()
+        ->and($label(FileUpload::make('file')->acceptedFileTypes(['application/pdf', '.csv', 'image/x-tga', 'application/vnd.oasis.opendocument.text', 'model/vnd.gltf+json', 'video/*'])))->toBe('PDF, CSV, TGA, ODT, GLTF, Videos')
+        ->and($label(FileUpload::make('design')->acceptedFileTypes(['application/vnd.sketchup.skp', 'image/svg+xml'])->mimeTypeMap(['skp' => 'application/vnd.sketchup.skp'])))->toBe('SKP, SVG');
+
+    app('translator')->addLines(['forms.file_upload.types.images' => 'Bilder'], 'de', 'alfakit');
+    app()->setLocale('de');
+
+    expect($label(FileUpload::make('photo')->image()))->toBe('Bilder');
+});
+
 it('treats a local disk without a public url as private and signs its file links', function (): void {
     config()->set('filesystems.disks.privatelocal', ['driver' => 'local', 'root' => storage_path('app/private-test'), 'serve' => true]);
     config()->set('filesystems.disks.publiclocal', ['driver' => 'local', 'root' => storage_path('app/public-test'), 'url' => 'http://localhost/storage']);
