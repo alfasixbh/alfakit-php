@@ -9,6 +9,7 @@ use AlfaSix\Alfakit\Tests\Fixtures\Models\Team;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Invoice extends Model
@@ -30,5 +31,10 @@ class Invoice extends Model
     public function tags(): BelongsToMany
     {
         return $this->belongsToMany(Tag::class);
+    }
+
+    public function lines(): HasMany
+    {
+        return $this->hasMany(InvoiceLine::class);
     }
 }

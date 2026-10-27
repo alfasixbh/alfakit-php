@@ -10,6 +10,9 @@ use AlfaSix\Alfakit\Realtime\Realtime;
 use AlfaSix\Alfakit\Realtime\RealtimeChannels;
 use AlfaSix\Alfakit\Realtime\RecordChanged;
 use AlfaSix\Alfakit\Realtime\RecordVersion;
+use AlfaSix\Alfakit\Tests\Fixtures\ApiResources\CarrierResource;
+use AlfaSix\Alfakit\Tests\Fixtures\ApiResources\SupplierResource;
+use AlfaSix\Alfakit\Tests\Fixtures\ApiResources\SupplierSource;
 use AlfaSix\Alfakit\Tests\Fixtures\AuthTenancy\Panels;
 use AlfaSix\Alfakit\Tests\Fixtures\Models\Post;
 use AlfaSix\Alfakit\Tests\Fixtures\Models\Project;
@@ -22,6 +25,7 @@ use Illuminate\Broadcasting\BroadcastManager;
 use Illuminate\Notifications\Events\NotificationSent;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification as NotificationFacade;
 use Illuminate\Support\Facades\Route;
 
@@ -173,6 +177,93 @@ it('keeps tenants apart: channels name the tenant and membership is checked', fu
     $props = inertiaProps(inertiaGet($this, '/teams/mine/projects'));
 
     expect($props['page']['content'][0]['live']['channels'])->toBe(["alfakit.teams.{$mine->id}.{$segment}"]);
+});
+
+it('authorises presence on API resource records through their data source and policy', function (): void {
+    SupplierSource::reset();
+    livePanel(fn (Panel $panel): Panel => $panel->strictAuthorization()->resources([SupplierResource::class, CarrierResource::class]));
+    Http::fake([
+        'carriers.test/v1/carriers/dhl' => Http::response(['id' => 'dhl', 'carrier_name' => 'DHL Express', 'code' => 'DHL']),
+        'carriers.test/v1/carriers/lock' => Http::response(['id' => 'lock', 'carrier_name' => 'Locked', 'code' => 'LOCK']),
+        'carriers.test/v1/carriers/broken' => Http::response(['message' => 'boom'], 500),
+        'carriers.test/v1/carriers/*' => Http::response(['message' => 'Not found'], 404),
+    ]);
+    $user = admin();
+    $url = '/live/_alfakit/broadcasting/auth';
+    $carrier = 'AlfaSix-Alfakit-Tests-Fixtures-ApiResources-CarrierResource';
+    $supplier = 'AlfaSix-Alfakit-Tests-Fixtures-ApiResources-SupplierResource';
+
+    // Every API resource's records are `ApiRecord`s: the channel names the resource instead.
+    $edit = inertiaProps(inertiaGet($this->actingAs($user), '/live/carriers/dhl/edit'));
+
+    expect($edit['page']['presence'])->toBe(['channel' => "alfakit.live._.{$carrier}.dhl", 'state' => 'editing']);
+
+    $response = authorizeChannel($this, $url, "presence-alfakit.live._.{$carrier}.dhl")->assertOk();
+
+    expect(json_decode((string) $response->json('channel_data'), true)['user_info'])->toBe(['id' => $user->id, 'name' => 'Admin', 'avatar' => null]);
+
+    // CarrierPolicy has no `view` (denied when strict) and denies `update` on LOCK.
+    authorizeChannel($this, $url, "presence-alfakit.live._.{$carrier}.lock")->assertForbidden();
+    // Unknown records and a failing data source are refused, not errors.
+    authorizeChannel($this, $url, "presence-alfakit.live._.{$carrier}.missing")->assertForbidden();
+    authorizeChannel($this, $url, "presence-alfakit.live._.{$carrier}.broken")->assertForbidden();
+    // The shared `ApiRecord` segment is ambiguous with two API resources; Eloquent
+    // resources and resources of other panels are no channel segment.
+    authorizeChannel($this, $url, 'presence-alfakit.live._.AlfaSix-Alfakit-Resources-Api-ApiRecord.dhl')->assertForbidden();
+    authorizeChannel($this, $url, 'presence-alfakit.live._.AlfaSix-Alfakit-Tests-Fixtures-Realtime-LivePostResource.1')->assertForbidden();
+    authorizeChannel($this, $url, 'presence-alfakit.live._.AlfaSix-Alfakit-Tests-Fixtures-Panel-Resources-PostResource.1')->assertForbidden();
+
+    // Supplier has no policy: strict authorisation denies it.
+    authorizeChannel($this, $url, "presence-alfakit.live._.{$supplier}.acme")->assertForbidden();
+});
+
+it('authorises presence on the only API resource of a panel by its record class too', function (): void {
+    SupplierSource::reset();
+    livePanel(fn (Panel $panel): Panel => $panel->resources([SupplierResource::class]));
+    $user = admin();
+
+    $view = inertiaProps(inertiaGet($this->actingAs($user), '/live/suppliers/acme'));
+
+    expect($view['page']['presence']['channel'])->toBe('alfakit.live._.AlfaSix-Alfakit-Tests-Fixtures-ApiResources-SupplierResource.acme')
+        ->and(RealtimeChannels::authorizeRecord('live', $user, '_', 'AlfaSix-Alfakit-Tests-Fixtures-ApiResources-SupplierResource', 'acme'))->toBeArray()
+        ->and(RealtimeChannels::authorizeRecord('live', $user, '_', 'AlfaSix-Alfakit-Resources-Api-ApiRecord', 'acme'))->toBeArray()
+        ->and(RealtimeChannels::authorizeRecord('live', $user, '_', 'AlfaSix-Alfakit-Resources-Api-ApiRecord', 'nope'))->toBeFalse();
+
+    SupplierSource::$fail = true;
+
+    expect(RealtimeChannels::authorizeRecord('live', $user, '_', 'AlfaSix-Alfakit-Tests-Fixtures-ApiResources-SupplierResource', 'acme'))->toBeFalse();
+
+    // Nothing is broadcast for API records: live tables over them keep polling.
+    expect(AlfaSix\Alfakit\Tables\Table::make()->live(models: [SupplierResource::class, Post::class])->getLiveUpdatesSchema()['channels'])
+        ->toBe(['alfakit.live._.'.LIVE_POST_SEGMENT]);
+});
+
+it('names and checks the tenant of API resource presence channels', function (): void {
+    SupplierSource::reset();
+    $panel = Panels::register('liveapi', fn (Panel $panel): Panel => $panel
+        ->realtime()
+        ->tenant(Team::class, slugAttribute: 'slug')
+        ->resources([SupplierResource::class]));
+    Realtime::bootPanel($panel);
+    $user = TenantUser::query()->create(['name' => 'Dana', 'email' => 'dana@example.com', 'password' => 'password']);
+    $mine = Team::query()->create(['name' => 'Mine', 'slug' => 'mine']);
+    $other = Team::query()->create(['name' => 'Other', 'slug' => 'other']);
+    $user->teams()->attach($mine);
+    $segment = 'AlfaSix-Alfakit-Tests-Fixtures-ApiResources-SupplierResource';
+    $url = '/liveapi/_alfakit/broadcasting/auth';
+
+    $view = inertiaProps(inertiaGet($this->actingAs($user), '/liveapi/mine/suppliers/acme'));
+
+    expect($view['page']['presence']['channel'])->toBe("alfakit.liveapi.{$mine->id}.{$segment}.acme");
+
+    SupplierSource::$calls = [];
+    authorizeChannel($this, $url, "presence-alfakit.liveapi.{$mine->id}.{$segment}.acme")->assertOk();
+
+    // The data source looked the record up in the channel's tenant.
+    expect(SupplierSource::$calls[0][1]?->is($mine))->toBeTrue();
+
+    authorizeChannel($this, $url, "presence-alfakit.liveapi.{$other->id}.{$segment}.acme")->assertForbidden();
+    authorizeChannel($this, $url, "presence-alfakit.liveapi._.{$segment}.acme")->assertForbidden();
 });
 
 it('broadcasts keys only, never attributes, to the model and record channels', function (): void {

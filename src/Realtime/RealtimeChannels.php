@@ -7,6 +7,8 @@ namespace AlfaSix\Alfakit\Realtime;
 use AlfaSix\Alfakit\Contracts\CanAccessPanel;
 use AlfaSix\Alfakit\Contracts\HasTenants;
 use AlfaSix\Alfakit\Panel;
+use AlfaSix\Alfakit\Resources\Api\DataSourceException;
+use AlfaSix\Alfakit\Resources\ApiResource;
 use AlfaSix\Alfakit\Resources\Resource;
 use AlfaSix\Alfakit\Support\Authorization;
 use Illuminate\Contracts\Auth\Authenticatable;
@@ -29,6 +31,11 @@ use Illuminate\Support\Facades\Broadcast;
  * `{tenant}` is the current tenant's key on tenancy panels for tenant-owned models, `_`
  * otherwise; `{model}` is the model class with `-` for `\`. Payloads only carry keys:
  * clients refetch through the authorised endpoints.
+ *
+ * Records of API resources are all `ApiRecord`s, so their presence channels name the
+ * resource class instead (`…{tenant}.App-Alfakit-Resources-SupplierResource.{key}`), carry
+ * the tenant on every tenancy panel (the tenant is handed to the data source) and find
+ * the record through the resource's data source.
  */
 final class RealtimeChannels
 {
@@ -156,13 +163,64 @@ final class RealtimeChannels
         return $tenantSegment === null ? null : "alfakit.{$panel->getId()}.{$tenantSegment}.".self::modelSegment($model);
     }
 
-    /** The presence channel of a record (without the `presence-` prefix). */
-    public static function forRecord(Panel $panel, Model $record, ?Model $tenant = null): ?string
+    /**
+     * The presence channel of a record (without the `presence-` prefix).
+     *
+     * @param  class-string<resource>|null  $resource  The record page's resource: required for API resources
+     */
+    public static function forRecord(Panel $panel, Model $record, ?Model $tenant = null, ?string $resource = null): ?string
     {
-        $base = self::forModel($panel, $record::class, $tenant);
         $key = self::keySegment($record->getKey());
 
+        if ($resource !== null && is_subclass_of($resource, ApiResource::class)) {
+            $tenantSegment = ! $panel->hasTenancy() ? self::NO_TENANT : ($tenant === null ? null : self::keySegment($tenant->getKey()));
+            $base = $tenantSegment === null ? null : "alfakit.{$panel->getId()}.{$tenantSegment}.".self::modelSegment($resource);
+        } else {
+            $base = self::forModel($panel, $record::class, $tenant);
+        }
+
         return $base === null || $key === null ? null : "{$base}.{$key}";
+    }
+
+    /**
+     * The API resource of the panel a `{model}` segment names, if any.
+     *
+     * @return class-string<ApiResource>|null
+     */
+    private static function apiResourceFromSegment(Panel $panel, string $segment): ?string
+    {
+        if (preg_match('/^[A-Za-z_][A-Za-z0-9_-]*$/', $segment) !== 1) {
+            return null;
+        }
+
+        $class = str_replace('-', '\\', $segment);
+
+        foreach ($panel->getResources() as $resource) {
+            if (ltrim($resource, '\\') === $class && is_subclass_of($resource, ApiResource::class)) {
+                return $resource;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Whether more than one of the panel's resources use this model (several API resources
+     * on the shared `ApiRecord`): the model alone doesn't tell which one a channel means.
+     *
+     * @param  class-string<Model>  $model
+     */
+    private static function isAmbiguous(Panel $panel, string $model): bool
+    {
+        $count = 0;
+
+        foreach ($panel->getResources() as $resource) {
+            if (ltrim($resource::getModel(), '\\') === $model) {
+                $count++;
+            }
+        }
+
+        return $count > 1;
     }
 
     // ---------------------------------------------------------------- Registration
@@ -229,13 +287,13 @@ final class RealtimeChannels
      */
     public static function authorizeModel(string $panelId, Authenticatable $user, string $tenant, string $model): bool
     {
-        $class = self::bootContext($panelId, $user, $tenant, $model);
+        $context = self::bootContext($panelId, $user, $tenant, $model);
 
-        if ($class === null) {
+        if ($context === null) {
             return false;
         }
 
-        $resource = self::resourceFor(alfakit()->getCurrentOrDefaultPanel(), $class);
+        [$class, $resource] = $context;
 
         return $resource !== null ? $resource::canViewAny() : Authorization::allows('viewAny', $class);
     }
@@ -248,14 +306,14 @@ final class RealtimeChannels
      */
     public static function authorizeRecord(string $panelId, Authenticatable $user, string $tenant, string $model, string $key): array|false
     {
-        $class = self::bootContext($panelId, $user, $tenant, $model);
+        $context = self::bootContext($panelId, $user, $tenant, $model);
 
-        if ($class === null) {
+        if ($context === null) {
             return false;
         }
 
+        [$class, $resource] = $context;
         $panel = alfakit()->getCurrentOrDefaultPanel();
-        $resource = self::resourceFor($panel, $class);
         $record = self::findRecord($panel, $class, $resource, $key);
 
         if ($record === null) {
@@ -285,22 +343,43 @@ final class RealtimeChannels
 
     /**
      * Make the channel's panel and tenant current, after checking the user may use them.
-     * Returns the model class, or null to deny.
+     * Returns the model class and its resource, or null to deny.
      *
-     * @return class-string<Model>|null
+     * @return array{0: class-string<Model>, 1: class-string<resource>|null}|null
      */
-    private static function bootContext(string $panelId, Authenticatable $user, string $tenantSegment, string $modelSegment): ?string
+    private static function bootContext(string $panelId, Authenticatable $user, string $tenantSegment, string $modelSegment): ?array
     {
         if (! alfakit()->hasPanel($panelId)) {
             return null;
         }
 
         $panel = alfakit()->getPanel($panelId);
-        $class = self::modelFromSegment($modelSegment);
 
-        if ($class === null || ! $panel->isRealtimeConfigured()) {
+        if (! $panel->isRealtimeConfigured()) {
             return null;
         }
+
+        $class = self::modelFromSegment($modelSegment);
+
+        if ($class !== null) {
+            $resource = self::resourceFor($panel, $class);
+
+            if ($resource !== null && is_subclass_of($resource, ApiResource::class) && self::isAmbiguous($panel, $class)) {
+                return null;
+            }
+        } else {
+            $resource = self::apiResourceFromSegment($panel, $modelSegment);
+
+            if ($resource === null) {
+                return null;
+            }
+
+            $class = ltrim($resource::getModel(), '\\');
+        }
+
+        // API resources hand the tenant to their data source: on tenancy panels their
+        // channels always name (and check) it.
+        $isApi = $resource !== null && is_subclass_of($resource, ApiResource::class);
 
         // The panel guard's user is the one being authorised (the channel's `guards` option).
         if ($panel->auth()->user()?->getAuthIdentifier() !== $user->getAuthIdentifier()) {
@@ -323,7 +402,7 @@ final class RealtimeChannels
 
         $tenant = null;
 
-        if (self::isTenantScoped($panel, $class)) {
+        if ($isApi ? $panel->hasTenancy() : self::isTenantScoped($panel, $class)) {
             $tenantModel = $panel->getTenantModel();
 
             if ($tenantModel === null || $tenantSegment === self::NO_TENANT) {
@@ -342,7 +421,7 @@ final class RealtimeChannels
 
         alfakit()->setTenant($tenant, isQuiet: true);
 
-        return $class;
+        return [$class, $resource];
     }
 
     /**
@@ -351,6 +430,15 @@ final class RealtimeChannels
      */
     private static function findRecord(Panel $panel, string $class, ?string $resource, string $key): ?Model
     {
+        // API resources have no query: their data source finds the record (in the tenant).
+        if ($resource !== null && is_subclass_of($resource, ApiResource::class)) {
+            try {
+                return $resource::resolveRecordRouteBinding($key);
+            } catch (DataSourceException) {
+                return null;
+            }
+        }
+
         if ($resource !== null) {
             $query = $resource::getEloquentQuery();
         } else {

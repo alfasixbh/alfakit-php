@@ -256,7 +256,7 @@ public static function infolist(Schema $schema): Schema
 
 ## Backup
 
-`composer require alfasix/alfakit-backup`; configure spatie/laravel-backup (`config/backup.php`) and run a queue worker (backups are a queued `Jobs\CreateBackupJob`).
+`composer require alfasix/alfakit-backup`; configure spatie/laravel-backup (`config/backup.php`) and run a queue worker (backups are a queued `Jobs\CreateBackupJob`, which fails when `backup:run` exits nonzero).
 
 ```php
 use AlfaSix\AlfakitBackup\BackupPlugin;

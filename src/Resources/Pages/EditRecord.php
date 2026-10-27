@@ -278,7 +278,7 @@ class EditRecord extends Page
         return Serializable::compact([
             ...parent::toProps(),
             'conflicts' => $this->record !== null && $this->detectsConflicts() ? ['version' => RecordVersion::of($this->record)] : null,
-            'presence' => $panel->getRecordPresenceSchema($this->record, 'editing', $panel->auth()->user()),
+            'presence' => $panel->getRecordPresenceSchema($this->record, 'editing', $panel->auth()->user(), static::getResource()),
         ]);
     }
 

@@ -162,7 +162,18 @@ class TenancyCheckCommand extends Command
                 continue;
             }
 
-            $this->checkRelated($panel, class_basename($component), class_basename($resource).' → '.$component->getName(), $model, $component->getRelationshipName(), $tenantModel, $ownership);
+            // A field inside a relationship repeater (or a relationship group) belongs to
+            // that relationship's model, which its container carries.
+            try {
+                $owner = $component->getModel() ?? $model;
+                $path = $component->getStatePath();
+            } catch (Throwable) {
+                $owner = $model;
+                $path = $component->getName();
+            }
+
+            /** @var class-string<Model> $owner */
+            $this->checkRelated($panel, class_basename($component), class_basename($resource).' → '.$path, $owner, $component->getRelationshipName(), $tenantModel, $ownership);
         }
     }
 

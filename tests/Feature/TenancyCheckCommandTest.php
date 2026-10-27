@@ -6,6 +6,7 @@ use AlfaSix\Alfakit\Commands\TenancyCheckCommand;
 use AlfaSix\Alfakit\Panel;
 use AlfaSix\Alfakit\Tests\Fixtures\Models\Team;
 use AlfaSix\Alfakit\Tests\Fixtures\Tenancy\Check\CurrencyResource;
+use AlfaSix\Alfakit\Tests\Fixtures\Tenancy\Check\InvoiceLinesResource;
 use AlfaSix\Alfakit\Tests\Fixtures\Tenancy\Check\InvoiceResource;
 use AlfaSix\Alfakit\Tests\Fixtures\Tenancy\Check\NoteResource;
 
@@ -67,6 +68,19 @@ it('reports resources that cannot be scoped, shared models and raw queries', fun
 
     // Every row belongs to the audited panel only.
     expect($rows->pluck('panel')->unique()->all())->toBe(['audit']);
+});
+
+it('checks relationship fields inside a relationship repeater against the repeater model', function (): void {
+    auditPanel([InvoiceLinesResource::class]);
+
+    $rows = collect(tenancyRows(['--panel' => 'audit']))->keyBy(fn (array $row): string => $row['check'].' '.$row['subject']);
+
+    // Invoice has no currency() or note(): InvoiceLine does.
+    expect($rows['Select InvoiceLinesResource → lines.currency_id']['status'])->toBe('OK')
+        ->and($rows['Select InvoiceLinesResource → lines.currency_id']['details'])->toContain('Currency is shared across tenants on purpose')
+        ->and($rows['Select InvoiceLinesResource → lines.note_id']['status'])->toBe('WARN')
+        ->and($rows['Select InvoiceLinesResource → lines.note_id']['details'])->toContain('Note is not tenant-scoped')
+        ->and($rows->where('status', 'FAIL'))->toBeEmpty();
 });
 
 it('exits with 1 on failures, and on warnings only with --strict', function (): void {
