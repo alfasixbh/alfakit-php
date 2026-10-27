@@ -114,7 +114,7 @@ Light/dark: `->defaultThemeMode(ThemeMode::Dark)` (`AlfaSix\Alfakit\Theming\Them
 - On one component: `->extraAttributes(['class' => 'bg-primary/5'])`, `->extraInputAttributes()`, `->extraCellAttributes()`, `$table->recordClasses(fn ($record) => …)`. The stylesheet must contain `@source '../../app/**/*.php';` so Tailwind sees these classes.
 - With CSS: target the hooks `[data-slot='topbar'|'content'|'page-header'|'input-group']`, `[data-surface]`, `[data-input]`, `[data-sidebar='menu-button'][data-active='true']`, `[data-slot='topnav-link']`, and `<html>` attributes such as `data-panel`, `data-layout` and `data-nav`.
 - Per panel: `->viteTheme('resources/css/portal.css')` (add it to Vite's `input`), or scope CSS with `:root[data-panel='portal']`.
-- Replace structure: register `layout:app`, `layout:auth`, `layout:blank`, `panel:sidebar` or `panel:topbar` in `createAlfakit({ components })`, composing the exported `AppSidebar`, `Topbar`, `TopNavLayout`, `Brand`, `UserMenu` and `Slot`.
+- Replace structure: register `layout:app`, `layout:auth`, `layout:blank`, `panel:sidebar` or `panel:topbar` in `createAlfakit({ components })`, composing the exported `AppSidebar`, `Topbar`, `TopNavLayout`, `Brand`, `UserMenu` and `Slot`. Panel layouts stay mounted across visits (they get new `page`/`breadcrumbs` props instead of remounting), so a replacement must follow its props and close its own menus when the page URL changes.
 
 ## Icons
 
