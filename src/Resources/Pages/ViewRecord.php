@@ -36,7 +36,7 @@ class ViewRecord extends Page
 
         return Serializable::compact([
             ...parent::toProps(),
-            'presence' => $panel->getRecordPresenceSchema($this->record, 'viewing', $panel->auth()->user()),
+            'presence' => $panel->getRecordPresenceSchema($this->record, 'viewing', $panel->auth()->user(), static::getResource()),
         ]);
     }
 

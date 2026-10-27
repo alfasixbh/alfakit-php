@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AlfaSix\Alfakit\Panel\Concerns;
 
 use AlfaSix\Alfakit\Realtime\RealtimeChannels;
+use AlfaSix\Alfakit\Resources\Resource;
 use Closure;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Model;
@@ -130,15 +131,16 @@ trait HasRealtime
      * The presence channel of a record page (`presence-` is added by Echo), or null when
      * real-time features are off or the record can't have one.
      *
+     * @param  class-string<resource>|null  $resource  The page's resource (it names the channel of an API resource's records)
      * @return array{channel: string, state: string}|null
      */
-    public function getRecordPresenceSchema(?Model $record, string $state, ?Authenticatable $user): ?array
+    public function getRecordPresenceSchema(?Model $record, string $state, ?Authenticatable $user, ?string $resource = null): ?array
     {
         if ($record === null || $user === null || ! $this->hasRealtime()) {
             return null;
         }
 
-        $channel = RealtimeChannels::forRecord($this, $record, $this->getTenant());
+        $channel = RealtimeChannels::forRecord($this, $record, $this->getTenant(), $resource);
 
         return $channel === null ? null : ['channel' => $channel, 'state' => $state];
     }

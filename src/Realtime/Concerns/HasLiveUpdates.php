@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AlfaSix\Alfakit\Realtime\Concerns;
 
 use AlfaSix\Alfakit\Realtime\RealtimeChannels;
+use AlfaSix\Alfakit\Resources\Api\ApiRecord;
 use AlfaSix\Alfakit\Resources\Resource;
 use Closure;
 use Illuminate\Database\Eloquent\Model;
@@ -94,6 +95,12 @@ trait HasLiveUpdates
 
         if ($panel !== null && $panel->hasRealtime() && $panel->auth()->user() !== null) {
             foreach ($this->getLiveModels() as $model) {
+                // API records change in their API, not through Eloquent: nothing is ever
+                // broadcast for them, so their tables keep the fallback polling.
+                if (is_a($model, ApiRecord::class, true)) {
+                    continue;
+                }
+
                 $channel = RealtimeChannels::forModel($panel, $model, $panel->getTenant());
 
                 if ($channel !== null) {
