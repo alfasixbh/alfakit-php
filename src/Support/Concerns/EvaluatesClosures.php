@@ -59,6 +59,23 @@ trait EvaluatesClosures
     }
 
     /**
+     * Evaluate a callback that authorises the signed-in user (a plugin's `authorize(fn
+     * (User $user): bool => ...)`). A guest is never authorised by a closure: it isn't
+     * called, since its `User $user` can't take null (the guest login page asks, e.g. for
+     * global search). The user is the one a `$user` parameter receives
+     * (`resolveDefaultClosureDependencyForEvaluationByName('user')`). Booleans are returned
+     * as they are.
+     */
+    protected function evaluateUserAuthorization(mixed $value): bool
+    {
+        if ($value instanceof Closure && ($this->resolveDefaultClosureDependencyForEvaluationByName('user')[0] ?? null) === null) {
+            return false;
+        }
+
+        return (bool) $this->evaluate($value);
+    }
+
+    /**
      * The closure's parameters, reflected once per closure object: a table evaluates the
      * same column closures for every row, and reflection was a visible share of that.
      *

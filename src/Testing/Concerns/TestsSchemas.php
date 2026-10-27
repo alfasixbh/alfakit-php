@@ -324,8 +324,7 @@ trait TestsSchemas
         $response = $this->postJson('schemaValidate', '/_alfakit/schema/validate', array_filter([
             'token' => $this->getToken(),
             'component' => $mounted === null ? 'form' : 'action:'.$mounted['component'].'.'.$mounted['name'],
-            'record' => $mounted['record'] ?? null,
-            'arguments' => $mounted['arguments'] ?? null,
+            ...$this->mountedActionTarget(),
             'state' => $this->getFormState(),
             'step' => $key,
         ], static fn (mixed $value): bool => $value !== null));

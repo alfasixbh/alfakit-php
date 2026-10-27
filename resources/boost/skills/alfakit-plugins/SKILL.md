@@ -926,6 +926,8 @@ $panel->plugin(
 
 Plugins never trust the browser: every page, widget and action authorises on the server from the context token, and records are always resolved within the plugin's (tenant-scoped) query.
 
+A plugin's `authorize(fn (User $user): bool => ...)` (and `canManageTokens()`, `canViewDocumentation()`, `sharing()`, `teamCreation()` closures) only runs for a signed-in user: guests are never authorised and the closure isn't called, so `User $user` can stay non-nullable (the guest login page asks resources about global search).
+
 | Plugin                                  | Who may do what                                                                                                                                                                                                                                                                                                 |
 | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Shield                                  | Generated policies return `$authUser->can('{permission}')`. Until `alfakit-shield:generate` writes them, resources allow everything (unless the panel uses `strictAuthorization()`), so generate before granting access. Super admin passes via `Gate::before()` (or gets every permission with `gate: false`). |

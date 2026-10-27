@@ -20,7 +20,7 @@ class HelpersPanelProvider extends PanelProvider
             ->path('helpers')
             ->login()
             ->middleware(['web'])
-            ->pages([HelperActionsPage::class]);
+            ->pages([HelperActionsPage::class, HelperBulkActionsPage::class]);
     }
 
     public static function registerPanel(): Panel

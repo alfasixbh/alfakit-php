@@ -282,8 +282,8 @@ trait TestsForms
         $response = $this->postJson('schemaRefresh', '/_alfakit/schema/refresh', array_filter([
             'token' => $this->getToken(),
             'component' => $mounted === null ? 'form' : 'action:'.$mounted['component'].'.'.$mounted['name'],
-            'record' => $mounted['record'] ?? null,
-            'arguments' => $mounted['arguments'] ?? null,
+            // The record or bulk selection, as the browser sends it.
+            ...$this->mountedActionTarget(),
             'state' => $state,
             'path' => $path,
         ], static fn (mixed $value): bool => $value !== null));

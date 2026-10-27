@@ -628,6 +628,34 @@ trait TestsActions
     }
 
     /**
+     * What the requests of the mounted action's modal (form refresh, wizard step validation)
+     * address besides the action, as the browser sends them: its record or bulk selection
+     * (`records`, `bulk`, `allRecords`), its arguments and the table's search and filters.
+     * Without the selection a bulk action can't be resolved (404).
+     *
+     * @return array<string, mixed>
+     */
+    protected function mountedActionTarget(): array
+    {
+        $mounted = $this->mountedAction;
+
+        if ($mounted === null) {
+            return [];
+        }
+
+        $isBulk = $mounted['records'] !== null || $mounted['allRecords'];
+
+        return array_filter([
+            'record' => $mounted['record'],
+            'records' => $mounted['records'],
+            'bulk' => $isBulk ? 1 : null,
+            'allRecords' => $mounted['allRecords'] ? 1 : null,
+            'arguments' => $mounted['arguments'],
+            'tableQuery' => $this->tableState === [] ? null : http_build_query($this->tableState),
+        ], static fn (mixed $value): bool => $value !== null);
+    }
+
+    /**
      * The form state of the mounted parents, outermost first, aligned with the nested
      * action's path.
      *

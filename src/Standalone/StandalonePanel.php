@@ -76,6 +76,17 @@ class StandalonePanel extends Panel
     }
 
     /**
+     * Standalone components live on the application's own pages, which any of its users
+     * may open (a customer with no panel at all): no `CanAccessPanel` check for this hidden
+     * panel. Each component authorises itself with `requiresAuthentication()` and
+     * `authorize()`, re-checked on every request, and its token is bound to its user.
+     */
+    public function requiresPanelAccessCheck(): bool
+    {
+        return false;
+    }
+
+    /**
      * The host application's own middleware already handles Inertia (shared props, flash,
      * redirects) and locale, so only the panel set-up runs here. `SetPanelLocale` is left
      * out on purpose: standalone components follow the application's locale.
