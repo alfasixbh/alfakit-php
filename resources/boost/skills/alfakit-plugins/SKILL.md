@@ -477,6 +477,7 @@ class TaskBoard extends KanbanPage   // resource page: 'board' => TaskBoard::rou
 - Columns: `Column::make('doing')->label()->color()->icon()->wipLimit(3, strict: true)->collapsible()->creatable(false)`. Cards: `$titleAttribute`, `$descriptionAttribute`, `$dueDateAttribute`, `$progressAttribute`, `$coverImageAttribute`, `$with`, or `getCard()` / `getCardSchema()`.
 - `getFormSchema()` adds create / per-column quick create and view / edit modals; `getCardActions()` the card menu; `getKanbanFilters()` takes table filters; `$pollingInterval`, `$cardsPerColumn`; swimlanes with `$swimlaneAttribute` / `$swimlaneRelationship` and `$canMoveBetweenSwimlanes`.
 - Hooks: `canMoveCard()` (default the `update` ability), `canMoveTo()`, `beforeCardMoved()` (throw `ValidationException` to refuse), `saveCardMove()`, `afterCardMoved()`; event `Events\CardMoved`.
+- `getTransitions()` (`['draft' => ['confirmed', 'cancelled'], 'confirmed' => ['shipped']]`, keys are column keys / enum values) is enforced on the server (422 with the reason) and in the browser: a card released over a column it may not enter returns to its own column with an error toast and no request; a refused or failed (500, network) save rolls the card and the counts back. Moves go one allowed step at a time (Draft → Confirmed → Shipped).
 
 ## Forms
 
