@@ -51,6 +51,7 @@ use AlfaSix\Alfakit\Support\Concerns\Configurable;
 use AlfaSix\Alfakit\Support\Concerns\EvaluatesClosures;
 use AlfaSix\Alfakit\Support\Credit;
 use AlfaSix\Alfakit\Support\Enums\Width;
+use AlfaSix\Alfakit\Support\EnumState;
 use AlfaSix\Alfakit\Support\SchemaContract;
 use AlfaSix\Alfakit\Support\Serializable;
 use AlfaSix\Alfakit\Tenancy\Pages\EditTenantProfile;
@@ -1784,16 +1785,10 @@ class Panel
         $user = $this->auth()->user();
 
         if ($user !== null) {
-            foreach ($pages as $page) {
-                if ($page::shouldRegisterNavigation() && $page::canAccess()) {
-                    return $this->route($page::getRelativeRouteName(), $parameters);
-                }
-            }
+            $first = $this->firstNavigationUrl($pages, $resources, $parameters);
 
-            foreach ($resources as $resource) {
-                if ($resource::shouldRegisterNavigation() && $resource::hasPage('index') && $resource::canAccess()) {
-                    return $resource::getUrl('index', $parameters);
-                }
+            if ($first !== null) {
+                return $first;
             }
 
             if ($this->isStarterKit) {
@@ -1801,16 +1796,10 @@ class Panel
             }
         }
 
-        foreach ($pages as $page) {
-            if ($page::shouldRegisterNavigation()) {
-                return $this->route($page::getRelativeRouteName(), $parameters);
-            }
-        }
+        $first = $this->firstNavigationUrl($pages, $resources, $parameters, checkAccess: false);
 
-        foreach ($resources as $resource) {
-            if ($resource::shouldRegisterNavigation() && $resource::hasPage('index')) {
-                return $resource::getUrl('index', $parameters);
-            }
+        if ($first !== null) {
+            return $first;
         }
 
         if ($pages !== []) {
@@ -1825,6 +1814,67 @@ class Panel
         }
 
         return url($this->path);
+    }
+
+    /**
+     * The URL of the first page or resource in sidebar order: ungrouped items first, then
+     * the `navigationGroups()` in their order, then other groups as they appear, each sorted
+     * by `navigationSort` (pages before resources on a tie). So a plugin page in a later
+     * group (the CMS **Site design**) never becomes the home page ahead of the app's own
+     * first menu item.
+     *
+     * @param  array<class-string<Page>>  $pages
+     * @param  array<class-string<resource>>  $resources
+     * @param  array<string, mixed>  $parameters
+     */
+    protected function firstNavigationUrl(array $pages, array $resources, array $parameters, bool $checkAccess = true): ?string
+    {
+        $candidates = [];
+
+        foreach ($pages as $page) {
+            if (! $page::shouldRegisterNavigation() || $page::getCluster() !== null || $page::hasRequiredRouteParameters() || ($checkAccess && ! $page::canAccess())) {
+                continue;
+            }
+
+            $candidates[] = [$page::getNavigationGroup(), $page::getNavigationSort(), fn (): string => $this->route($page::getRelativeRouteName(), $parameters)];
+        }
+
+        foreach ($resources as $resource) {
+            if (! $resource::shouldRegisterNavigation() || ! $resource::hasPage('index') || $resource::isNested() || ($checkAccess && ! $resource::canAccess())) {
+                continue;
+            }
+
+            $candidates[] = [$resource::getNavigationGroup(), $resource::getNavigationSort(), static fn (): string => $resource::getUrl('index', $parameters)];
+        }
+
+        if ($candidates === []) {
+            return null;
+        }
+
+        $defined = [];
+
+        foreach ($this->evaluate($this->navigationGroups) ?? [] as $group) {
+            $label = $group instanceof NavigationGroup ? $group->getLabel() : $group;
+            $defined[] = (string) ($label instanceof UnitEnum ? EnumState::label($label) : $label);
+        }
+
+        $order = ['' => 0];
+
+        foreach ($defined as $label) {
+            $order[$label] ??= count($order);
+        }
+
+        $ranked = [];
+
+        foreach ($candidates as $index => [$group, $sort, $url]) {
+            $label = $group instanceof UnitEnum ? (string) EnumState::label($group) : (string) ($group ?? '');
+            $order[$label] ??= count($order);
+            $ranked[] = [$order[$label], $sort ?? -1, $index, $url];
+        }
+
+        usort($ranked, static fn (array $a, array $b): int => [$a[0], $a[1], $a[2]] <=> [$b[0], $b[1], $b[2]]);
+
+        return $ranked[0][3]();
     }
 
     public function getLoginUrl(): ?string
