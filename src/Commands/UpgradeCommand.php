@@ -130,6 +130,12 @@ class UpgradeCommand extends Command
             $notes[] = "Your app user menu ({$menu}) has no <AlfakitUserMenuItems /> yet, so the panel's userMenuItems() (and plugin entries such as Billing's) don't show there. Run php artisan alfakit:install --starter-kit --no-npm (with the --panel you installed with) to add it.";
         }
 
+        $direction = $this->starterKitFilesWithoutDirection();
+
+        if ($direction !== []) {
+            $notes[] = 'Your starter kit app ('.implode(', ', $direction).') does not follow the panel language\'s direction yet, so a right-to-left language (Arabic, Hebrew…) only mirrors AlfaKit\'s content, not the kit\'s sidebar and header. Run php artisan alfakit:install --starter-kit --no-npm (with the --panel you installed with) to add <html dir> and dock the sidebar on the right in right-to-left languages, then rebuild your frontend.';
+        }
+
         $missing = $this->newMigrations();
 
         if ($missing !== []) {
@@ -260,5 +266,42 @@ class UpgradeCommand extends Command
         return str_contains($sidebar, StarterKitInstaller::MARKER) && $menu !== null && ! str_contains($menu, StarterKitInstaller::USER_MENU_MARKER)
             ? $files['userMenu']
             : null;
+    }
+
+    /**
+     * The root view and app sidebar of a starter kit app the installer set up (its
+     * `alfakit:nav` block) before the document followed the panel language's direction
+     * (`<html dir>` from `StarterKitDocument::direction()`, the sidebar's `side` from
+     * `useAlfakitDirection()`): re-running the installer adds them.
+     *
+     * @return list<string>
+     */
+    protected function starterKitFilesWithoutDirection(): array
+    {
+        $kit = StarterKitInstaller::detect(base_path());
+
+        if ($kit === null) {
+            return [];
+        }
+
+        $files = StarterKitInstaller::files($kit);
+        $sidebar = is_file(base_path($files['sidebar'])) ? (string) file_get_contents(base_path($files['sidebar'])) : '';
+
+        if (! str_contains($sidebar, StarterKitInstaller::MARKER)) {
+            return [];
+        }
+
+        $missing = [];
+        $view = 'resources/views/app.blade.php';
+
+        if (is_file(base_path($view)) && ! str_contains((string) file_get_contents(base_path($view)), 'StarterKitDocument::direction(')) {
+            $missing[] = $view;
+        }
+
+        if (! str_contains($sidebar, 'useAlfakitDirection')) {
+            $missing[] = $files['sidebar'];
+        }
+
+        return $missing;
     }
 }

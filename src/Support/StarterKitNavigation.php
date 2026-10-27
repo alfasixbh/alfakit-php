@@ -12,7 +12,8 @@ use Inertia\Inertia;
  * Shares the navigation of `starterKit()` panels with every Inertia page of the application
  * (`alfakitNavigation`), so the host's sidebar lists the panel's resources and pages on the
  * host's own pages (dashboard, settings) as well as on the panel's, and their dashboard
- * widgets with the host's dashboard (`alfakitWidgets`).
+ * widgets with the host's dashboard (`alfakitWidgets`), and the document's language and
+ * direction (`alfakitDocument`, see `StarterKitDocument`).
  */
 final class StarterKitNavigation
 {
@@ -30,6 +31,8 @@ final class StarterKitNavigation
                 Inertia::share(self::PROP, static fn (): ?array => self::resolve($manager));
                 // Null (and nothing built) except on the pages of `starterKitDashboard()`.
                 Inertia::share(self::WIDGETS_PROP, static fn (): ?array => self::resolveWidgets($manager));
+                // `<html lang dir>` of every page, guests' included (the kit's login page too).
+                Inertia::share(StarterKitDocument::PROP, static fn (): ?array => StarterKitDocument::resolve($manager));
 
                 return;
             }
