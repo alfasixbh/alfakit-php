@@ -32,6 +32,8 @@ void createAlfakit({
 
 `createAlfakit()` registers the panel layouts (`layout:app`, `layout:auth`, `layout:blank`, `layout:fullscreen`) from the exported `panelLayouts`; `PageShell` never imports them, so a registry built by hand for `AlfakitPage` needs `createDefaultRegistry().registerMany(panelLayouts)` (without it a page renders bare). Starter kit pages use the host's layout (plus the panel's auth layout); a `fullscreen` page there renders `StarterKitFullscreenLayout` (the content area, no AlfaKit header; replace `layout:fullscreen` in `createStarterKitPage({ components })`): don't import panel chrome (`AppLayout`, `AppSidebar`, `Topbar`) from code that starter kit pages run, `pnpm bundle:budget` (`starter-kit:<renderer>`) fails on it.
 
+In a panel the layout persists across visits between `Alfakit/Page` pages: `AlfakitRoot` renders the registered `layout:*` around the page and `PageShell` inside the page renders only the page part, so a custom `layout:app` is not remounted on navigation. It receives fresh `page`, `breadcrumbs` and `maxContentWidth` props on each visit: derive page-specific output from them (not from state initialised on mount) and close its own menus or phone sheets when the page URL changes. Custom page components (`Page::$component`) and starter kit pages still mount their layout through `PageShell`.
+
 Keys come from the path. The file name is used exactly as written, and sub-folders don't change it except under `pages/`:
 
 | File                                         | Key                  | PHP                                                                        |
