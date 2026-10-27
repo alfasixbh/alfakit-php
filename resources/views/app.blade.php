@@ -66,8 +66,13 @@
         </x-inertia::head>
 
         {!! $alfakitPanel->renderHeadSlot(\AlfaSix\Alfakit\Theming\Slot::HEAD_END, $alfakitCspNonce) !!}
+
+        {{-- CMS public pages: the head snippet of Site design (`CmsPlugin::customCode()`). --}}
+        {{ $alfakitCmsCode ?? '' }}
     </head>
     <body class="font-sans antialiased">
         <x-inertia::app />
+
+        {{ $alfakitCmsBodyCode ?? '' }}
     </body>
 </html>

@@ -8,6 +8,7 @@ use AlfaSix\Alfakit\Commands\StarterKit\StarterKitInstaller;
 use AlfaSix\Alfakit\Support\PluginCompatibility;
 use Composer\InstalledVersions;
 use Illuminate\Console\Command;
+use Illuminate\Support\ServiceProvider;
 use Symfony\Component\Console\Attribute\AsCommand;
 
 /**
@@ -22,7 +23,9 @@ use Symfony\Component\Console\Attribute\AsCommand;
 #[AsCommand(name: 'alfakit:upgrade', description: 'Clear caches, publish updated assets and show upgrade notes after updating Alfakit')]
 class UpgradeCommand extends Command
 {
-    protected $signature = 'alfakit:upgrade {--strict : Fail when an installed plugin or @alfakit npm package is incompatible with the installed version}';
+    protected $signature = 'alfakit:upgrade
+        {--strict : Fail when an installed plugin or @alfakit npm package is incompatible with the installed version}
+        {--migrations : Publish the new migrations of AlfaKit packages whose migrations you published before}';
 
     public function handle(): int
     {
@@ -33,6 +36,10 @@ class UpgradeCommand extends Command
         $this->components->task('Cleared the cached panel components', fn (): bool => $this->callSilently('alfakit:optimize-clear') === self::SUCCESS);
         $this->components->task('Cleared compiled views', fn (): bool => $this->callSilently('view:clear') === self::SUCCESS);
         $this->components->task('Published plugin assets', fn (): bool => $this->callSilently('alfakit:assets') === self::SUCCESS);
+
+        if ($this->option('migrations')) {
+            $this->publishNewMigrations();
+        }
 
         $compatibility = $this->compatibility();
         $this->reportCompatibility($compatibility);
@@ -123,11 +130,87 @@ class UpgradeCommand extends Command
             $notes[] = "Your app user menu ({$menu}) has no <AlfakitUserMenuItems /> yet, so the panel's userMenuItems() (and plugin entries such as Billing's) don't show there. Run php artisan alfakit:install --starter-kit --no-npm (with the --panel you installed with) to add it.";
         }
 
+        $missing = $this->newMigrations();
+
+        if ($missing !== []) {
+            $notes[] = 'New migrations: '.implode(', ', array_values($missing)).'. Publish only these with php artisan alfakit:upgrade --migrations, then run php artisan migrate (vendor:publish would copy the migrations you already ran again).';
+        }
+
         if (app()->routesAreCached() || app()->configurationIsCached()) {
             $notes[] = 'Routes or configuration are cached: run php artisan optimize again so new routes and options take effect.';
         }
 
         return $notes;
+    }
+
+    /**
+     * Migrations of AlfaKit packages (`alfasix/*`) the app hasn't published yet, for
+     * packages with at least one migration published already: what a release added.
+     * Matched by name without the date, which `vendor:publish` rewrites.
+     *
+     * @return array<string, string> source file => migration name
+     */
+    protected function newMigrations(): array
+    {
+        $published = [];
+
+        foreach (glob(database_path('migrations/*.php')) ?: [] as $file) {
+            $published[static::migrationName(basename($file))] = true;
+        }
+
+        $missing = [];
+
+        foreach (ServiceProvider::publishableMigrationPaths() as $path) {
+            $real = realpath($path);
+
+            if ($real === false || ! str_contains(str_replace('\\', '/', $real), 'alfakit')) {
+                continue;
+            }
+
+            $names = [];
+
+            foreach (glob($real.'/*.php') ?: [] as $file) {
+                $names[$file] = static::migrationName(basename($file));
+            }
+
+            $unpublished = array_filter($names, static fn (string $name): bool => ! isset($published[$name]));
+
+            // A package none of whose migrations are published isn't set up: leave it.
+            if ($unpublished !== [] && count($unpublished) < count($names)) {
+                $missing = [...$missing, ...$unpublished];
+            }
+        }
+
+        ksort($missing);
+
+        return $missing;
+    }
+
+    protected function publishNewMigrations(): void
+    {
+        $missing = $this->newMigrations();
+
+        if ($missing === []) {
+            $this->components->task('No new migrations to publish');
+
+            return;
+        }
+
+        $time = now();
+
+        foreach ($missing as $source => $name) {
+            $time = $time->addSecond();
+            $target = database_path('migrations/'.$time->format('Y_m_d_His').'_'.$name);
+
+            $this->components->task("Published {$name}", static fn (): bool => @copy($source, $target));
+        }
+
+        $this->components->info('Run php artisan migrate to create the new tables.');
+    }
+
+    protected static function migrationName(string $file): string
+    {
+        return (string) preg_replace('/^\d{4}_\d{2}_\d{2}_\d{6}_/', '', $file);
     }
 
     /**

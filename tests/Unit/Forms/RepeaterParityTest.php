@@ -191,3 +191,26 @@ it('keeps the item values of a repeater or builder default() on create', functio
         ->and($schema->getRawState()['content'])->toBe([['type' => 'heading', 'data' => ['text' => 'Hello']]])
         ->and($schema->getRawState()['items'])->toBe([['sku' => 'SKU-1'], ['sku' => 'SKU-1']]);
 });
+
+it('keeps the paths of Group::statePath() inside repeater and builder items', function (): void {
+    $nested = static fn (): array => [
+        TextInput::make('title'),
+        AlfaSix\Alfakit\Schemas\Components\Section::make('Style')->schema([
+            AlfaSix\Alfakit\Schemas\Components\Group::make()->statePath('style')->schema([
+                Select::make('background')->options(['muted' => 'Muted', 'dark' => 'Dark'])->default('muted'),
+            ]),
+        ]),
+    ];
+
+    $repeater = Repeater::make('rows')->schema($nested());
+    $builder = Builder::make('content')->blocks([Block::make('hero')->schema($nested())]);
+
+    $schema = schema([$repeater, $builder])->fill([
+        'rows' => [['title' => 'A', 'style' => ['background' => 'dark']]],
+        'content' => [['type' => 'hero', 'data' => ['title' => 'B', 'style' => ['background' => 'dark']]]],
+    ]);
+
+    expect(array_values($repeater->getState()))->toBe([['title' => 'A', 'style' => ['background' => 'dark']]])
+        ->and(array_values($builder->getState()))->toBe([['type' => 'hero', 'data' => ['title' => 'B', 'style' => ['background' => 'dark']]]])
+        ->and($builder->getBlockTemplateState('hero'))->toBe(['type' => 'hero', 'data' => ['title' => null, 'style' => ['background' => 'muted']]]);
+});

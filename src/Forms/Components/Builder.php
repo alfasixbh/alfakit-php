@@ -505,10 +505,11 @@ class Builder extends Repeater
     protected function dehydrateItem(int|string $index): array
     {
         $data = [];
+        $itemPath = $this->getBlockSchema($this->getItemType($index), $index)->getStatePath();
 
         foreach ($this->getItemFields($index) as $field) {
             if ($field->isDehydrated()) {
-                $field->dehydrateStateInto($data, $field->getStatePath(isAbsolute: false));
+                $field->dehydrateStateInto($data, $field->getStatePathRelativeTo($itemPath));
             }
         }
 
@@ -524,8 +525,10 @@ class Builder extends Repeater
     {
         $data = [];
 
+        $itemPath = $this->getBlockSchema($type, self::TEMPLATE_INDEX)->getStatePath();
+
         foreach ($this->getBlockFields($type, self::TEMPLATE_INDEX, withHidden: true) as $field) {
-            Arr::set($data, $field->getStatePath(isAbsolute: false), $field->hasDefault() ? $field->getDefaultState() : $field->getDefaultStateForTemplate());
+            Arr::set($data, $field->getStatePathRelativeTo($itemPath), $field->hasDefault() ? $field->getDefaultState() : $field->getDefaultStateForTemplate());
         }
 
         return ['type' => $type, 'data' => $data];

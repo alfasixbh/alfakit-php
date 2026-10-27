@@ -404,6 +404,19 @@ trait HasState
     }
 
     /**
+     * The state path below a container's (an item of a repeater or builder): `address.city`
+     * for `items.2.address.city` below `items.2`, keeping the segments that
+     * `Group::statePath()` adds between them. The field's own name when it isn't below.
+     */
+    public function getStatePathRelativeTo(string $containerPath): string
+    {
+        $path = $this->getStatePath();
+        $prefix = $containerPath === '' ? '' : $containerPath.'.';
+
+        return $prefix !== '' && str_starts_with($path, $prefix) ? substr($path, strlen($prefix)) : $this->getStatePath(isAbsolute: false);
+    }
+
+    /**
      * Whether a concrete state path (e.g. `items.2.name`) belongs to this field's
      * wildcard pattern (e.g. `items.*.name`).
      */

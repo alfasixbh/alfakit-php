@@ -1008,10 +1008,11 @@ class Repeater extends Field
     protected function dehydrateItem(int|string $index): array
     {
         $item = [];
+        $itemPath = $this->getItemSchema($index)->getStatePath();
 
         foreach ($this->getItemFields($index) as $field) {
             if ($field->isDehydrated()) {
-                $field->dehydrateStateInto($item, $field->getStatePath(isAbsolute: false));
+                $field->dehydrateStateInto($item, $field->getStatePathRelativeTo($itemPath));
             }
         }
 
@@ -1058,8 +1059,10 @@ class Repeater extends Field
                 continue;
             }
 
+            $itemPath = $this->getItemSchema($index)->getStatePath();
+
             foreach ($this->getItemFields($index) as $field) {
-                $relativePath = $field->getStatePath(isAbsolute: false);
+                $relativePath = $field->getStatePathRelativeTo($itemPath);
 
                 if ($field->isReadOnly()) {
                     $root->setStateAt($field->getStatePath(), Arr::get($serverItem, $relativePath));
@@ -1567,8 +1570,10 @@ class Repeater extends Field
     {
         $state = [];
 
+        $itemPath = $this->getItemSchema(self::TEMPLATE_INDEX)->getStatePath();
+
         foreach ($this->getItemFields(self::TEMPLATE_INDEX, withHidden: true) as $field) {
-            Arr::set($state, $field->getStatePath(isAbsolute: false), $field->hasDefault() ? $field->getDefaultState() : $field->getDefaultStateForTemplate());
+            Arr::set($state, $field->getStatePathRelativeTo($itemPath), $field->hasDefault() ? $field->getDefaultState() : $field->getDefaultStateForTemplate());
         }
 
         return $state;

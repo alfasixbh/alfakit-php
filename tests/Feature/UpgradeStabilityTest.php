@@ -181,3 +181,46 @@ it('declares compatibility in generated plugins', function (): void {
     expect($composer['extra']['alfakit'])->toHaveKey('frontend')
         ->and($composer['extra']['alfakit']['frontend'])->toBeNull();
 });
+
+// --------------------------------------------------------- New migrations
+
+it('lists and publishes only the new migrations of AlfaKit packages already set up', function (): void {
+    $files = new Filesystem;
+    $source = sys_get_temp_dir().'/alfakit-upgrade-'.uniqid().'/alfakit-shop/database/migrations';
+    $other = dirname($source, 3).'/alfakit-unused/database/migrations';
+    $files->ensureDirectoryExists($source);
+    $files->ensureDirectoryExists($other);
+    file_put_contents($source.'/2026_01_01_000000_create_shop_tables.php', '<?php');
+    file_put_contents($source.'/2026_10_27_000000_create_shop_coupons_table.php', '<?php');
+    file_put_contents($other.'/2026_01_01_000000_create_unused_tables.php', '<?php');
+
+    $paths = new ReflectionProperty(Illuminate\Support\ServiceProvider::class, 'publishableMigrationPaths');
+    $before = $paths->getValue();
+    $paths->setValue(null, [...$before, $source, $other]);
+
+    $migrations = database_path('migrations');
+    $files->ensureDirectoryExists($migrations);
+    file_put_contents($migrations.'/2026_03_04_101010_create_shop_tables.php', '<?php');
+
+    try {
+        $this->artisan('alfakit:upgrade')
+            ->expectsOutputToContain('New migrations: create_shop_coupons_table.php')
+            ->assertSuccessful();
+
+        $this->artisan('alfakit:upgrade', ['--migrations' => true])->assertSuccessful();
+
+        $published = array_map(basename(...), glob($migrations.'/*_create_shop_*.php') ?: []);
+
+        expect($published)->toHaveCount(2)
+            ->and(collect($published)->contains(fn (string $file): bool => str_ends_with($file, '_create_shop_coupons_table.php')))->toBeTrue()
+            ->and(glob($migrations.'/*_create_unused_tables.php'))->toBe([]);
+
+        $this->artisan('alfakit:upgrade')->doesntExpectOutputToContain('New migrations')->assertSuccessful();
+    } finally {
+        $paths->setValue(null, $before);
+        foreach (glob($migrations.'/*_create_shop_*.php') ?: [] as $file) {
+            unlink($file);
+        }
+        $files->deleteDirectory(dirname($source, 3));
+    }
+});
