@@ -28,7 +28,9 @@ use Illuminate\Support\Str;
  *   app's dashboard, in a marked block (`--no-dashboard-widgets` skips it).
  * - `resources/views/app.blade.php` and the app sidebar: `<html dir>` and the sidebar's `side`
  *   follow the panel language's direction, so the whole page mirrors in a right-to-left
- *   language; the kit's logo, user info and menus get logical margins and alignment.
+ *   language; the kit's logo, user info, menus, header layout (whose mobile menu opens from
+ *   the end of the line too), password field, appearance tabs, two-factor setup and split auth
+ *   layout get logical margins, padding and alignment (`logicalClassFiles()`).
  * - `resources/css/app.css`: the starter kit stylesheet (`standalone.css`, no shadcn palette,
  *   so the host's tokens stay) and the `@source` of the renderer's compiled components.
  * - `app/Providers/Alfakit/{Id}PanelProvider.php` with `->starterKit()`, registered in
@@ -170,8 +172,10 @@ final class StarterKitInstaller
         $this->patchFile($files['sidebar'], fn (string $contents): ?string => self::addDirectionToSidebar($contents, $this->kit), 'docked the sidebar on the end of the line (side follows useAlfakitDirection()): the right in a right-to-left language');
 
         foreach (self::logicalClassFiles($this->kit) as $relative) {
-            $this->patchFile($relative, fn (string $contents): string => self::useLogicalClasses($contents, $this->kit), 'logical margins and alignment (ms-, me-, text-start), so it mirrors in a right-to-left language');
+            $this->patchFile($relative, fn (string $contents): ?string => self::patchLogicalClasses($contents, $this->kit), 'logical margins, padding and alignment (ms-, me-, pe-, end-, text-start), so it mirrors in a right-to-left language');
         }
+
+        $this->patchFile($files['header'], fn (string $contents): ?string => self::addDirectionToHeader($contents, $this->kit), 'the mobile menu opens from the end of the line (the sheet\'s side follows useAlfakitDirection()): the right in a right-to-left language');
 
         $this->record('unchanged', $files['entry'], 'no change needed: Inertia resolves '.$files['page'].' like the app\'s other pages');
         $this->installPanelProvider($panelId, $path ?? $panelId);
@@ -261,18 +265,57 @@ final class StarterKitInstaller
             return null;
         }
 
-        $side = match ($kit) {
+        $end = $tag[0][1] + strlen($tag[0][0]) - (str_ends_with($tag[0][0], '/>') ? 2 : 1);
+        $updated = rtrim(substr($contents, 0, $end)).' '.self::directionalSide($kit).substr($contents, $end);
+
+        return self::addDirectionHook($updated, $kit, 'AppSidebar', 'the sidebar docks on the right in a right-to-left language');
+    }
+
+    /**
+     * Open the mobile menu of the kit's header layout (`<SheetContent side="left">`) from the
+     * end of the line, like the sidebar: its `side` follows `useAlfakitDirection()`, so the
+     * sheet slides in from the right in a right-to-left language, next to the menu button.
+     * Null when the header has no sheet with the kit's `side="left"`; unchanged when the hook
+     * is there.
+     */
+    public static function addDirectionToHeader(string $contents, string $kit): ?string
+    {
+        if (str_contains($contents, 'useAlfakitDirection')) {
+            return $contents;
+        }
+
+        $side = self::directionalSide($kit);
+        $updated = preg_replace_callback('/(<SheetContent\b[^>]*?\s)side="left"/', static fn (array $matches): string => $matches[1].$side, $contents, 1, $count);
+
+        if ($updated === null || $count !== 1) {
+            return null;
+        }
+
+        return self::addDirectionHook($updated, $kit, 'AppHeader', 'the mobile menu opens from the right in a right-to-left language');
+    }
+
+    /** The `side` prop that follows `useAlfakitDirection()`: the right in a right-to-left language. */
+    private static function directionalSide(string $kit): string
+    {
+        return match ($kit) {
             'vue' => ':side="direction === \'rtl\' ? \'right\' : \'left\'"',
             'svelte' => 'side={direction.current === \'rtl\' ? \'right\' : \'left\'}',
             default => 'side={direction === \'rtl\' ? \'right\' : \'left\'}',
         };
-        $end = $tag[0][1] + strlen($tag[0][0]) - (str_ends_with($tag[0][0], '/>') ? 2 : 1);
-        $updated = rtrim(substr($contents, 0, $end)).' '.$side.substr($contents, $end);
-        $comment = '// '.self::DIRECTION_MARKER.': the sidebar docks on the right in a right-to-left language (php artisan alfakit:install --starter-kit)';
+    }
+
+    /**
+     * A marked `const direction = useAlfakitDirection()` in the component (React: the start of
+     * the exported function `$component`; Vue and Svelte: the end of the component's script)
+     * and the hook's import. Null when the file does not have the starter kit's shape.
+     */
+    private static function addDirectionHook(string $updated, string $kit, string $component, string $why): ?string
+    {
+        $comment = '// '.self::DIRECTION_MARKER.': '.$why.' (php artisan alfakit:install --starter-kit)';
 
         if ($kit === 'react') {
             $updated = preg_replace_callback(
-                '/^([ \t]*)export (?:default )?function AppSidebar\([^)]*\)[^{\n]*\{[ \t]*\n/m',
+                '/^([ \t]*)export (?:default )?function '.$component.'\([^)]*\)[^{\n]*\{[ \t]*\n/m',
                 static fn (array $matches): string => $matches[0]
                     .$matches[1].'    '.$comment."\n"
                     .$matches[1]."    const direction = useAlfakitDirection();\n\n",
@@ -311,30 +354,77 @@ final class StarterKitInstaller
     }
 
     /**
-     * The kit's sidebar components that use physical margins or alignment (the logo, the user
-     * info, the user button). The user menu and the sidebar header get logical classes with
-     * their own patches.
+     * The kit's components that use physical margins, padding, positions or alignment: the
+     * sidebar's logo, user info and user button, the header layout's header, the password
+     * field's reveal button, the appearance tabs, the two-factor setup's copy button, the
+     * split auth layout and (React) the login page's "Forgot password" link. The user menu
+     * and the sidebar header get logical classes with their own patches.
      *
      * @return list<string>
      */
     public static function logicalClassFiles(string $kit): array
     {
-        $names = $kit === 'react' ? ['app-logo', 'user-info', 'nav-user'] : ['AppLogo', 'UserInfo', 'NavUser'];
-        $extension = $kit === 'react' ? 'tsx' : $kit;
+        if ($kit === 'react') {
+            return [
+                'resources/js/components/app-logo.tsx',
+                'resources/js/components/user-info.tsx',
+                'resources/js/components/nav-user.tsx',
+                'resources/js/components/app-header.tsx',
+                'resources/js/components/password-input.tsx',
+                'resources/js/components/appearance-tabs.tsx',
+                'resources/js/components/two-factor-setup-modal.tsx',
+                'resources/js/layouts/auth/auth-split-layout.tsx',
+                'resources/js/pages/auth/login.tsx',
+            ];
+        }
 
-        return array_map(static fn (string $name): string => "resources/js/components/{$name}.{$extension}", $names);
+        $names = ['components/AppLogo', 'components/UserInfo', 'components/NavUser', 'components/AppHeader', 'components/PasswordInput', 'components/AppearanceTabs', 'components/TwoFactorSetupModal', 'layouts/auth/AuthSplitLayout'];
+
+        return array_map(static fn (string $name): string => "resources/js/{$name}.{$kit}", $names);
     }
 
     /**
-     * The starter kits' physical margins and alignment (`ml-1 … text-left`, `ml-auto`,
-     * `-ml-1`, `mr-2`) as their logical twins, which are the same left to right and mirror
-     * right to left. Only these exact class lists change; others are left as they are.
+     * The starter kits' physical classes (`ml-1 … text-left`, `ml-auto`, `-ml-1`, `mr-2`,
+     * `pr-10`, `right-0 … rounded-r-md`, `border-l`, `dark:border-r`) as their logical twins,
+     * which are the same left to right and mirror right to left. Only these exact class
+     * lists of the kits' files change; others are left as they are.
      */
     public static function useLogicalClasses(string $contents, string $kit): string
     {
+        return strtr($contents, self::logicalClasses($kit));
+    }
+
+    /**
+     * `useLogicalClasses()` for a file of `logicalClassFiles()`: null when it has none of the
+     * kit's class lists, physical or logical (the app changed it, so it is left alone with a
+     * note); unchanged when it already has the logical ones.
+     */
+    public static function patchLogicalClasses(string $contents, string $kit): ?string
+    {
+        $updated = self::useLogicalClasses($contents, $kit);
+
+        if ($updated !== $contents) {
+            return $updated;
+        }
+
+        foreach (self::logicalClasses($kit) as $logical) {
+            if (str_contains($contents, $logical)) {
+                return $contents;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private static function logicalClasses(string $kit): array
+    {
         $attribute = $kit === 'react' ? 'className' : 'class';
 
-        return strtr($contents, [
+        return [
+            // Sidebar: logo, user info, user button and menu, sidebar header.
             '"ml-1 grid flex-1 text-left text-sm"' => '"ms-1 grid flex-1 text-start text-sm"',
             '"grid flex-1 text-left text-sm leading-tight"' => '"grid flex-1 text-start text-sm leading-tight"',
             '"flex items-center gap-2 px-1 py-1.5 text-left text-sm"' => '"flex items-center gap-2 px-1 py-1.5 text-start text-sm"',
@@ -342,7 +432,32 @@ final class StarterKitInstaller
             "<SidebarTrigger {$attribute}=\"-ml-1\"" => "<SidebarTrigger {$attribute}=\"-ms-1\"",
             "<LogOut {$attribute}=\"mr-2" => "<LogOut {$attribute}=\"me-2",
             "<Settings {$attribute}=\"mr-2" => "<Settings {$attribute}=\"me-2",
-        ]);
+            // Header layout: menu button, sheet header, navigation and its icons, active
+            // underline, the group at the end of the row.
+            '"mr-2 h-[34px] w-[34px]"' => '"me-2 h-[34px] w-[34px]"',
+            '"mr-2 h-9 w-9"' => '"me-2 h-9 w-9"',
+            '"flex justify-start text-left"' => '"flex justify-start text-start"',
+            '"ml-6 hidden h-full items-center space-x-6 lg:flex"' => '"ms-6 hidden h-full items-center space-x-6 lg:flex"',
+            '"ml-10 flex h-full items-stretch"' => '"ms-10 flex h-full items-stretch"',
+            '"mr-2 h-4 w-4"' => '"me-2 h-4 w-4"',
+            '"absolute bottom-0 left-0 h-0.5 w-full translate-y-px' => '"absolute bottom-0 start-0 h-0.5 w-full translate-y-px',
+            '"ml-auto flex items-center space-x-2"' => '"ms-auto flex items-center space-x-2"',
+            '"ml-1 hidden gap-1 lg:flex"' => '"ms-1 hidden gap-1 lg:flex"',
+            // Password field: room for the reveal button, and the button at the end.
+            "cn('pr-10'," => "cn('pe-10',",
+            'inset-y-0 right-0 flex items-center rounded-r-md px-3' => 'inset-y-0 end-0 flex items-center rounded-e-md px-3',
+            // Appearance tabs: the icon and the label.
+            '"-ml-1 h-4 w-4"' => '"-ms-1 h-4 w-4"',
+            '"ml-1.5 text-sm"' => '"ms-1.5 text-sm"',
+            // Two-factor setup: the copy button next to the setup key.
+            'border-l border-border px-3 hover:bg-muted"' => 'border-s border-border px-3 hover:bg-muted"',
+            // Split auth layout: the panel's border, the logo and the heading.
+            'lg:flex dark:border-r"' => 'lg:flex dark:border-e"',
+            '"mr-2 size-8 fill-current text-white"' => '"me-2 size-8 fill-current text-white"',
+            '"flex flex-col items-start gap-2 text-left sm:items-center sm:text-center"' => '"flex flex-col items-start gap-2 text-start sm:items-center sm:text-center"',
+            // Login (React): "Forgot password" at the end of the label row.
+            '"ml-auto text-sm"' => '"ms-auto text-sm"',
+        ];
     }
 
     private static function withLogicalClasses(?string $contents, string $kit): ?string
@@ -482,9 +597,10 @@ final class StarterKitInstaller
                 $count,
             );
         } else {
-            // Before the user menu, inside the `ml-auto` group at the end of the header.
+            // Before the user menu, inside the `ml-auto` group at the end of the header (`ms-auto`
+            // once the installer made the header's classes logical).
             $updated = preg_replace_callback(
-                '/(\bml-auto\b[^\n]*\n(?:(?!^[ \t]*<DropdownMenu>)[^\n]*\n)*?)^([ \t]*)<DropdownMenu>/m',
+                '/(\bm[ls]-auto\b[^\n]*\n(?:(?!^[ \t]*<DropdownMenu>)[^\n]*\n)*?)^([ \t]*)<DropdownMenu>/m',
                 static fn (array $matches): string => $matches[1]
                     .$matches[2].$comment."\n"
                     .$matches[2]."<AlfakitSearch />\n"

@@ -52,7 +52,8 @@
         {{-- `pwa()`: manifest, theme colours and the iOS home screen icon. --}}
         {{ $alfakitPanel->renderPwaHeadTags() }}
 
-        @if ($favicon = $alfakitPanel->getFavicon())
+        {{-- `alfakitPanelFavicon` false: the page brings its own (a CMS site design's favicon). --}}
+        @if (($alfakitPanelFavicon ?? true) && ($favicon = $alfakitPanel->getFavicon()))
             <link rel="icon" href="{{ $favicon }}" data-alfakit-favicon>
         @endif
 
