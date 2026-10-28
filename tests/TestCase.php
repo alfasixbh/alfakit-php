@@ -5,9 +5,13 @@ declare(strict_types=1);
 namespace AlfaSix\Alfakit\Tests;
 
 use AlfaSix\Alfakit\AlfakitServiceProvider;
+use AlfaSix\Alfakit\CommandPalette\UserPreferences;
+use AlfaSix\Alfakit\Pwa\PushSubscription;
+use AlfaSix\Alfakit\Tables\Views\SavedTableView;
 use AlfaSix\Alfakit\Tests\Fixtures\Models\User;
 use AlfaSix\Alfakit\Tests\Fixtures\Panel\TestPanelProvider;
 use AlfaSix\Alfakit\Tests\Fixtures\Tenancy\TenantPanelProvider;
+use AlfaSix\Alfakit\Tests\Support\IsolatedSkeleton;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\ServiceProvider as InertiaServiceProvider;
@@ -17,11 +21,28 @@ abstract class TestCase extends Orchestra
 {
     use RefreshDatabase;
 
+    /**
+     * Each PHP process boots from its own copy of Testbench's skeleton, so parallel
+     * workers never share `public/build`, `storage/`, `app/` or `config/` (see
+     * IsolatedSkeleton).
+     */
+    public static function applicationBasePath()
+    {
+        return IsolatedSkeleton::path();
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
 
         $this->withoutVite();
+
+        // Whether an optional table exists is memoised per process, but each test has its
+        // own database: suites that load AlfaKit's migrations would otherwise make later
+        // tests without them query a missing table.
+        UserPreferences::flush();
+        SavedTableView::flushAvailability();
+        PushSubscription::flushAvailability();
 
         Factory::guessFactoryNamesUsing(
             static fn (string $modelName): string => 'AlfaSix\\Alfakit\\Tests\\Fixtures\\Database\\Factories\\'.class_basename($modelName).'Factory',
