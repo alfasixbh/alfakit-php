@@ -183,6 +183,7 @@ return [
         'previous_step' => 'Back',
         'file_too_large' => 'This file is too large.',
         'file_too_small' => 'This file is too small.',
+        'upload_not_saved' => 'A file didn\'t upload. Remove it or upload it again before saving.',
         'min_files' => 'At least :count file|At least :count files',
         'clone' => 'Clone',
         'remove_row' => 'Remove row',
