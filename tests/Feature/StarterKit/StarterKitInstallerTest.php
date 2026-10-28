@@ -107,6 +107,32 @@ it('wires Alfakit into the starter kit, idempotently', function (string $kit, st
             ->not->toMatch('/(ChevronsUpDown|LogOut|Settings) (class|className)="m[lr]-/');
     }
 
+    // The header layout, the password field, the appearance tabs, the two-factor setup, the
+    // split auth layout (and React's login) keep none of the kit's physical classes.
+    foreach (StarterKitInstaller::logicalClassFiles($kit) as $file) {
+        $contents = (string) file_get_contents($app.'/'.$file);
+
+        expect($contents)->toBe(StarterKitInstaller::useLogicalClasses($contents, $kit))
+            ->not->toMatch('/["\' ](-?m[lr]-(auto|1|1\.5|2|6|10)|pr-10|right-0|rounded-r-md|text-left|border-l|dark:border-r|bottom-0 left-0)["\' ]/');
+    }
+
+    $files = StarterKitInstaller::logicalClassFiles($kit);
+    $file = static fn (string $name): string => (string) file_get_contents($app.'/'.collect($files)->first(fn (string $path): bool => str_contains($path, $name)));
+
+    expect($file($kit === 'react' ? 'password-input' : 'PasswordInput'))->toContain("cn('pe-10',")->toContain('inset-y-0 end-0 flex items-center rounded-e-md px-3')
+        ->and($file($kit === 'react' ? 'auth-split-layout' : 'AuthSplitLayout'))->toContain('dark:border-e"')->toContain('"me-2 size-8 fill-current text-white"')
+        ->and($file($kit === 'react' ? 'two-factor-setup-modal' : 'TwoFactorSetupModal'))->toContain('border-s border-border px-3 hover:bg-muted"')
+        ->and($file($kit === 'react' ? 'appearance-tabs' : 'AppearanceTabs'))->toContain('"-ms-1 h-4 w-4"')->toContain('"ms-1.5 text-sm"');
+
+    // The header layout's mobile menu opens from the end of the line, like the sidebar.
+    $headerContents = (string) file_get_contents($app.'/'.StarterKitInstaller::files($kit)['header']);
+
+    expect($headerContents)->not->toContain('side="left"')
+        ->toContain($side)
+        ->toContain('ms-auto flex items-center space-x-2')
+        ->and(substr_count($headerContents, 'const direction = useAlfakitDirection();'))->toBe(1)
+        ->and(StarterKitInstaller::addDirectionToHeader('<SheetContent side="right" />', $kit))->toBeNull();
+
     // The user menu gains the panel's entries (userMenuItems(), Billing…) in a marked block
     // before the separator above Log out, built from the app's own dropdown items.
     expect(file_get_contents($app.'/'.StarterKitInstaller::files($kit)['userMenuItems']))
@@ -130,10 +156,10 @@ it('wires Alfakit into the starter kit, idempotently', function (string $kit, st
     // without the AI plugin) and the language switcher (nothing with fewer than two
     // languages) in a marked block, the sidebar layout's at the end of the row, the header
     // layout's before the user menu.
-    $imports = "import { AlfakitCopilot, AlfakitLanguageSwitcher, AlfakitNotifications, AlfakitSearch } from '@alfakit/{$kit}';";
-
     foreach (['sidebarHeader', 'header'] as $file) {
         $header = (string) file_get_contents($app.'/'.StarterKitInstaller::files($kit)[$file]);
+        // The header layout's also has the direction hook of its mobile menu.
+        $imports = 'import { AlfakitCopilot, AlfakitLanguageSwitcher, AlfakitNotifications, AlfakitSearch'.($file === 'header' ? ', useAlfakitDirection' : '')." } from '@alfakit/{$kit}';";
 
         expect($header)->toContain(StarterKitInstaller::HEADER_MARKER)
             ->toContain($imports)
@@ -176,7 +202,7 @@ it('wires Alfakit into the starter kit, idempotently', function (string $kit, st
         $bellOnly = (string) preg_replace('/^[ \t]*<Alfakit(Copilot|LanguageSwitcher) \/>\n/m', '', str_replace(['AlfakitCopilot, ', 'AlfakitLanguageSwitcher, '], '', $header));
 
         expect((string) StarterKitInstaller::addLanguageSwitcherToHeader($bellOnly, $kit))
-            ->toContain("import { AlfakitLanguageSwitcher, AlfakitNotifications, AlfakitSearch } from '@alfakit/{$kit}';")
+            ->toContain('import { AlfakitLanguageSwitcher, AlfakitNotifications, AlfakitSearch'.($file === 'header' ? ', useAlfakitDirection' : '')." } from '@alfakit/{$kit}';")
             ->toMatch('/<AlfakitNotifications \/>\n[ \t]*<AlfakitLanguageSwitcher \/>\n/')
             ->and(StarterKitInstaller::addLanguageSwitcherToHeader('<header></header>', $kit))->toBeNull();
     }
@@ -254,12 +280,44 @@ it('names only the header components a re-run added', function (): void {
         file_put_contents($path, (string) preg_replace('/^[ \t]*<AlfakitLanguageSwitcher \/>\n/m', '', str_replace('AlfakitLanguageSwitcher, ', '', (string) file_get_contents($path))));
     }
 
-    $changes = collect((new StarterKitInstaller($app, 'react'))->install('admin', 'admin'))->keyBy('path');
+    // The first change of each file: the header's later ones are its classes and direction.
+    $changes = collect((new StarterKitInstaller($app, 'react'))->install('admin', 'admin'))->groupBy('path')->map->first();
 
     expect($changes['resources/js/components/app-sidebar-header.tsx']['status'])->toBe('updated')
         ->and($changes['resources/js/components/app-sidebar-header.tsx']['note'])->toBe('added <AlfakitLanguageSwitcher /> to the header')
         ->and($changes['resources/js/components/app-header.tsx']['note'])->toBe('added <AlfakitLanguageSwitcher /> before the user menu')
         ->and(StarterKitInstaller::addedComponents('<X />', "<AlfakitSearch />\n<AlfakitNotifications />\n<AlfakitCopilot />\n"))->toBe('<AlfakitSearch />, <AlfakitNotifications /> and <AlfakitCopilot />');
+
+    (new Filesystem)->deleteDirectory($app);
+});
+
+it('leaves a kit component it does not recognise alone, with a note', function (): void {
+    expect(StarterKitInstaller::patchLogicalClasses('<button class="absolute end-2 p-1" />', 'vue'))->toBeNull()
+        ->and(StarterKitInstaller::patchLogicalClasses('<input class={cn(\'pe-10\', className)} />', 'react'))->toBe('<input class={cn(\'pe-10\', className)} />');
+
+    $app = starterKitApp('react');
+    $input = $app.'/resources/js/components/password-input.tsx';
+    file_put_contents($input, 'export default function PasswordInput() { return <input className="pl-3" /> }');
+
+    $changes = collect((new StarterKitInstaller($app, 'react'))->install())->keyBy('path');
+
+    expect($changes['resources/js/components/password-input.tsx']['status'])->toBe('skipped')
+        ->and($changes['resources/js/components/password-input.tsx']['note'])->toContain('yourself')
+        ->and(file_get_contents($input))->toBe('export default function PasswordInput() { return <input className="pl-3" /> }');
+
+    (new Filesystem)->deleteDirectory($app);
+});
+
+it('adds the header widgets to a header layout whose classes are already logical', function (): void {
+    $app = starterKitApp('vue');
+    (new StarterKitInstaller($app, 'vue'))->install('admin', 'admin', headerWidgets: false);
+    $header = (string) file_get_contents($app.'/resources/js/components/AppHeader.vue');
+
+    expect($header)->toContain('ms-auto flex items-center space-x-2')->not->toContain('<AlfakitSearch');
+
+    (new StarterKitInstaller($app, 'vue'))->install('admin', 'admin');
+
+    expect(file_get_contents($app.'/resources/js/components/AppHeader.vue'))->toContain('<AlfakitSearch />');
 
     (new Filesystem)->deleteDirectory($app);
 });
@@ -466,6 +524,29 @@ it('reminds an app set up before the page followed the panel language direction,
 
     expect(file_get_contents($view))->toBe($installedView)
         ->and(file_get_contents($sidebar))->toBe($installedSidebar);
+
+    $this->artisan('alfakit:upgrade')
+        ->doesntExpectOutputToContain('direction yet')
+        ->assertSuccessful();
+
+    // An app installed by 0.2.2: <html dir> and the sidebar, but the kit's own header layout
+    // and password field (physical classes, the mobile menu on the left).
+    $header = $app.'/'.StarterKitInstaller::files($kit)['header'];
+    $password = $app.'/'.collect(StarterKitInstaller::logicalClassFiles($kit))->first(fn (string $file): bool => str_contains(strtolower($file), 'password'));
+    $fixtures = dirname(__DIR__, 2).'/Fixtures/StarterKits/'.$kit.'/';
+    $installedHeader = (string) file_get_contents($header);
+    $installedPassword = (string) file_get_contents($password);
+    file_put_contents($password, (string) file_get_contents($fixtures.substr($password, strlen($app) + 1)));
+    file_put_contents($header, (string) StarterKitInstaller::addWidgetsToHeader((string) file_get_contents($fixtures.StarterKitInstaller::files($kit)['header']), $kit, sidebarLayout: false));
+
+    $this->artisan('alfakit:upgrade')
+        ->expectsOutputToContain('Your starter kit app ('.StarterKitInstaller::files($kit)['header'])
+        ->assertSuccessful();
+
+    $this->artisan('alfakit:install', ['--starter-kit' => true, '--no-npm' => true, '--no-composer-script' => true])->assertSuccessful();
+
+    expect(file_get_contents($header))->toBe($installedHeader)
+        ->and(file_get_contents($password))->toBe($installedPassword);
 
     $this->artisan('alfakit:upgrade')
         ->doesntExpectOutputToContain('direction yet')

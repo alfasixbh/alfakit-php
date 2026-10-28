@@ -133,7 +133,7 @@ class UpgradeCommand extends Command
         $direction = $this->starterKitFilesWithoutDirection();
 
         if ($direction !== []) {
-            $notes[] = 'Your starter kit app ('.implode(', ', $direction).') does not follow the panel language\'s direction yet, so a right-to-left language (Arabic, Hebrew…) only mirrors AlfaKit\'s content, not the kit\'s sidebar and header. Run php artisan alfakit:install --starter-kit --no-npm (with the --panel you installed with) to add <html dir> and dock the sidebar on the right in right-to-left languages, then rebuild your frontend.';
+            $notes[] = 'Your starter kit app ('.implode(', ', $direction).') does not follow the panel language\'s direction yet, so a right-to-left language (Arabic, Hebrew…) only mirrors AlfaKit\'s content, not the kit\'s sidebar, header and auth pages. Run php artisan alfakit:install --starter-kit --no-npm (with the --panel you installed with) to add <html dir>, dock the sidebar and the mobile menu on the right in right-to-left languages and switch the kit\'s header, auth layout, password field and settings components to logical classes, then rebuild your frontend.';
         }
 
         $missing = $this->newMigrations();
@@ -300,6 +300,23 @@ class UpgradeCommand extends Command
 
         if (! str_contains($sidebar, 'useAlfakitDirection')) {
             $missing[] = $files['sidebar'];
+        }
+
+        // The kit's header, auth layouts, password field… with physical classes the installer
+        // makes logical, and the header layout's mobile menu on the left.
+        foreach (StarterKitInstaller::logicalClassFiles($kit) as $relative) {
+            $contents = is_file(base_path($relative)) ? (string) file_get_contents(base_path($relative)) : null;
+
+            if ($contents !== null && StarterKitInstaller::useLogicalClasses($contents, $kit) !== $contents) {
+                $missing[] = $relative;
+            }
+        }
+
+        $header = is_file(base_path($files['header'])) ? (string) file_get_contents(base_path($files['header'])) : null;
+        $patched = $header === null ? null : StarterKitInstaller::addDirectionToHeader($header, $kit);
+
+        if ($patched !== null && $patched !== $header && ! in_array($files['header'], $missing, true)) {
+            $missing[] = $files['header'];
         }
 
         return $missing;
