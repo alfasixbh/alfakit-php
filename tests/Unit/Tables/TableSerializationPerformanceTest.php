@@ -125,7 +125,16 @@ it('runs row-independent closures once per pass and row closures once per row', 
 it('serialises rows in linear time (500 rows cost about ten times 50)', function (): void {
     seedManyPosts(500);
 
-    $measure = static function (int $perPage): float {
+    // CPU time of this process, in milliseconds. Wall time also counts the time the OS
+    // gives other processes (`pest --parallel`, a busy machine), which skews the ratio.
+    $cpu = static function (): float {
+        $usage = getrusage();
+
+        return ($usage['ru_utime.tv_sec'] + $usage['ru_stime.tv_sec']) * 1e3
+            + ($usage['ru_utime.tv_usec'] + $usage['ru_stime.tv_usec']) / 1e3;
+    };
+
+    $measure = static function (int $perPage) use ($cpu): float {
         $best = INF;
 
         for ($attempt = 0; $attempt < 3; $attempt++) {
@@ -134,9 +143,12 @@ it('serialises rows in linear time (500 rows cost about ten times 50)', function
                 ->state(TableState::fromRequest(Request::create('/', 'GET', ['perPage' => $perPage])));
             $table->getRecords();
 
-            $started = hrtime(true);
+            // Garbage left by earlier tests is collected before, not during, the measurement.
+            gc_collect_cycles();
+
+            $started = $cpu();
             $table->toSchema();
-            $best = min($best, (hrtime(true) - $started) / 1e6);
+            $best = min($best, $cpu() - $started);
         }
 
         return $best;

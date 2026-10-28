@@ -47,7 +47,8 @@ spl_autoload_register(static function (string $class) use ($appPath): void {
 /** @var array<int, class-string> $appProviders */
 $appProviders = require $appPath.'/bootstrap/providers.php';
 
-$resolver = new class(null, null) extends Application
+// Its own copy of Testbench's skeleton, like the test processes (compiled views, caches).
+$resolver = new class(AlfaSix\Alfakit\Tests\Support\IsolatedSkeleton::path(), null) extends Application
 {
     public ?Closure $environment = null;
 
