@@ -30,6 +30,9 @@ final class StarterKitDocument
 {
     public const PROP = 'alfakitDocument';
 
+    /** Request attribute holding the direction resolved for this request, per panel. */
+    private const ATTRIBUTE = 'alfakit.starter_kit_direction';
+
     /**
      * `<html lang dir>` for the current page, or null on pages of a panel that does not run in
      * starter kit mode (its own root view and runtime set them) and without a starter kit panel.
@@ -46,7 +49,7 @@ final class StarterKitDocument
 
         return [
             'tag' => str_replace('_', '-', app()->getLocale()),
-            'direction' => self::directionOf($manager, $panel)->value,
+            'direction' => self::directionFor($manager, $panel),
         ];
     }
 
@@ -65,10 +68,12 @@ final class StarterKitDocument
             $panel = $current !== null && ! $current instanceof StandalonePanel ? $current : self::panel($manager);
 
             if ($panel !== null) {
-                return self::directionOf($manager, $panel)->value;
+                return self::directionFor($manager, $panel);
             }
-        } catch (Throwable) {
-            // Fall through to the app's own language.
+        } catch (Throwable $exception) {
+            // The root view renders error pages too: never fail it, but don't hide the cause
+            // (the app locale's direction may differ from the panel's that the page carries).
+            report($exception);
         }
 
         return TextDirection::detect(app()->getLocale())->value;
@@ -95,14 +100,32 @@ final class StarterKitDocument
         return null;
     }
 
-    private static function directionOf(AlfakitManager $manager, Panel $panel): TextDirection
+    /**
+     * The panel language's direction, resolved once per request: the shared prop and the root
+     * view's `<html dir>` read the same answer, so the first paint and the page the renderers
+     * hydrate never disagree (no flip from one direction to the other after load).
+     *
+     * @return 'ltr'|'rtl'
+     */
+    private static function directionFor(AlfakitManager $manager, Panel $panel): string
     {
-        // A panel page runs in the panel's language (`SetPanelLocale`); an app page resolves
-        // the language the user picked for the panel (session, cookie, user preference…).
-        if ($manager->getCurrentPanel() === $panel) {
-            return $panel->getCurrentLocale()->getDirection();
+        $request = request();
+        $key = self::ATTRIBUTE.'.'.$panel->getId();
+        $resolved = $request->attributes->get($key);
+
+        if ($resolved === 'ltr' || $resolved === 'rtl') {
+            return $resolved;
         }
 
-        return app(LocaleResolver::class)->resolve($panel, request())->getDirection();
+        // A panel page runs in the panel's language (`SetPanelLocale`); an app page resolves
+        // the language the user picked for the panel (session, cookie, user preference…).
+        $locale = $manager->getCurrentPanel() === $panel
+            ? $panel->getCurrentLocale()
+            : app(LocaleResolver::class)->resolve($panel, $request);
+        $direction = $locale->getDirection()->value;
+
+        $request->attributes->set($key, $direction);
+
+        return $direction;
     }
 }

@@ -158,6 +158,59 @@ it('renders <html dir> in the starter kit root view from the panel language', fu
     $this->get('/dashboard')->assertOk()->assertSee('<html lang="en" dir="rtl">', false);
 });
 
+/**
+ * The root view's `<html dir>` and the page's `alfakitDocument` from one full page load.
+ *
+ * @return array{0: string|null, 1: array<string, mixed>|null}
+ */
+function starterKitGuestDocument(AlfaSix\Alfakit\Tests\TestCase $test, string $url, string $acceptLanguage): array
+{
+    $html = (string) $test->get($url, ['Accept-Language' => $acceptLanguage])->assertOk()->getContent();
+
+    preg_match('/<html[^>]* dir="([^"]*)"/', $html, $dir);
+    preg_match('/data-page="([^"]*)"|<script data-page="app" type="application\/json">(.*?)<\/script>/s', $html, $page);
+    $json = ($page[1] ?? '') !== '' ? html_entity_decode($page[1]) : ($page[2] ?? 'null');
+
+    return [$dir[1] ?? null, json_decode($json, true)['props'][StarterKitDocument::PROP] ?? null];
+}
+
+it('gives a guest the same direction in the root view and the shared prop, following the panel locale rules', function (bool $detectBrowser, string $direction): void {
+    starterKitPanel(fn (Panel $panel): Panel => $panel->locales(['en', 'ar'])->defaultLocale('ar')->detectBrowserLocale($detectBrowser));
+    $this->app['view']->addLocation(__DIR__.'/views/document');
+    Route::middleware('web')->get('/kit-login', fn () => Inertia::render('auth/login'));
+    app('router')->getRoutes()->refreshNameLookups();
+
+    // A guest whose browser asks for English (the kit's login page).
+    [$rootDir, $document] = starterKitGuestDocument($this, '/kit-login', 'en-US,en;q=0.9');
+
+    expect($rootDir)->toBe($direction)
+        ->and($document['direction'] ?? null)->toBe($direction);
+})->with([
+    // `detectBrowserLocale(false)`: the browser never overrides `defaultLocale('ar')`.
+    'browser detection off' => [false, 'rtl'],
+    'browser detection on' => [true, 'ltr'],
+]);
+
+it('resolves the guest document direction once per request, so the root view and the prop cannot disagree', function (): void {
+    $calls = 0;
+    // A resolver whose answer changes between calls stands in for anything that changes the
+    // language mid-request (session, cookie, middleware order).
+    starterKitPanel(function (Panel $panel) use (&$calls): Panel {
+        return $panel->locales(['en', 'ar'])->resolveLocaleUsing(function () use (&$calls): string {
+            return ++$calls === 1 ? 'ar' : 'en';
+        });
+    });
+    $this->app['view']->addLocation(__DIR__.'/views/document');
+    Route::middleware('web')->get('/kit-login', fn () => Inertia::render('auth/login'));
+    app('router')->getRoutes()->refreshNameLookups();
+
+    [$rootDir, $document] = starterKitGuestDocument($this, '/kit-login', 'en');
+
+    expect($rootDir)->toBe('rtl')
+        ->and($document['direction'] ?? null)->toBe('rtl')
+        ->and($calls)->toBe(1);
+});
+
 it('does not share starter kit navigation on pages of other panels', function (): void {
     starterKitPanel();
 
