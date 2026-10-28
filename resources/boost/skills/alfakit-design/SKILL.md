@@ -98,6 +98,8 @@ $panel->slot(Slot::TOPBAR_END, fn () => view('admin.environment-badge'));
 $panel->slot(Slot::PAGE_HEADER_AFTER, View::make('sales-chart'), scopes: [ListOrders::class]);
 ```
 
+`TOPBAR_END` items share a box that shrinks and clips when the top bar is short of room (the page never scrolls sideways): keep them compact or hide them on phones (`hidden sm:flex`). The top bar's search field folds into an icon button while the bar is narrower than 56rem, and the `topbar` layout moves its links into the menu drawer below `lg`.
+
 Slots (constants on `AlfaSix\Alfakit\Theming\Slot`; the value is the frontend name, e.g. `GLOBAL_SEARCH_START` is `global-search.start`):
 
 - Layout: `BODY_START/END`, `LAYOUT_START/END`, `SIDEBAR_START/END`, `SIDEBAR_LOGO_BEFORE/AFTER`, `SIDEBAR_HEADER`, `SIDEBAR_NAV_START/END`, `SIDEBAR_FOOTER`, `TOPBAR_BEFORE/AFTER`, `TOPBAR_LOGO_BEFORE/AFTER` (top navigation and fullscreen layouts), `TOPBAR_START/END`, `GLOBAL_SEARCH_BEFORE/AFTER/START/END`, `TENANT_MENU_BEFORE/AFTER`, `USER_MENU_BEFORE/AFTER` (inside the dropdown), `USER_MENU_PROFILE_BEFORE/AFTER`, `CONTENT_BEFORE/AFTER`, `CONTENT_START/END`, `FOOTER`, `HEAD_START` / `HEAD_END` (rendered into `<head>` by the root view: HTML only, closures get `?string $nonce`, inline `<script>`/`<style>` get the CSP nonce).
