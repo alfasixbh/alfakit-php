@@ -9,6 +9,7 @@ use PhpParser\Node;
 use PhpParser\Node\Arg;
 use PhpParser\Node\Expr\Array_;
 use PhpParser\Node\Expr\Assign;
+use PhpParser\Node\Expr\ConstFetch;
 use PhpParser\Node\Expr\MethodCall;
 use PhpParser\Node\Expr\PropertyFetch;
 use PhpParser\Node\Expr\Variable;
@@ -75,6 +76,16 @@ final class FilamentLivewireFormRector extends AbstractRector
                 $value = isset($call->args[0]) && $call->args[0] instanceof Arg ? $call->args[0]->value : new Array_([]);
 
                 return new Assign(new PropertyFetch(new Variable('this'), 'formData'), $value);
+            }
+
+            if ($method === 'getState') {
+                // Filament's getState() validates first (`getState(false)` doesn't); AlfaKit's
+                // validate() does, its getState() only dehydrates.
+                $argument = isset($call->args[0]) && $call->args[0] instanceof Arg ? $call->args[0]->value : null;
+                $validates = ! ($argument instanceof ConstFetch && $this->isName($argument, 'false'));
+                $this->report(MigrationReport::SECTION_METHODS, $call, $validates ? '`$this->form->getState()` became `$this->getForm()->validate()`' : '`$this->form->getState(false)` became `$this->getForm()->getState()`', $validates ? 'It validates the state the user submitted and returns it, like Filament\'s `getState()`.' : 'It returns the submitted state without validating it.');
+
+                return new MethodCall(new MethodCall(new Variable('this'), 'getForm'), $validates ? 'validate' : 'getState');
             }
 
             $this->report(MigrationReport::SECTION_METHODS, $call, "`\$this->form->{$method}()` became `\$this->getForm()->{$method}()`", 'Pages hold the form state in `$this->formData`; actions receive the validated `$data`.');

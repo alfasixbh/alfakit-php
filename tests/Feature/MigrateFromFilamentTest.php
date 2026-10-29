@@ -144,7 +144,7 @@ function assertMigratedFixture(mixed $test, string $root): void
     expect($settings)
         ->toContain('public function mount(mixed ...$parameters): void')
         ->toContain('$this->formData = [')
-        ->toContain('$this->getForm()->getState()')
+        ->toContain('$this->getForm()->validate()')
         ->toContain("protected static ?string \$navigationIcon = 'settings';")
         ->not->toContain('$view')
         ->not->toContain('public ?array $data')

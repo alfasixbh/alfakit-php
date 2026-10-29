@@ -256,8 +256,8 @@ final class FilamentDiscovery
     }
 
     /**
-     * Classes under app/Livewire that extend a Livewire component (`extends Component` with
-     * `use Livewire\Component;`, or the FQCN).
+     * Classes under app/Livewire that extend a Livewire component (see
+     * `extendsLivewireComponent()`).
      *
      * @return array<int, string>
      */
@@ -272,13 +272,31 @@ final class FilamentDiscovery
         foreach (Finder::create()->files()->in($this->basePath.'/app/Livewire')->name('*.php')->sortByName() as $file) {
             $contents = $file->getContents();
 
-            if (preg_match('/\bextends\s+\\?Livewire\\\\Component\b/', $contents) === 1
-                || (preg_match('/^use\s+Livewire\\\\Component\s*;/m', $contents) === 1 && preg_match('/\bextends\s+Component\b/', $contents) === 1)) {
+            if ($this->extendsLivewireComponent($contents)) {
                 $classes[] = $file->getPathname();
             }
         }
 
         return $classes;
+    }
+
+    /**
+     * `extends \Livewire\Component` or `extends Livewire\Component`, or the short or aliased
+     * name imported with `use Livewire\Component;` / `use Livewire\Component as Base;`.
+     */
+    private function extendsLivewireComponent(string $contents): bool
+    {
+        if (preg_match('/\bextends\s+\\\\?Livewire\\\\Component\b/', $contents) === 1) {
+            return true;
+        }
+
+        if (preg_match('/^use\s+\\\\?Livewire\\\\Component(?:\s+as\s+(\w+))?\s*;/m', $contents, $import) !== 1) {
+            return false;
+        }
+
+        $name = $import[1] ?? 'Component';
+
+        return preg_match('/\bextends\s+'.preg_quote($name, '/').'\b/', $contents) === 1;
     }
 
     /**

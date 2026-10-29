@@ -1173,7 +1173,7 @@ final class TokenRewriter
             $method = $this->tokens[$name]->text;
             $line = $this->tokens[$name]->line;
 
-            // $this->form->fill([...]) → $this->formData = [...]; $this->form->getState() → $this->getForm()->getState()
+            // $this->form->fill([...]) → $this->formData = [...]; $this->form->getState() → $this->getForm()->validate()
             if ($method === 'form' && $open !== null && $this->tokens[$open]->is(T_OBJECT_OPERATOR)) {
                 $previous = $this->previousSignificant($i);
                 $call = $this->nextSignificant($open);
@@ -1188,6 +1188,14 @@ final class TokenRewriter
                             $arguments = trim($this->text($paren + 1, $close - 1));
                             $this->blank($i, $close);
                             $this->out[$i] = '->formData = '.($arguments === '' ? '[]' : $arguments);
+                        } elseif ($isPage && $this->tokens[$call]->text === 'getState') {
+                            // Filament's getState() validates first (`getState(false)` doesn't);
+                            // AlfaKit's validate() does, its getState() only dehydrates.
+                            $validates = strtolower(trim($this->text($paren + 1, $close - 1))) !== 'false';
+                            $this->out[$name] = 'getForm()';
+                            $this->out[$call] = $validates ? 'validate' : 'getState';
+                            $this->blank($paren + 1, $close - 1);
+                            $this->report->add(MigrationReport::SECTION_METHODS, $this->file, $line, $validates ? '`$this->form->getState()` became `$this->getForm()->validate()`' : '`$this->form->getState(false)` became `$this->getForm()->getState()`', $validates ? 'It validates the state the user submitted and returns it, like Filament\'s `getState()`.' : 'It returns the submitted state without validating it.');
                         } elseif ($isPage) {
                             $this->out[$name] = 'getForm()';
                             $this->report->add(MigrationReport::SECTION_METHODS, $this->file, $line, "`\$this->form->{$this->tokens[$call]->text}()` became `\$this->getForm()->{$this->tokens[$call]->text}()`", 'Pages hold the form state in `$this->formData`; actions receive the validated `$data`.');

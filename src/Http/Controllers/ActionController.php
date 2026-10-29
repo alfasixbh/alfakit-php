@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AlfaSix\Alfakit\Http\Controllers;
 
 use AlfaSix\Alfakit\Actions\Action;
+use AlfaSix\Alfakit\Actions\ActionGroup;
 use AlfaSix\Alfakit\Actions\BulkAction;
 use AlfaSix\Alfakit\Actions\Exceptions\ActionNotResolvableException;
 use AlfaSix\Alfakit\Actions\Exceptions\Cancel;
@@ -87,6 +88,7 @@ class ActionController
         abort_if($action->isLink(), 400, "The [{$action->getName()}] action opens a URL and cannot be executed.");
 
         $this->applyParentData($action, $request);
+        $this->applyPageFormState($page, $action, (array) $request->input('data', []));
 
         $password = $request->input(Action::PASSWORD_CONFIRMATION_INPUT);
         $action->providePasswordConfirmation(is_string($password) ? $password : null);
@@ -139,6 +141,31 @@ class ActionController
         $redirect = \AlfaSix\Alfakit\Support\Url::sanitize($action->getSuccessRedirectUrl());
 
         return $redirect !== null ? redirect()->to($redirect) : back();
+    }
+
+    /**
+     * A button below the page form (`getFormActions()`) without a form of its own submits the
+     * page form: its state is applied to the page's form, so the handler reads what the user
+     * typed with `$this->getForm()->getState()` (validated), not the state the page was filled
+     * with (FM-B02).
+     *
+     * @param  array<string, mixed>  $data
+     */
+    protected function applyPageFormState(Page $page, Action $action, array $data): void
+    {
+        if ($action->hasForm() || $action->getRootAction() !== $action) {
+            return;
+        }
+
+        foreach ($page->getCachedFormActions() as $formAction) {
+            foreach ($formAction instanceof ActionGroup ? $formAction->getFlatActions() : [$formAction] as $flat) {
+                if ($flat->getName() === $action->getName()) {
+                    $page->getForm()?->applyClientState($data);
+
+                    return;
+                }
+            }
+        }
     }
 
     /**
