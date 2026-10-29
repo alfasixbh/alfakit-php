@@ -1,9 +1,9 @@
 {
     "_readme": ["Fixture lock file for the Filament 5 migration corpus."],
     "packages": [
-        {"name": "filament/filament", "version": "v5.10.1"},
-        {"name": "filament/support", "version": "v5.10.1"},
-        {"name": "livewire/livewire", "version": "v4.4.7"},
+        {"name": "filament/filament", "version": "v5.11.0"},
+        {"name": "filament/support", "version": "v5.11.0"},
+        {"name": "livewire/livewire", "version": "v4.4.8"},
         {"name": "bezhansalleh/filament-shield", "version": "v4.0.4"},
         {"name": "kirschbaum-development/commentions", "version": "v0.6.2"},
         {"name": "mokhosh/filament-kanban", "version": "v3.1.0"},

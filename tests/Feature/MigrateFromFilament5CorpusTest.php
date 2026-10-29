@@ -169,7 +169,7 @@ it('migrates the Filament 5 corpus: lint, no Filament references, TODO markers a
 
     // The report: summary, plugin command, grouped by file.
     expect($report)
-        ->toContain('Detected Filament v5.10.1')
+        ->toContain('Detected Filament v5.11.0')
         ->toContain('## First-party plugins to add')
         ->toContain('php artisan alfakit:add activity-log calendar comments kanban media-library settings shield tags tree')
         ->toContain('## By file')

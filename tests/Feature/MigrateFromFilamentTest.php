@@ -263,7 +263,7 @@ it('migrates the fixture Filament app with the built-in rewriter and reports wha
     $report = $this->files->get($this->sandbox.'/alfakit-migration-report.md');
 
     expect($report)
-        ->toContain('Detected Filament v4.1.0')
+        ->toContain('Detected Filament v4.16.0')
         ->toContain('Moved `app/Filament` to `app/Alfakit`')
         ->toContain('Registered `App\\Providers\\Alfakit\\AdminPanelProvider`')
         // Livewire component, Blade views, Alpine attributes.

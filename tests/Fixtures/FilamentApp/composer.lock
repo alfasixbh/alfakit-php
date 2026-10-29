@@ -1,8 +1,8 @@
 {
     "_readme": ["Fixture lock file for the migration tests."],
     "packages": [
-        {"name": "filament/filament", "version": "v4.1.0"},
-        {"name": "filament/support", "version": "v4.1.0"},
+        {"name": "filament/filament", "version": "v4.16.0"},
+        {"name": "filament/support", "version": "v4.16.0"},
         {"name": "bezhansalleh/filament-shield", "version": "v4.0.2"}
     ],
     "packages-dev": [
