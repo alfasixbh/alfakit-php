@@ -222,6 +222,9 @@ class MultiFactorChallenge extends Page
             throw ValidationException::withMessages(['code' => __('alfakit::multi-factor.invalid_code')]);
         }
 
+        // Earlier mistypes no longer count against the next sign-in.
+        RateLimiter::clear($throttleKey);
+
         return MultiFactorAuthentication::completeChallenge($panel, $user, (bool) ($data['remember_device'] ?? false));
     }
 

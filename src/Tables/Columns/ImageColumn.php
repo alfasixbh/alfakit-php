@@ -32,6 +32,8 @@ class ImageColumn extends Column
 
     protected string|Closure|null $width = null;
 
+    protected int|string|Closure|null $imageWidth = null;
+
     protected string|Closure|null $defaultImageUrl = null;
 
     protected bool|Closure $isStacked = false;
@@ -107,11 +109,33 @@ class ImageColumn extends Column
         return $this;
     }
 
+    /**
+     * The width of the column, which the image also takes unless `imageWidth()` says otherwise.
+     */
     public function width(string|Closure|null $width): static
     {
         $this->width = $width;
 
         return $this;
+    }
+
+    /**
+     * The width of the image alone: the column keeps its own width (`width()`, or as wide
+     * as its content).
+     */
+    public function imageWidth(int|string|Closure|null $width): static
+    {
+        $this->imageWidth = $width;
+
+        return $this;
+    }
+
+    /**
+     * The same as `height()`, beside `imageWidth()`.
+     */
+    public function imageHeight(int|string|Closure|null $height): static
+    {
+        return $this->height($height);
     }
 
     public function defaultImageUrl(string|Closure|null $url): static
@@ -217,6 +241,7 @@ class ImageColumn extends Column
             'size' => $this->evaluate($this->size),
             'height' => $this->evaluate($this->height),
             'width' => $this->evaluate($this->width),
+            'imageWidth' => $this->evaluate($this->imageWidth),
             'stacked' => $this->evaluate($this->isStacked) ?: null,
             'limit' => $this->evaluate($this->limit),
             'limitedRemainingText' => $this->evaluate($this->hasLimitedRemainingText) ?: null,

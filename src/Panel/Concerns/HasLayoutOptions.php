@@ -102,9 +102,9 @@ trait HasLayoutOptions
     public function applyNavigationGroupOptions(array $groups): array
     {
         if (! $this->hasCollapsibleNavigationGroups()) {
-            foreach ($groups as $group) {
-                $group->collapsible(false)->collapsed(false);
-            }
+            // Copies: groups given to `navigationGroups([...])` live as long as the panel, and
+            // the option may be a closure that answers differently for the next request.
+            return array_map(static fn (NavigationGroup $group): NavigationGroup => (clone $group)->collapsible(false)->collapsed(false), $groups);
         }
 
         return $groups;

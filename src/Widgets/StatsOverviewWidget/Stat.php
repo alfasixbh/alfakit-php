@@ -175,7 +175,8 @@ class Stat
             'descriptionColor' => $this->evaluate($this->descriptionColor),
             'color' => $this->evaluate($this->color),
             'icon' => Icons::resolve($this->evaluate($this->icon)),
-            'chart' => $this->evaluate($this->chart),
+            // A list for the sparkline: keys (`['Jan' => 3]`) or gaps would make it a JSON object.
+            'chart' => is_array($chart = $this->evaluate($this->chart)) ? array_values($chart) : $chart,
             'chartColor' => $this->evaluate($this->chartColor) ?? $this->evaluate($this->color),
             'url' => \AlfaSix\Alfakit\Support\Url::sanitize($this->evaluate($this->url)),
             'openUrlInNewTab' => $this->evaluate($this->shouldOpenUrlInNewTab) ?: null,

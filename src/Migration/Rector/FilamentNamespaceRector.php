@@ -8,6 +8,7 @@ use AlfaSix\Alfakit\Migration\FilamentClassMap;
 use AlfaSix\Alfakit\Migration\MigrationReport;
 use AlfaSix\Alfakit\Migration\TokenRewriter;
 use PhpParser\Node;
+use PhpParser\Node\Expr\FuncCall;
 use PhpParser\Node\Name;
 use PhpParser\Node\Name\FullyQualified;
 use PhpParser\Node\Scalar\String_;
@@ -36,11 +37,27 @@ final class FilamentNamespaceRector extends AbstractRector
      */
     public function getNodeTypes(): array
     {
-        return [Name::class, String_::class];
+        return [FuncCall::class, Name::class, String_::class];
     }
 
     public function refactor(Node $node): ?Node
     {
+        // Directory names: app_path('Filament/Resources') → app_path('Alfakit/Resources'). Only
+        // as the argument of a path helper: `'Filament/exports'` on a storage disk is the
+        // application's own path.
+        if ($node instanceof FuncCall) {
+            $argument = $node->args[0] ?? null;
+
+            if ($node->name instanceof Name && in_array($node->name->toString(), ['app_path', 'base_path', 'resource_path'], true)
+                && $argument instanceof Node\Arg && $argument->value instanceof String_ && str_starts_with($argument->value->value, 'Filament/')) {
+                $argument->value = new String_('Alfakit/'.substr($argument->value->value, 9));
+
+                return $node;
+            }
+
+            return null;
+        }
+
         if ($node instanceof Name) {
             $written = $node->toString();
             $renamed = TokenRewriter::renameAppNamespace($written);
@@ -63,9 +80,7 @@ final class FilamentNamespaceRector extends AbstractRector
             $new = FilamentClassMap::target($value) ?? $value;
         }
 
-        if (str_starts_with($new, 'Filament/')) {
-            $new = 'Alfakit/'.substr($new, 9);
-        } elseif (str_starts_with($new, 'app/Filament/')) {
+        if (str_starts_with($new, 'app/Filament/')) {
             $new = 'app/Alfakit/'.substr($new, 13);
         }
 

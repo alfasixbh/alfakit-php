@@ -7,6 +7,7 @@ namespace AlfaSix\Alfakit\Migration\Rector;
 use AlfaSix\Alfakit\Migration\MigrationReport;
 use PhpParser\Modifiers;
 use PhpParser\Node;
+use PhpParser\Node\Expr\PropertyFetch;
 use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\Identifier;
 use PhpParser\Node\Name;
@@ -17,6 +18,7 @@ use PhpParser\Node\Stmt\Class_;
 use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Stmt\Property;
 use PhpParser\Node\UnionType;
+use PhpParser\NodeFinder;
 use PhpParser\PrettyPrinter\Standard;
 use Rector\Rector\AbstractRector;
 use ReflectionClass;
@@ -77,7 +79,8 @@ final class FilamentClassMembersRector extends AbstractRector
                     continue;
                 }
 
-                if ($name === 'data' && $isPage && $statement->isPublic()) {
+                // Not when the class reads or writes `$this->data` itself: it is its own state.
+                if ($name === 'data' && $isPage && $statement->isPublic() && ! $this->usesOwnProperty($node, 'data')) {
                     $changed = true;
 
                     continue;
@@ -214,5 +217,14 @@ final class FilamentClassMembersRector extends AbstractRector
         $position = strrpos($name, '\\');
 
         return strtolower($position === false ? $name : substr($name, $position + 1));
+    }
+
+    private function usesOwnProperty(Class_ $class, string $property): bool
+    {
+        return (new NodeFinder)->findFirst($class->stmts, static fn (Node $node): bool => $node instanceof PropertyFetch
+            && $node->var instanceof Variable
+            && $node->var->name === 'this'
+            && $node->name instanceof Identifier
+            && $node->name->toString() === $property) !== null;
     }
 }

@@ -8,6 +8,7 @@ use AlfaSix\Alfakit\Actions\Imports\Exceptions\RowImportFailedException;
 use AlfaSix\Alfakit\Support\Concerns\Configurable;
 use AlfaSix\Alfakit\Support\Concerns\EvaluatesClosures;
 use AlfaSix\Alfakit\Support\Labels;
+use AlfaSix\Alfakit\Support\ModelKey;
 use AlfaSix\Alfakit\Support\TenantScope;
 use BackedEnum;
 use Closure;
@@ -696,7 +697,15 @@ class ImportColumn
         // Only records of the current tenant can be linked.
         $query = TenantScope::apply($relationship->getRelated()->newQuery());
         $key = $relationship instanceof BelongsTo ? $relationship->getOwnerKeyName() : $relationship->getRelatedKeyName();
-        $attributes = $resolveUsing === null ? [$key] : (array) $resolveUsing;
+        // A cell is only compared with the columns it can be a value of: "Acme" is not an id.
+        $attributes = array_values(array_filter(
+            $resolveUsing === null ? [$key] : (array) $resolveUsing,
+            static fn (mixed $attribute): bool => is_string($attribute) && ModelKey::isComparable($query->getModel(), $attribute, is_int($state) ? $state : (string) $state),
+        ));
+
+        if ($attributes === []) {
+            return null;
+        }
 
         return $query
             ->where(function (Builder $query) use ($attributes, $state): void {

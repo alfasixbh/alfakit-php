@@ -104,6 +104,13 @@ class AlfakitServiceProvider extends ServiceProvider
         $this->loadTranslationsFrom(__DIR__.'/../resources/lang', 'alfakit');
         $this->loadViewsFrom(__DIR__.'/../resources/views', 'alfakit');
 
+        // A session that changes its own user's password (a panel page, the application's
+        // settings page, any code) keeps up with it, so the panels' `AuthenticateSession`
+        // only signs the other sessions out.
+        foreach (array_unique(array_filter(array_column((array) config('auth.providers', []), 'model'), is_string(...))) as $userModel) {
+            \Illuminate\Support\Facades\Event::listen('eloquent.updated: '.$userModel, [Http\Middleware\AuthenticateSession::class, 'keepUpWithPasswordChange']);
+        }
+
         // The renderer writes the colour-scheme and sidebar cookies from JavaScript, so they
         // are plain text; an encrypted-cookie middleware would otherwise discard them and the
         // server could never render the stored scheme or sidebar state.

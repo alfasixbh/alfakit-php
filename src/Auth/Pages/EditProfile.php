@@ -178,8 +178,8 @@ class EditProfile extends Page
 
         // `AuthenticateSession` signs out every session whose stored password hash is not
         // the user's: this one keeps up with the new password.
-        if ($passwordChanged && request()->hasSession()) {
-            request()->session()->put('password_hash_'.$this->getPanel()->getAuthGuard(), $record->getAuthPassword());
+        if ($passwordChanged) {
+            \AlfaSix\Alfakit\Http\Middleware\AuthenticateSession::remember(request(), $this->getPanel(), $record);
         }
 
         if ($emailChanged && $record instanceof MustVerifyEmail) {

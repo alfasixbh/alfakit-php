@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace AlfaSix\Alfakit\Panel\Concerns;
 
 use AlfaSix\Alfakit\Billing\Providers\Contracts\BillingProvider;
+use AlfaSix\Alfakit\Http\Middleware\AuthorizeTenantBilling;
+use AlfaSix\Alfakit\Http\Middleware\RequireTenantSubscription;
 use AlfaSix\Alfakit\Navigation\MenuItem;
 use Closure;
 use Illuminate\Database\Eloquent\Model;
@@ -88,9 +90,19 @@ trait HasTenantBilling
         return $this->hasTenancy() && $this->tenantBillingProvider !== null;
     }
 
+    /**
+     * A closure is asked with the current tenant (null while routes are registered).
+     */
     public function isTenantSubscriptionRequired(): bool
     {
-        return $this->hasTenantBilling() && (bool) $this->evaluate($this->isTenantSubscriptionRequired);
+        return $this->hasTenantBilling() && (bool) $this->evaluate($this->isTenantSubscriptionRequired, ['tenant' => $this->getTenant()]);
+    }
+
+    public function getTenantSubscribedMiddleware(): ?string
+    {
+        $middleware = $this->hasTenantBilling() ? $this->tenantBillingProvider?->getSubscribedMiddleware() : null;
+
+        return is_string($middleware) && $middleware !== '' ? $middleware : null;
     }
 
     /**
@@ -103,6 +115,17 @@ trait HasTenantBilling
 
         if (! is_string($middleware) || $middleware === '') {
             return $route;
+        }
+
+        // A closure is asked on every request (`RequireTenantSubscription`), where the
+        // tenant is known: a page or resource that decides for itself overrides it.
+        if ($this->isTenantSubscriptionRequired instanceof Closure) {
+            // The same answer as the panel gives right now: the page follows the panel.
+            if ($required === $this->isTenantSubscriptionRequired()) {
+                return $route;
+            }
+
+            return $required ? $route->middleware($middleware) : $route->withoutMiddleware($this->getTenantBillingMiddleware());
         }
 
         $panelRequires = (bool) $this->evaluate($this->isTenantSubscriptionRequired);
@@ -132,9 +155,15 @@ trait HasTenantBilling
      */
     protected function getTenantBillingMiddleware(): array
     {
-        return $this->hasTenantBilling() && $this->evaluate($this->isTenantSubscriptionRequired)
-            ? [(string) $this->tenantBillingProvider?->getSubscribedMiddleware()]
-            : [];
+        if (! $this->hasTenantBilling()) {
+            return [];
+        }
+
+        if ($this->isTenantSubscriptionRequired instanceof Closure) {
+            return [RequireTenantSubscription::class.':'.$this->getId()];
+        }
+
+        return $this->isTenantSubscriptionRequired ? [(string) $this->tenantBillingProvider?->getSubscribedMiddleware()] : [];
     }
 
     /**
@@ -156,7 +185,9 @@ trait HasTenantBilling
             return;
         }
 
-        $route = $router->get('/'.$this->tenantBillingRouteSlug, $this->tenantBillingProvider->getRouteAction())->name('tenant.billing');
+        $route = $router->get('/'.$this->tenantBillingRouteSlug, $this->tenantBillingProvider->getRouteAction())->name('tenant.billing')
+            // `authorizeTenantBilling()` on the route itself, whatever the provider does.
+            ->middleware(AuthorizeTenantBilling::class.':'.$this->getId());
 
         // Unsubscribed tenants must still reach the page where they subscribe.
         $middleware = $this->getTenantBillingMiddleware();

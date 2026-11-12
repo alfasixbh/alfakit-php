@@ -24,7 +24,12 @@ function editor(): RichEditor
     return RichEditor::make('content')
         ->customBlocks([HeroBlock::class, DividerBlock::class])
         ->mentions([
-            MentionProvider::make('@')->getSearchResultsUsing(fn (string $search): array => User::query()->where('name', 'like', "%{$search}%")->pluck('name', 'id')->all()),
+            MentionProvider::make('@')->getSearchResultsUsing(function (string $search): array {
+                $query = User::query();
+                AlfaSix\Alfakit\Support\SearchQuery::contains($query, 'name', $search);
+
+                return $query->pluck('name', 'id')->all();
+            }),
             MentionProvider::make('#')->items(['php' => 'PHP', 'js' => 'JavaScript']),
         ])
         ->mergeTags(['name', 'today' => 'Today\'s date']);

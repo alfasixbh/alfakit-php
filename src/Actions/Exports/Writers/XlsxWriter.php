@@ -336,6 +336,17 @@ final class XlsxWriter
 
     private static function xml(string $value): string
     {
+        // Bytes that are not UTF-8 (a legacy column) are replaced first: the pattern below
+        // returns null for such a string, and the cell came out empty.
+        if (! mb_check_encoding($value, 'UTF-8')) {
+            $value = mb_convert_encoding($value, 'UTF-8', 'UTF-8');
+        }
+
+        // Excel refuses a file with a cell over 32,767 characters.
+        if (mb_strlen($value) > 32767) {
+            $value = mb_substr($value, 0, 32767);
+        }
+
         // XML 1.0 can't hold most control characters.
         $value = (string) preg_replace('/[^\x{9}\x{A}\x{D}\x{20}-\x{D7FF}\x{E000}-\x{FFFD}\x{10000}-\x{10FFFF}]/u', '', $value);
 

@@ -14,6 +14,7 @@ use AlfaSix\Alfakit\Http\Controllers\TableController;
 use AlfaSix\Alfakit\Pages\Page;
 use AlfaSix\Alfakit\Resources\Pages\Page as ResourcePage;
 use AlfaSix\Alfakit\Resources\Resource;
+use AlfaSix\Alfakit\Support\ModelKey;
 use Closure;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
@@ -101,7 +102,8 @@ trait HasGuestAccess
 
         $tenant = $slugAttribute !== null
             ? $model::query()->where($slugAttribute, $key)->first()
-            : $model::query()->find($key);
+            // A segment that can't be the model's key is no tenant (not a database error).
+            : (ModelKey::isComparable($instance = new $model, $instance->getKeyName(), $key) ? $model::query()->find($key) : null);
 
         return $tenant !== null && $this->hasGuestAccess($tenant) ? $tenant : null;
     }

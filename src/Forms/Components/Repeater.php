@@ -931,7 +931,7 @@ class Repeater extends Field
         $path = $this->getStatePath();
 
         if ($this->hasRelationship() && ! $useDefaults) {
-            $this->loadStateFromRelationships();
+            $this->readStateFromRelationship();
         } elseif ($useDefaults || ! Arr::has($root->getRawState(), $path)) {
             $defaultState = $this->hasDefault() ? $this->getDefaultState() : null;
 
@@ -946,18 +946,46 @@ class Repeater extends Field
 
         $root->setStateAt($path, $items);
 
-        foreach (array_keys($items) as $index) {
+        $this->hydrateItemFields();
+
+        $this->callAfterStateHydrated();
+    }
+
+    /**
+     * Let the fields of every item make of their value what they show (money in major
+     * units, a normalised date, `formatStateUsing()`, defaults of missing values).
+     */
+    protected function hydrateItemFields(): void
+    {
+        $root = $this->getContainer()->getRootSchema();
+
+        foreach (array_keys($this->getItems()) as $index) {
             foreach ($this->getItemFields($index, withHidden: true) as $field) {
                 // Item values the field's own `default()` lists are kept; only missing
                 // ones (new items, `defaultItems()`) take the item fields' defaults.
                 $field->hydrateState(! Arr::has($root->getRawState(), $field->getStatePath()));
             }
         }
-
-        $this->callAfterStateHydrated();
     }
 
+    /**
+     * Called by the schema after a fill from a record as well: the items are read again, so
+     * their fields are hydrated again (reading alone left them with the stored values, and
+     * a `MoneyInput::minorUnits()` showed, and then saved, the minor units as the amount).
+     */
     public function loadStateFromRelationships(): void
+    {
+        if ($this->getRelationship() === null) {
+            return;
+        }
+
+        $this->readStateFromRelationship();
+        $this->itemSchemas = [];
+        $this->boundItemKeys = [];
+        $this->hydrateItemFields();
+    }
+
+    protected function readStateFromRelationship(): void
     {
         if ($this->getRelationship() === null) {
             return;

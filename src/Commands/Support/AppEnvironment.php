@@ -386,10 +386,11 @@ final class AppEnvironment
      * Run `php artisan …` in a fresh process.
      *
      * @param  array<int, string>  $arguments
+     * @param  array<string, string>  $environment  Extra environment variables for the child.
      */
-    public static function artisan(array $arguments, ?callable $output = null): ProcessResult
+    public static function artisan(array $arguments, ?callable $output = null, array $environment = []): ProcessResult
     {
-        return Process::path(base_path())->timeout(900)->run(
+        return Process::path(base_path())->timeout(900)->env($environment)->run(
             [PHP_BINARY, 'artisan', ...$arguments],
             $output === null ? null : static fn (string $type, string $buffer) => $output($buffer),
         );

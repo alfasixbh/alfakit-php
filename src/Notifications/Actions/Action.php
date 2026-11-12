@@ -180,15 +180,18 @@ class Action
      */
     public static function fromArray(array $data): static
     {
-        $static = static::make($data['name'] ?? 'action')->label($data['label'] ?? null)->url($data['url'] ?? null, $data['openUrlInNewTab'] ?? false);
-        $static->shouldMarkAsRead = $data['markAsRead'] ?? false;
-        $static->shouldMarkAsUnread = $data['markAsUnread'] ?? false;
-        $static->shouldClose = $data['close'] ?? false;
-        $static->color($data['color'] ?? null);
-        $static->icon($data['icon'] ?? null);
-        $static->size = Size::tryFrom((string) ($data['size'] ?? ''));
-        $static->variant = ActionVariant::tryFrom($data['variant'] ?? '') ?? null;
-        $static->dispatch = $data['dispatch'] ?? null;
+        // As with the notification itself: a value of the wrong type is left out.
+        $text = static fn (string $key): ?string => is_scalar($data[$key] ?? null) ? (string) $data[$key] : null;
+
+        $static = static::make($text('name') ?? 'action')->label($text('label'))->url($text('url'), (bool) ($data['openUrlInNewTab'] ?? false));
+        $static->shouldMarkAsRead = (bool) ($data['markAsRead'] ?? false);
+        $static->shouldMarkAsUnread = (bool) ($data['markAsUnread'] ?? false);
+        $static->shouldClose = (bool) ($data['close'] ?? false);
+        $static->color($text('color'));
+        $static->icon($text('icon'));
+        $static->size = Size::tryFrom((string) $text('size'));
+        $static->variant = ActionVariant::tryFrom((string) $text('variant'));
+        $static->dispatch = is_array($data['dispatch'] ?? null) ? $data['dispatch'] : null;
 
         return $static;
     }

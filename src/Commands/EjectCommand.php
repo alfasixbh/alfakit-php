@@ -329,11 +329,13 @@ class EjectCommand extends Command
      */
     protected function rewriteImports(string $code, string $source, string $target, int $depth, bool $isRoot): string
     {
-        $pattern = '/\b(import|export)\s+(type\s+)?([^\'";]*?)\s*from\s*([\'"])(\.\.?\/[^\'"]+)\4|\bimport\s+([\'"])(\.\.?\/[^\'"]+)\6/s';
+        $pattern = '/\b(import|export)\s+(type\s+)?([^\'";]*?)\s*from\s*([\'"])(\.\.?\/[^\'"]+)\4|\bimport\s+([\'"])(\.\.?\/[^\'"]+)\6|\bimport\s*\(\s*([\'"])(\.\.?\/[^\'"]+)\8\s*\)/s';
 
         $result = preg_replace_callback($pattern, function (array $match) use ($source, $target, $depth, $isRoot): string {
-            $sideEffect = ($match[7] ?? '') !== '';
-            $specifier = $sideEffect ? $match[7] : $match[5];
+            // `import('./x')`: a lazily loaded part (the editors), copied like a side-effect import.
+            $dynamic = ($match[9] ?? '') !== '';
+            $sideEffect = $dynamic || ($match[7] ?? '') !== '';
+            $specifier = $dynamic ? $match[9] : ($sideEffect ? $match[7] : $match[5]);
             $resolved = $this->resolveSource($source, $specifier);
 
             if ($resolved === null) {

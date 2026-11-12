@@ -17,6 +17,7 @@ use AlfaSix\Alfakit\Resources\Concerns\IsNestedResource;
 use AlfaSix\Alfakit\Resources\RelationManagers\RelationManager;
 use AlfaSix\Alfakit\Schemas\Schema;
 use AlfaSix\Alfakit\Support\Labels;
+use AlfaSix\Alfakit\Support\ModelKey;
 use AlfaSix\Alfakit\Support\ModelLabel;
 use AlfaSix\Alfakit\Support\SearchQuery;
 use AlfaSix\Alfakit\Tables\Table;
@@ -402,7 +403,14 @@ abstract class Resource
             $query->withTrashed();
         }
 
-        return $query->where(static::getRecordRouteKeyName() ?? $query->getModel()->getRouteKeyName(), $key)->first();
+        $column = static::getRecordRouteKeyName() ?? $query->getModel()->getRouteKeyName();
+
+        // `/posts/abc/edit` with an integer key is a missing record, not a database error.
+        if (! ModelKey::isComparable($query->getModel(), $column, $key)) {
+            return null;
+        }
+
+        return $query->where($column, $key)->first();
     }
 
     // ---------------------------------------------------------------- Tenancy

@@ -48,3 +48,39 @@ CODE;
         ->toContain("TextInput::make('slug')->live(onBlur: true)")
         ->and(fn () => token_get_all($out, TOKEN_PARSE))->not->toThrow(ParseError::class);
 });
+
+it('keeps a public $data property the class uses itself, and the app\'s own Filament/ paths', function (): void {
+    $uses = <<<'CODE'
+<?php
+
+namespace App\Filament\Pages;
+
+use Filament\Pages\Page;
+use Illuminate\Support\Facades\Storage;
+
+class Preferences extends Page
+{
+    public ?array $data = [];
+
+    public function save(): void
+    {
+        $theme = $this->data['theme'] ?? 'light';
+        Storage::disk('local')->put('Filament/exports/theme.txt', $theme);
+        $dir = app_path('Filament/Resources');
+    }
+}
+CODE;
+
+    $out = (new TokenRewriter(new MigrationReport(sys_get_temp_dir())))->rewrite('app/Filament/Pages/Preferences.php', $uses);
+
+    expect($out)
+        ->toContain('public ?array $data = [];')
+        ->toContain("put('Filament/exports/theme.txt'")
+        ->toContain("app_path('Alfakit/Resources')");
+
+    // Only the Livewire form state: the property goes, as before.
+    $unused = str_replace(["        \$theme = \$this->data['theme'] ?? 'light';\n", ', $theme)'], ['', ", 'x')"], $uses);
+    $out = (new TokenRewriter(new MigrationReport(sys_get_temp_dir())))->rewrite('app/Filament/Pages/Preferences.php', $unused);
+
+    expect($out)->not->toContain('$data');
+});

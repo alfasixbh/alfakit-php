@@ -351,4 +351,4 @@ it('skips a nested global search result whose parent is gone instead of failing 
     $comments = collect($groups)->flatMap(fn (array $group): array => $group['results'])->pluck('title')->all();
 
     expect($comments)->toContain('Ann')->not->toContain('Orphan Ann');
-});
+})->skip(fn (): bool => Illuminate\Support\Facades\DB::getDriverName() !== 'sqlite', 'Makes an orphan row with a SQLite pragma.');

@@ -306,7 +306,7 @@ final class MigrationReport
                 continue;
             }
 
-            $this->add((string) $entry['section'], (string) $entry['file'], isset($entry['line']) ? (int) $entry['line'] : null, (string) $entry['what'], (string) ($entry['suggestion'] ?? ''), (bool) ($entry['manual'] ?? true));
+            $this->add((string) $entry['section'], (string) $entry['file'], isset($entry['line']) ? (int) $entry['line'] : null, (string) $entry['what'], (string) ($entry['suggestion'] ?? ''), isset($entry['manual']) ? (bool) $entry['manual'] : null);
         }
     }
 

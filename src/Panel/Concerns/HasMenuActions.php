@@ -249,7 +249,8 @@ trait HasMenuActions
         $items = array_map(fn (array $entry): array => $this->serializeMenuEntry($entry[0], $entry[1]), $this->visibleMenuEntries($entries));
         $profileUrl = $this->getTenantProfileUrl();
         $registrationUrl = $this->getTenantRegistrationUrl();
-        $billingUrl = $this->getTenantBillingUrl();
+        // `authorizeTenantBilling()`: the others don't see the entry.
+        $billingUrl = $this->canManageTenantBilling() ? $this->getTenantBillingUrl() : null;
         $schema = [
             'profileUrl' => $profileUrl,
             'registrationUrl' => $registrationUrl,

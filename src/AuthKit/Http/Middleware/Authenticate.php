@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AlfaSix\Alfakit\AuthKit\Http\Middleware;
 
+use AlfaSix\Alfakit\Http\Middleware\AuthenticateSession;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -19,7 +20,8 @@ class Authenticate
         $panel = alfakit()->getAuthKitPanel();
 
         if ($panel->auth()->check()) {
-            return $next($request);
+            // And not with a session whose password has changed since ("sign out other sessions").
+            return app(AuthenticateSession::class)->handleFor($panel, $request, $next);
         }
 
         if ($request->expectsJson() && ! $request->header('X-Inertia')) {

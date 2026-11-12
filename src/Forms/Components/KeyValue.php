@@ -7,6 +7,7 @@ namespace AlfaSix\Alfakit\Forms\Components;
 use AlfaSix\Alfakit\Forms\Components\Concerns\CanCustomizeItemActions;
 use AlfaSix\Alfakit\Forms\Components\Repeater\ItemAction;
 use Closure;
+use Illuminate\Contracts\Validation\ValidationRule;
 
 /**
  * Its add, delete and reorder buttons are actions: customise them with `addAction()`,
@@ -147,8 +148,14 @@ class KeyValue extends Field
      */
     public function getRows(): array
     {
-        $state = $this->getState();
+        return self::rowsOf($this->getState());
+    }
 
+    /**
+     * @return array<int, array{key: string, value: mixed}>
+     */
+    private static function rowsOf(mixed $state): array
+    {
         if (! is_array($state)) {
             return [];
         }
@@ -326,7 +333,8 @@ class KeyValue extends Field
             $result = [];
 
             foreach ($state as $row) {
-                if (is_array($row) && filled($row['key'] ?? null)) {
+                // A key is text: a row with anything else (a hand-made request) is dropped.
+                if (is_array($row) && is_scalar($row['key'] ?? null) && filled($row['key'])) {
                     $result[(string) $row['key']] = $row['value'] ?? null;
                 }
             }
@@ -339,7 +347,88 @@ class KeyValue extends Field
 
     protected function getTypeValidationRules(): array
     {
-        return ['array'];
+        $rules = ['array'];
+
+        if (! $this->evaluate($this->isAddable) || ! $this->evaluate($this->isDeletable) || ! $this->evaluate($this->canEditKeys) || ! $this->evaluate($this->canEditValues)) {
+            // Implicit, so it also runs when the browser drops the field from the payload.
+            $rules[] = new class(fn (): bool => $this->respectsLocks()) implements ValidationRule
+            {
+                public bool $implicit = true;
+
+                public function __construct(private readonly Closure $check) {}
+
+                public function validate(string $attribute, mixed $value, Closure $fail): void
+                {
+                    if (! ($this->check)()) {
+                        $fail(__('alfakit::forms.key_value.locked'));
+                    }
+                }
+            };
+        }
+
+        return $rules;
+    }
+
+    /**
+     * Whether the submitted rows only differ from the ones the server filled in the ways
+     * `addable()`, `deletable()`, `editableKeys()` and `editableValues()` allow. The editor
+     * already holds to them; this stops a hand-made request.
+     */
+    protected function respectsLocks(): bool
+    {
+        // Nothing was filled by the server (a form validated on its own): nothing to compare with.
+        if ($this->getContainer()->getServerStateAt('') === null) {
+            return true;
+        }
+
+        $filled = $this->getContainer()->getServerStateAt($this->getStatePath());
+
+        // Not filled by the server either: a repeater item added in the browser, with its
+        // defaults. As with repeaters, only rows the server knows can be compared.
+        if (! is_array($filled)) {
+            return true;
+        }
+
+        $toMap = static function (array $rows): array {
+            $map = [];
+
+            foreach ($rows as $row) {
+                if ($row['key'] !== '') {
+                    $map[$row['key']] = is_scalar($row['value']) ? (string) $row['value'] : (string) json_encode($row['value']);
+                }
+            }
+
+            return $map;
+        };
+
+        $server = $toMap(self::rowsOf($filled));
+        $client = $toMap($this->getRows());
+        $addable = (bool) $this->evaluate($this->isAddable);
+        $deletable = (bool) $this->evaluate($this->isDeletable);
+
+        if (! $this->evaluate($this->canEditKeys)) {
+            // Keys are fixed: a row is known by its key.
+            if (! $addable && array_diff_key($client, $server) !== []) {
+                return false;
+            }
+
+            if (! $deletable && array_diff_key($server, $client) !== []) {
+                return false;
+            }
+        } elseif ((! $addable && count($client) > count($server)) || (! $deletable && count($client) < count($server))) {
+            // Keys may be renamed, so rows can only be counted.
+            return false;
+        }
+
+        if (! $this->evaluate($this->canEditValues)) {
+            foreach (array_intersect_key($client, $server) as $key => $value) {
+                if ($value !== $server[$key]) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 
     protected function getSchemaProps(): array

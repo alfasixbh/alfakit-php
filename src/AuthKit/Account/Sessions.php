@@ -10,6 +10,7 @@ use AlfaSix\Alfakit\Auth\Throttle;
 use AlfaSix\Alfakit\AuthKit\Concerns\InteractsWithAuthKit;
 use AlfaSix\Alfakit\AuthKit\Support\BrowserSessions;
 use AlfaSix\Alfakit\Forms\Components\TextInput;
+use AlfaSix\Alfakit\Http\Middleware\AuthenticateSession;
 use AlfaSix\Alfakit\Infolists\Components\RepeatableEntry;
 use AlfaSix\Alfakit\Infolists\Components\RepeatableEntry\TableColumn;
 use AlfaSix\Alfakit\Infolists\Components\TextEntry;
@@ -105,10 +106,14 @@ class Sessions extends Component
 
         abort_if($user === null, 403);
 
-        // Rehashes the password, so `AuthenticateSession` signs every other session out.
+        // Rehashes the password, so the panel's `AuthenticateSession` signs every other session out
+        // (on any session driver; the database driver also deletes their rows below).
         if (method_exists($guard, 'logoutOtherDevices')) {
             $guard->logoutOtherDevices($password);
         }
+
+        // The password was rehashed: this session keeps up with it.
+        AuthenticateSession::remember(request(), $this->getPanel(), $user);
 
         BrowserSessions::endOthers($user);
 

@@ -116,6 +116,44 @@ it('sends unsubscribed tenants to billing and adds a billing menu item', functio
     expect(Project::query()->where('name', 'Free ride')->exists())->toBeFalse();
 });
 
+it('keeps tenant billing to the users allowed to manage it', function (): void {
+    Panels::register('owned', fn (Panel $panel): Panel => $panel
+        ->tenant(Team::class, slugAttribute: 'slug')
+        ->tenantBillingProvider(new FakeBillingProvider)
+        ->authorizeTenantBilling(fn (Team $tenant): bool => $tenant->slug === 'alpha')
+        ->resources([ProjectResource::class])
+        ->pages([Dashboard::class]));
+
+    [$user] = teamsFixture();
+    $this->actingAs($user);
+
+    $menu = fn (string $tenant): array => collect(inertiaProps(inertiaGet($this, "/owned/{$tenant}/projects"))['alfakit']['tenancy']['menu'])->pluck('url')->all();
+
+    expect($menu('alpha'))->toContain('http://localhost/owned/alpha/billing')
+        ->and($menu('beta'))->not->toContain('http://localhost/owned/beta/billing');
+
+    $this->get('/owned/alpha/billing')->assertOk();
+    $this->get('/owned/beta/billing')->assertForbidden();
+});
+
+it('asks a subscription closure for the tenant of each request', function (): void {
+    Panels::register('metered', fn (Panel $panel): Panel => $panel
+        ->tenant(Team::class, slugAttribute: 'slug')
+        ->tenantBillingProvider(new FakeBillingProvider)
+        ->requiresTenantSubscription(fn (?Team $tenant): bool => $tenant?->slug !== 'alpha')
+        ->resources([ProjectResource::class])
+        ->pages([Dashboard::class]));
+
+    RequireSubscription::$subscribed = [];
+    [$user] = teamsFixture();
+    $this->actingAs($user);
+
+    // Alpha is exempt; beta has to subscribe.
+    $this->get('/metered/alpha/projects')->assertOk();
+    $this->get('/metered/beta/projects')->assertRedirect('http://localhost/metered/beta/billing');
+    $this->get('/metered/beta/billing')->assertOk();
+});
+
 it('keeps database notifications in the tenant they were sent in', function (): void {
     Panels::register('inbox', fn (Panel $panel): Panel => $panel
         ->tenant(Team::class, slugAttribute: 'slug')

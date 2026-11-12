@@ -335,6 +335,10 @@ class EditRecord extends Page
             }
         }
 
+        // As on a full save: the page's own preparation of the data, and a hidden attribute
+        // (a password, a token) the form showed blank is not overwritten with nothing.
+        $data = $this->keepHiddenAttributesLeftBlank($this->mutateFormDataBeforeSave($data));
+
         DB::transaction(function () use ($data, $component): void {
             $this->record = $this->handleRecordUpdate($this->record, $data);
 

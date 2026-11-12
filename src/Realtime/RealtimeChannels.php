@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Facades\Broadcast;
+use Illuminate\Support\Facades\Gate;
 
 /**
  * The broadcast channels of a panel and how they are authorised.
@@ -295,7 +296,15 @@ final class RealtimeChannels
 
         [$class, $resource] = $context;
 
-        return $resource !== null ? $resource::canViewAny() : Authorization::allows('viewAny', $class);
+        if ($resource !== null) {
+            return $resource::canViewAny();
+        }
+
+        // A model the panel has no resource for is only followed when its policy says so:
+        // without a policy nobody decided that its changes may be listened to.
+        $policy = Gate::getPolicyFor($class);
+
+        return is_object($policy) && method_exists($policy, 'viewAny') && Authorization::allows('viewAny', $class);
     }
 
     /**

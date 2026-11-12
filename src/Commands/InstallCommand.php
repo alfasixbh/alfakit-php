@@ -8,6 +8,7 @@ use AlfaSix\Alfakit\Commands\Concerns\CanGenerateFiles;
 use AlfaSix\Alfakit\Commands\Concerns\InstallsStarterKit;
 use AlfaSix\Alfakit\Commands\Concerns\ShowsBanner;
 use AlfaSix\Alfakit\Commands\Support\AppEnvironment;
+use AlfaSix\Alfakit\Commands\Support\JsonFile;
 use Illuminate\Console\Command;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Str;
@@ -308,6 +309,12 @@ class InstallCommand extends Command
         [$indent, $before, $existing] = [$match[1][0], $match[2][0], $match[3][0]];
         preg_match_all('/([\'"])(.*?)\1/', $existing, $strings, PREG_SET_ORDER);
 
+        // Anything but string literals (a spread, a variable) can't be rebuilt: the caller
+        // then asks for the inputs to be added by hand.
+        if (trim((string) preg_replace(['/([\'"])(.*?)\1/', '#//[^\n]*#', '#/\*.*?\*/#s', '/[\s,]+/'], '', $existing)) !== '') {
+            return null;
+        }
+
         $quote = $strings[0][1] ?? "'";
         $items = [...array_map(static fn (array $string): string => $string[0], $strings), ...array_map(static fn (string $input): string => $quote.$input.$quote, $inputs)];
         // Items one level deeper than the line holding `input:`, the closing bracket on its level.
@@ -358,7 +365,7 @@ class InstallCommand extends Command
 
             if (is_array($package) && ! isset($package['scripts']['build:ssr'])) {
                 $package['scripts'] = [...($package['scripts'] ?? []), 'build:ssr' => 'vite build && vite build --ssr'];
-                $filesystem->put($packageJson, json_encode($package, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES).PHP_EOL);
+                $filesystem->put($packageJson, JsonFile::encode($package, $filesystem->get($packageJson)));
                 $this->components->task('Added the build:ssr script to package.json');
             }
         }
@@ -458,7 +465,7 @@ class InstallCommand extends Command
             return;
         }
 
-        $filesystem->put($path, json_encode($updated, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE).PHP_EOL);
+        $filesystem->put($path, JsonFile::encode($updated, $filesystem->get($path)));
         $this->components->task('Added alfakit:upgrade to the post-autoload-dump composer script');
     }
 

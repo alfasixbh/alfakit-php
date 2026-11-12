@@ -134,7 +134,7 @@ class TagsInput extends Field
 
     protected function mutateDehydratedState(mixed $state): mixed
     {
-        $tags = array_values(array_filter((array) $this->trimState(Arr::wrap($state ?? [])), static fn (mixed $tag): bool => filled($tag)));
+        $tags = array_values(array_filter((array) $this->trimState(Arr::wrap($state ?? [])), static fn (mixed $tag): bool => is_scalar($tag) && filled($tag)));
         $separator = $this->evaluate($this->separator);
 
         return $separator !== null ? implode($separator, $tags) : $tags;

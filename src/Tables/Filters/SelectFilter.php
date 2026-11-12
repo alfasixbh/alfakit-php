@@ -187,7 +187,8 @@ class SelectFilter extends BaseFilter
     {
         $values = $this->isMultiple() ? ($this->state['values'] ?? []) : ($this->state['value'] ?? null);
 
-        return array_values(array_filter(Arr::wrap($values), static fn (mixed $value): bool => $value !== null && $value !== ''));
+        // Scalars only: `?filters[status][value][0][]=x` is not a value.
+        return array_values(array_filter(Arr::wrap($values), static fn (mixed $value): bool => is_scalar($value) && $value !== ''));
     }
 
     public function isActive(): bool

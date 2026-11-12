@@ -15,6 +15,9 @@ use function Laravel\Prompts\text;
 #[AsCommand(name: 'make:alfakit-user', description: 'Create a user that can sign in to a panel')]
 class MakeUserCommand extends Command
 {
+    /** A password for a non-interactive run, kept off the command line. */
+    public const PASSWORD_ENVIRONMENT_VARIABLE = 'ALFAKIT_USER_PASSWORD';
+
     protected $signature = 'make:alfakit-user {--name=} {--email=} {--password=} {--panel=}';
 
     public function handle(): int
@@ -44,7 +47,8 @@ class MakeUserCommand extends Command
             return self::FAILURE;
         }
 
-        $passwordValue = $this->option('password') ?? password('Password', required: true);
+        $fromEnvironment = getenv(self::PASSWORD_ENVIRONMENT_VARIABLE);
+        $passwordValue = $this->option('password') ?? (is_string($fromEnvironment) && $fromEnvironment !== '' ? $fromEnvironment : password('Password', required: true));
 
         $user = $model::query()->create([
             'name' => $name,

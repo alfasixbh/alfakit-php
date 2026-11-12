@@ -866,7 +866,7 @@ Tickets::reply($ticket, '<p>On our way.</p>', author: $agent, status: TicketStat
 ```
 
 - Panel: tickets resource with views (`mine`, `unassigned`, `due_soon`, `breached`…), Inbox page (`helpdesk:inbox`, live with `->realtime()`), canned replies with `{{ placeholders }}` (never evaluated), groups, reports widget. Outside panels: customer portal and contact form under `/support`, `<HelpdeskChat endpoint="/support/chat" />` live chat, reply by email (`inbound`, verified by `InboundMailVerifier`).
-- Options: `agents()`, `publicTenant()`, `dueSoonMinutes()`, `inboxPollingInterval()`, `spatieTags()`, `inbox(false)`, `cannedReplies(false)`, `groups(false)`, `reports(false)`, resource / page overrides. Code: `Tickets::note()`, `assign()`, `changeStatus()`, `merge()`, `rate()`.
+- Options: `agents()`, `requesters(fn (?Model $tenant) => Builder)` (who can be picked as requester), `publicTenant()`, `dueSoonMinutes()`, `inboxPollingInterval()`, `spatieTags()`, `inbox(false)`, `cannedReplies(false)`, `groups(false)`, `reports(false)`, resource / page overrides. Code: `Tickets::note()`, `assign()`, `changeStatus()`, `merge()`, `rate()`.
 
 ## Analytics
 

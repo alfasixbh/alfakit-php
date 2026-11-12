@@ -400,7 +400,62 @@ class DatePicker extends Field
             $rules[] = 'before_or_equal:'.($max instanceof DateTimeInterface ? $max->format($this->getFormat()) : $max);
         }
 
+        // `disabledDates()` greys the days out in the calendar; a typed or posted value (the
+        // native input has no way to disable days) is refused here.
+        if (($disabled = $this->getDisabledDays()) !== []) {
+            $rules[] = static function (string $attribute, mixed $value, Closure $fail) use ($disabled): void {
+                try {
+                    $day = is_string($value) && $value !== '' ? Carbon::parse($value)->format('Y-m-d') : null;
+                } catch (Throwable) {
+                    return;
+                }
+
+                if ($day !== null && in_array($day, $disabled, true)) {
+                    $fail('validation.not_in')->translate();
+                }
+            };
+        }
+
         return $rules;
+    }
+
+    /**
+     * The disabled dates in the field's own format, which is what the renderers parse
+     * (a Carbon instance or a date in another format was ignored, or broke the calendar).
+     *
+     * @return array<int, string>
+     */
+    public function getDisabledDates(): array
+    {
+        $dates = [];
+
+        foreach ((array) ($this->evaluate($this->disabledDates) ?? []) as $date) {
+            try {
+                $dates[] = ($date instanceof DateTimeInterface ? Carbon::instance($date) : Carbon::parse((string) $date))->format($this->getFormat());
+            } catch (Throwable) {
+                // Not a date: nothing to disable.
+            }
+        }
+
+        return $dates;
+    }
+
+    /**
+     * @return array<int, string> `Y-m-d`
+     */
+    protected function getDisabledDays(): array
+    {
+        $days = [];
+
+        foreach ((array) ($this->evaluate($this->disabledDates) ?? []) as $date) {
+            try {
+                $days[] = ($date instanceof DateTimeInterface ? Carbon::instance($date) : Carbon::parse((string) $date))->format('Y-m-d');
+            } catch (Throwable) {
+                // Not a date.
+            }
+        }
+
+        return array_values(array_unique($days));
     }
 
     protected function normalizeFocusedDate(mixed $date): mixed
@@ -447,7 +502,7 @@ class DatePicker extends Field
             'hasSeconds' => $this->hasSeconds() ?: null,
             'minDate' => $this->formatBoundForDisplay($min),
             'maxDate' => $this->formatBoundForDisplay($max),
-            'disabledDates' => $this->evaluate($this->disabledDates) ?: null,
+            'disabledDates' => $this->getDisabledDates() ?: null,
             'native' => (bool) $this->evaluate($this->isNative),
             'timezone' => $this->getTimezone(),
             'firstDayOfWeek' => $this->getFirstDayOfWeek(),

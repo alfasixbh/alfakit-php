@@ -7,6 +7,7 @@ namespace AlfaSix\Alfakit\Migration\Rector;
 use AlfaSix\Alfakit\Migration\FilamentClassMap;
 use AlfaSix\Alfakit\Migration\MigrationReport;
 use PhpParser\Node;
+use PhpParser\Node\Expr\ArrayDimFetch;
 use PhpParser\Node\Expr\ClassConstFetch;
 use PhpParser\Node\Expr\StaticCall;
 use PhpParser\Node\Identifier;
@@ -38,11 +39,20 @@ final class FilamentIconsAndColorsRector extends AbstractRector
      */
     public function getNodeTypes(): array
     {
-        return [ClassConstFetch::class, StaticCall::class];
+        return [ArrayDimFetch::class, ClassConstFetch::class, StaticCall::class];
     }
 
     public function refactor(Node $node): ?Node
     {
+        // `Color::Amber[500]`: the colour is one CSS value, so the shade index goes.
+        if ($node instanceof ArrayDimFetch) {
+            if ($node->var instanceof ClassConstFetch && $this->getName($node->var->class) === 'Filament\\Support\\Colors\\Color' && $node->var->name instanceof Identifier && isset(FilamentClassMap::colors()[$node->var->name->toString()])) {
+                return new String_(FilamentClassMap::colors()[$node->var->name->toString()]);
+            }
+
+            return null;
+        }
+
         if (! $node instanceof ClassConstFetch && ! $node instanceof StaticCall) {
             return null;
         }

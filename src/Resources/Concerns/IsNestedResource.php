@@ -198,7 +198,7 @@ trait IsNestedResource
         $model = $query->getModel();
 
         if (method_exists($model, $inverse) && ($inverseRelationship = $model->{$inverse}()) instanceof BelongsTo) {
-            return $query->where($inverseRelationship->getQualifiedForeignKeyName(), $parent->getKey());
+            return $query->where($inverseRelationship->getQualifiedForeignKeyName(), $parent->getAttribute($inverseRelationship->getOwnerKeyName()));
         }
 
         return $query->whereHas($inverse, static fn (Builder $q) => $q->whereKey($parent->getKey()));

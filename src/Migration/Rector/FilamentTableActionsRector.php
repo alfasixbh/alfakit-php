@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AlfaSix\Alfakit\Migration\Rector;
 
+use AlfaSix\Alfakit\Migration\TokenRewriter;
 use PhpParser\Node;
 use PhpParser\Node\Arg;
 use PhpParser\Node\ArrayItem;
@@ -78,7 +79,7 @@ final class FilamentTableActionsRector extends AbstractRector
                 continue;
             }
 
-            if ($method === 'toolbarActions' && ! str_contains($this->print($item->value), 'Bulk')) {
+            if ($method === 'toolbarActions' && ! TokenRewriter::startsWithBulkActionClass($this->print($item->value))) {
                 $header[] = $item;
             } else {
                 $bulk[] = $item;

@@ -491,7 +491,9 @@ it('creates the admin user in a fresh process when the panel was only just writt
         && array_slice($process->command, 1, 2) === ['artisan', 'make:alfakit-user']
         && in_array('--panel=backoffice', $process->command, true)
         && in_array('--email=owner@example.com', $process->command, true)
-        && in_array('--password=secret-password', $process->command, true));
+        // Off the command line: the password travels in the child's environment.
+        && ! in_array('--password=secret-password', $process->command, true)
+        && ($process->environment['ALFAKIT_USER_PASSWORD'] ?? null) === 'secret-password');
 });
 
 it('asks for the admin user interactively and creates it', function (): void {

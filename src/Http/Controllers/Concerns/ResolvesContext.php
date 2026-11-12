@@ -126,7 +126,8 @@ trait ResolvesContext
     {
         $middleware = array_values(array_filter(
             $middleware,
-            static fn (mixed $entry): bool => ! is_string($entry) || ! str_starts_with($entry, \AlfaSix\Alfakit\Http\Middleware\Authenticate::class),
+            // `Authenticate` itself only (the context token did its work), not `AuthenticateSession`.
+            static fn (mixed $entry): bool => ! is_string($entry) || ($entry !== \AlfaSix\Alfakit\Http\Middleware\Authenticate::class && ! str_starts_with($entry, \AlfaSix\Alfakit\Http\Middleware\Authenticate::class.':')),
         ));
 
         if ($middleware === []) {
@@ -143,6 +144,9 @@ trait ResolvesContext
 
                 return response()->noContent();
             });
+
+        // A middleware that signed the user out (a session whose password has changed) is a 401.
+        abort_if(! $passed && alfakit()->getCurrentPanel()?->auth()->check() === false, 401);
 
         abort_unless($passed, $response instanceof Response && in_array($response->getStatusCode(), [401, 403, 404], true) ? $response->getStatusCode() : 403);
     }

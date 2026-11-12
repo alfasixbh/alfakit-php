@@ -475,7 +475,9 @@ final class RichContentRenderer implements Htmlable
             'bulletList' => '<ul>'.$children().'</ul>',
             'orderedList' => ((int) ($attrs['start'] ?? 1)) > 1 ? '<ol start="'.(int) $attrs['start'].'">'.$children().'</ol>' : '<ol>'.$children().'</ol>',
             'listItem' => '<li>'.$children().'</li>',
-            'codeBlock' => '<pre><code'.(is_string($attrs['language'] ?? null) && preg_match('/^[\w+-]+$/', $attrs['language']) === 1 ? ' class="language-'.e($attrs['language']).'"' : '').'>'.$children().'</code></pre>',
+            // Inside `<pre>` a newline already breaks the line: the `<br>` text nodes get
+            // elsewhere would double every line.
+            'codeBlock' => '<pre><code'.(is_string($attrs['language'] ?? null) && preg_match('/^[\w+-]+$/', $attrs['language']) === 1 ? ' class="language-'.e($attrs['language']).'"' : '').'>'.str_replace('<br>', '', $children()).'</code></pre>',
             'horizontalRule' => '<hr>',
             'table' => '<table><tbody>'.$children().'</tbody></table>',
             'tableRow' => '<tr>'.$children().'</tr>',

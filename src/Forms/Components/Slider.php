@@ -522,7 +522,12 @@ class Slider extends Field
     {
         $min = $this->getMinValue();
         $max = $this->getMaxValue();
-        $interval = $density ?? $this->getStep();
+        // A density (or step) of zero or less would never reach the maximum.
+        $interval = ($density !== null && $density > 0 ? $density : $this->getStep()) ?: 1;
+
+        if ($interval <= 0) {
+            $interval = 1;
+        }
 
         while (($max - $min) / $interval > self::MAX_PIPS - 1) {
             $interval *= 2;

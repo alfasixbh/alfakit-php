@@ -590,7 +590,7 @@ class Panel
      */
     public function getAuthMiddleware(): array
     {
-        $middleware = [Authenticate::class.':'.$this->id, ...$this->authMiddleware];
+        $middleware = [Authenticate::class.':'.$this->id, Http\Middleware\AuthenticateSession::class.':'.$this->id, ...$this->authMiddleware];
 
         if ($this->hasEmailVerification) {
             $middleware[] = Http\Middleware\EnsureEmailIsVerified::class.':'.$this->id;
@@ -616,7 +616,16 @@ class Panel
             return Support\Html::toText($user->getAlfakitName());
         }
 
-        return (string) ($user->getAttribute('name') ?? $user->getAttribute('email') ?? $user->getAuthIdentifier());
+        return (string) (self::userAttribute($user, 'name') ?? self::userAttribute($user, 'email') ?? $user->getAuthIdentifier());
+    }
+
+    /**
+     * An attribute of the signed-in user, who need not be an Eloquent model (the `database`
+     * user provider signs in a `GenericUser`).
+     */
+    private static function userAttribute(Authenticatable $user, string $name): mixed
+    {
+        return $user instanceof Model ? $user->getAttribute($name) : ($user->{$name} ?? null);
     }
 
     /**
@@ -627,7 +636,7 @@ class Panel
     {
         $url = $user instanceof HasAvatar
             ? $user->getAlfakitAvatarUrl()
-            : ($user->getAttribute('avatar_url') ?? $user->getAttribute('avatar') ?? null);
+            : (self::userAttribute($user, 'avatar_url') ?? self::userAttribute($user, 'avatar'));
 
         return is_string($url) && $url !== '' ? $url : $this->getDefaultAvatarUrl($user);
     }
@@ -1655,7 +1664,7 @@ class Panel
 
         $tenants = $user->getTenants($this);
 
-        return $tenants instanceof \Illuminate\Support\Collection ? $tenants->all() : $tenants;
+        return array_values($tenants instanceof \Illuminate\Support\Collection ? $tenants->all() : $tenants);
     }
 
     /**
@@ -2275,7 +2284,7 @@ class Panel
             'user' => $user === null ? null : [
                 'id' => $user->getAuthIdentifier(),
                 'name' => $this->getUserName($user),
-                'email' => $user->getAttribute('email'),
+                'email' => self::userAttribute($user, 'email'),
                 'avatar' => $this->getUserAvatarUrl($user),
             ],
             'userMenu' => $user === null || ! $this->hasUserMenu ? null : [

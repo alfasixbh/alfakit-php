@@ -14,6 +14,7 @@ return [
         'loading' => 'Loading…',
     ],
     'key_value' => [
+        'locked' => 'The rows of :attribute can\'t be changed that way.',
         'key' => 'Key',
         'value' => 'Value',
         'add' => 'Add row',

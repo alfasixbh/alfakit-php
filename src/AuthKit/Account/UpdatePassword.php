@@ -104,8 +104,6 @@ class UpdatePassword extends Form
      */
     protected function keepSessionSignedIn(Model&Authenticatable $user): void
     {
-        if (request()->hasSession()) {
-            request()->session()->put('password_hash_'.$this->getPanel()->getAuthGuard(), $user->getAuthPassword());
-        }
+        \AlfaSix\Alfakit\Http\Middleware\AuthenticateSession::remember(request(), $this->getPanel(), $user);
     }
 }

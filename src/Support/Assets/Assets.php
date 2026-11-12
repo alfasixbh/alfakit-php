@@ -53,7 +53,8 @@ final class Assets
             $asset->package($package);
 
             // Registering again (a plugin booted on every request) replaces the entry.
-            self::$assets[$asset->getPackage().'/'.$asset->getExtension().'/'.$asset->getId()] = [
+            // Per panel: two panels may each register their own asset under the same id.
+            self::$assets[$asset->getPackage().'/'.$asset->getExtension().'/'.$asset->getId().($panel === null ? '' : '@'.implode(',', (array) $panel))] = [
                 'asset' => $asset,
                 'panels' => $panel === null ? null : array_values((array) $panel),
             ];

@@ -6,6 +6,7 @@ namespace AlfaSix\Alfakit\Actions\Exports;
 
 use AlfaSix\Alfakit\Support\Concerns\Configurable;
 use AlfaSix\Alfakit\Support\Concerns\EvaluatesClosures;
+use AlfaSix\Alfakit\Support\DateOnly;
 use AlfaSix\Alfakit\Support\Labels;
 use BackedEnum;
 use Closure;
@@ -501,6 +502,9 @@ class ExportColumn
             $state === null, is_scalar($state) => $state,
             $state instanceof BackedEnum => $state->value,
             $state instanceof UnitEnum => $state->name,
+            // A `date` cast is a calendar day: written as that day, not as a moment moved to
+            // the panel's timezone (which could be the day before).
+            $state instanceof DateTimeInterface && DateOnly::is($this->record, $this->getName()) => \Illuminate\Support\Carbon::instance($state)->format('Y-m-d'),
             $state instanceof DateTimeInterface => \Illuminate\Support\Carbon::instance($state)->setTimezone(alfakit()->getTimezone())->format('Y-m-d H:i:s'),
             $state instanceof Htmlable => strip_tags($state->toHtml()),
             $state instanceof Model => (string) $state->getKey(),

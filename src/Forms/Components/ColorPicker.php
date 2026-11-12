@@ -44,10 +44,15 @@ class ColorPicker extends Field
 
     protected function getTypeValidationRules(): array
     {
+        // Channels 0–255, hue 0–360, percentages 0–100: what the picker itself can produce.
+        $channel = '(25[0-5]|2[0-4]\d|1?\d?\d)';
+        $percent = '(100|[1-9]?\d)%';
+        $hue = '(360|3[0-5]\d|[12]?\d?\d)';
+
         return [match ($this->getFormat()) {
-            'rgb' => 'regex:/^rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\)$/i',
-            'rgba' => 'regex:/^rgba\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*(0|1|0?\.\d+)\s*\)$/i',
-            'hsl' => 'regex:/^hsl\(\s*\d{1,3}\s*,\s*\d{1,3}%\s*,\s*\d{1,3}%\s*\)$/i',
+            'rgb' => "regex:/^rgb\(\s*{$channel}\s*,\s*{$channel}\s*,\s*{$channel}\s*\)$/i",
+            'rgba' => "regex:/^rgba\(\s*{$channel}\s*,\s*{$channel}\s*,\s*{$channel}\s*,\s*(0|1|0?\.\d+|1\.0+)\s*\)$/i",
+            'hsl' => "regex:/^hsl\(\s*{$hue}\s*,\s*{$percent}\s*,\s*{$percent}\s*\)$/i",
             default => 'hex_color',
         }];
     }

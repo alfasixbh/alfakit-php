@@ -7,6 +7,7 @@ namespace AlfaSix\Alfakit\Tables\Grouping;
 use AlfaSix\Alfakit\Support\Concerns\Configurable;
 use AlfaSix\Alfakit\Support\Concerns\EvaluatesClosures;
 use AlfaSix\Alfakit\Support\Concerns\HasEnumState;
+use AlfaSix\Alfakit\Support\DateOnly;
 use AlfaSix\Alfakit\Support\EnumState;
 use AlfaSix\Alfakit\Support\Labels;
 use AlfaSix\Alfakit\Support\RecordState;
@@ -281,7 +282,7 @@ class Group
         }
 
         if ($this->isDate()) {
-            $date = $this->toDate($state);
+            $date = $this->toDate($state, DateOnly::is($record, $this->getColumn()));
 
             return $date?->format('Y-m-d');
         }
@@ -323,7 +324,7 @@ class Group
         }
 
         if ($this->isDate()) {
-            $date = $this->toDate($state);
+            $date = $this->toDate($state, DateOnly::is($record, $this->getColumn()));
 
             if ($date !== null) {
                 return $date->translatedFormat($this->evaluate($this->dateFormat) ?? 'M j, Y');
@@ -467,7 +468,11 @@ class Group
 
     // ---------------------------------------------------------------- Helpers
 
-    protected function toDate(mixed $state): ?Carbon
+    /**
+     * `$dateOnly`: a `date` cast is a calendar day, shown as it is; a moment is shown in the
+     * panel's timezone.
+     */
+    protected function toDate(mixed $state, bool $dateOnly = false): ?Carbon
     {
         try {
             $date = $state instanceof DateTimeInterface ? Carbon::instance($state) : Carbon::parse((string) $state);
@@ -475,7 +480,7 @@ class Group
             return null;
         }
 
-        return $date->setTimezone(alfakit()->getTimezone());
+        return $dateOnly ? $date : $date->setTimezone(alfakit()->getTimezone());
     }
 
     protected function stringify(mixed $value): ?string

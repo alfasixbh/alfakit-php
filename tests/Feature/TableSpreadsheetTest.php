@@ -174,7 +174,7 @@ it('checks the update policy on every record', function (): void {
 
     expect($response['errors'])->toHaveCount(1)
         ->and($response['errors'][0]['record'])->toBe(2)
-        ->and(Post::query()->pluck('title', 'id')->all())->toBe([1 => 'Alpha', 2 => 'Beta', 3 => 'Gamma']);
+        ->and(Post::query()->orderBy('id')->pluck('title', 'id')->all())->toBe([1 => 'Alpha', 2 => 'Beta', 3 => 'Gamma']);
 });
 
 it('refuses read-only columns, unknown and trashed records and disabled cells', function (): void {
@@ -197,7 +197,7 @@ it('refuses read-only columns, unknown and trashed records and disabled cells', 
     ])->assertStatus(422)->json();
 
     expect($response['errors'])->toHaveCount(5)
-        ->and(Post::withTrashed()->pluck('title', 'id')->all())->toBe([1 => 'Alpha', 2 => 'Beta', 3 => 'Gamma'])
+        ->and(Post::withTrashed()->orderBy('id')->pluck('title', 'id')->all())->toBe([1 => 'Alpha', 2 => 'Beta', 3 => 'Gamma'])
         ->and(Post::query()->find(1)->slug)->toBe('alpha');
 
     // The inline cell endpoint does not edit text columns either.

@@ -90,6 +90,9 @@ class CreateAction extends Action
                         $resource::associateRecordWithUser($record);
                     }
 
+                    // Nested resources: the new record belongs to the parent record, as on create pages.
+                    $attachToParent = $resource !== null && $resource::associateRecordWithParent($record);
+
                     // Tenancy panels: the new record belongs to the current tenant, as on create pages.
                     $tenant = alfakit()->getTenant();
 
@@ -97,6 +100,10 @@ class CreateAction extends Action
                         $record = $resource::associateRecordWithTenant($record, $tenant);
                     } else {
                         $record->save();
+                    }
+
+                    if ($attachToParent) {
+                        $resource::attachRecordToParent($record);
                     }
                 }
 

@@ -40,6 +40,9 @@ final class TokenRewriter
      */
     private array $imports = [];
 
+    /** @var array<string, true>|null */
+    private ?array $otherImportAliases = null;
+
     /** @var array<int, array<int, array{alias: string, text: string}>> */
     private array $importSlots = [];
 
@@ -74,6 +77,7 @@ final class TokenRewriter
         $this->out = array_map(static fn (PhpToken $token): string => $token->text, $this->tokens);
         $this->namespace = null;
         $this->imports = [];
+        $this->otherImportAliases = null;
         $this->importSlots = [];
         $this->importIndent = [];
         $this->importTokenIndexes = [];
@@ -472,6 +476,41 @@ final class TokenRewriter
     }
 
     /**
+     * The short names the file's imports of classes outside Filament (and outside a renamed
+     * application namespace) already use.
+     *
+     * @return array<string, true>
+     */
+    private function otherImportAliases(): array
+    {
+        if ($this->otherImportAliases !== null) {
+            return $this->otherImportAliases;
+        }
+
+        $this->otherImportAliases = [];
+        $source = implode('', array_map(static fn (PhpToken $token): string => $token->text, $this->tokens));
+
+        if (preg_match_all('/^use\s+(?!function\b|const\b)([^;{]+);/m', $source, $matches) > 0) {
+            foreach ($matches[1] as $list) {
+                foreach (explode(',', $list) as $part) {
+                    if (trim($part) === '') {
+                        continue;
+                    }
+
+                    [$fqcn, $alias] = self::parseImportItem(trim($part));
+                    $fqcn = ltrim($fqcn, '\\');
+
+                    if (! FilamentClassMap::isFilament($fqcn) && self::renameAppNamespace($fqcn) === $fqcn) {
+                        $this->otherImportAliases[$alias] = true;
+                    }
+                }
+            }
+        }
+
+        return $this->otherImportAliases;
+    }
+
+    /**
      * Rewrite one top-level `use` statement starting at `$start`; returns the index of its `;`.
      */
     private function rewriteImport(int $start): int
@@ -543,6 +582,14 @@ final class TokenRewriter
             }
 
             $newAlias = $new === null ? $alias : ($explicitAlias ? $alias : self::basename($new));
+            $collides = false;
+
+            // The new short name may already belong to another import of the file
+            // (`Form` → `Schema` beside the `Schema` facade): import it under an alias.
+            if ($new !== null && ! $explicitAlias && $newAlias !== $alias && isset($this->otherImportAliases()[$newAlias])) {
+                $newAlias = 'Alfakit'.$newAlias;
+                $collides = true;
+            }
 
             // Two imports that map to the same class (v3 `Form` and `Infolist` → `Schema`) keep one statement.
             $duplicate = false;
@@ -563,7 +610,7 @@ final class TokenRewriter
             }
 
             $target = $new ?? $fqcn;
-            $statement = 'use '.$target.($explicitAlias && $alias !== self::basename($target) ? ' as '.$alias : '').';';
+            $statement = 'use '.$target.($collides ? ' as '.$newAlias : ($explicitAlias && $alias !== self::basename($target) ? ' as '.$alias : '')).';';
 
             $this->importSlots[$start][] = ['alias' => $alias, 'text' => $statement];
         }
@@ -807,7 +854,8 @@ final class TokenRewriter
                     $this->removeNamesFromList($i, $end, $contracts, 'use');
                 }
 
-                $i = $end;
+                // A `use A, B { ... }` block: its brace is counted on the next round.
+                $i = $this->tokens[$end]->text === '{' ? $end - 1 : $end;
             }
         }
     }
@@ -1040,7 +1088,12 @@ final class TokenRewriter
             }, $text);
 
             // Directory names: app_path('Filament/Resources') → app_path('Alfakit/Resources').
-            $text = (string) preg_replace('/^([\'"])Filament\//', '$1Alfakit/', $text);
+            // Only as the argument of a path helper: `'Filament/exports'` on a storage disk
+            // is the application's own path.
+            if ($this->isPathHelperArgument($i)) {
+                $text = (string) preg_replace('/^([\'"])Filament\//', '$1Alfakit/', $text);
+            }
+
             $text = (string) preg_replace('/^([\'"])app\/Filament\//', '$1app/Alfakit/', $text);
 
             // Panel route names: route('filament.admin.resources.posts.edit') → 'alfakit.admin.resources.posts.edit'.
@@ -1137,8 +1190,17 @@ final class TokenRewriter
                 $colors = FilamentClassMap::colors();
 
                 if (isset($colors[$case])) {
-                    $this->blank($i, $member);
-                    $this->out[$member] = "'{$colors[$case]}'";
+                    $end = $member;
+
+                    // `Color::Amber[500]`: a shade of Filament's palette. The colour is one
+                    // CSS value here, so the index goes (it would read a character of the string).
+                    if ($after !== null && $this->tokens[$after]->text === '[') {
+                        $end = $this->matchClose($after);
+                        $this->report->note(MigrationReport::SECTION_PANEL, $this->file, $token->line, '`Color::'.$case.'['.trim($this->text($after + 1, $end - 1)).']` became the colour\'s base value');
+                    }
+
+                    $this->blank($i, $end);
+                    $this->out[$end] = "'{$colors[$case]}'";
                 } else {
                     $this->report->add(MigrationReport::SECTION_PANEL, $this->file, $token->line, "`Color::{$case}` has no palette", 'Use a CSS colour string, e.g. `\'#2563eb\'`.');
                 }
@@ -1216,6 +1278,8 @@ final class TokenRewriter
             $previous = $this->previousSignificant($i);
             $inChain = $previous !== null && in_array($this->tokens[$previous]->text, [')', ']'], true);
             $onThis = $previous !== null && $this->tokens[$previous]->text === '$this';
+            // `$table->bulkActions([...])`: the first call on the table is part of its chain too.
+            $onVariable = $previous !== null && $this->tokens[$previous]->is(T_VARIABLE) && ! $onThis;
 
             // Livewire events on pages and widgets: `$this->dispatch('refresh')` has no AlfaKit
             // equivalent; the call becomes `null` (the code keeps running) and gets a TODO.
@@ -1261,13 +1325,13 @@ final class TokenRewriter
                 }
             }
 
-            if ($method === 'toolbarActions' && $inChain) {
+            if ($method === 'toolbarActions' && ($inChain || $onVariable)) {
                 $this->rewriteToolbarActions($i, $open, $close);
 
                 continue;
             }
 
-            if (in_array($method, ['bulkActions', 'groupedBulkActions'], true) && $inChain) {
+            if (in_array($method, ['bulkActions', 'groupedBulkActions'], true) && ($inChain || $onVariable)) {
                 $this->out[$name] = 'bulkActions';
                 $this->unwrapBulkActionGroups($open, $close);
 
@@ -1371,6 +1435,15 @@ final class TokenRewriter
      * `->toolbarActions([CreateAction::make(), BulkActionGroup::make([DeleteBulkAction::make()])])`
      * → `->headerActions([CreateAction::make()])->bulkActions([DeleteBulkAction::make()])`.
      */
+    /**
+     * `DeleteBulkAction::make()`, `Tables\Actions\BulkAction::make('x')`: by the class the
+     * element starts with, not by a name that merely contains "Bulk".
+     */
+    public static function startsWithBulkActionClass(string $code): bool
+    {
+        return preg_match('/^(?:new\s+)?\\\\?(?:\w+\\\\)*\w*BulkAction\w*\b/', ltrim($code)) === 1;
+    }
+
     private function rewriteToolbarActions(int $arrow, int $open, int $close): void
     {
         $array = $this->nextSignificant($open);
@@ -1392,7 +1465,7 @@ final class TokenRewriter
                 foreach ($this->innerElements($from, $to) as $inner) {
                     $bulk[] = $inner;
                 }
-            } elseif (str_contains($text, 'Bulk')) {
+            } elseif (self::startsWithBulkActionClass($text)) {
                 $bulk[] = $text;
             } else {
                 $header[] = $text;
@@ -1763,8 +1836,15 @@ final class TokenRewriter
                 continue;
             }
 
+            // `public ?array $data = []` is the Livewire state of the page form, which AlfaKit
+            // keeps itself. A class that also reads or writes `$this->data` needs the
+            // property: it stays, with a note in the report.
             if ($property === 'data' && $isPage && in_array('public', $modifiers, true)) {
-                $this->removeMember($start, $end);
+                if ($this->usesOwnProperty('data')) {
+                    $this->report->note(MigrationReport::SECTION_METHODS, $this->file, $this->tokens[$start]->line, '`public $data` was kept', 'The class uses `$this->data` itself. The page form\'s state is `$this->getForm()->getState()` (or `$this->formData`); move what belongs to the form there.');
+                } else {
+                    $this->removeMember($start, $end);
+                }
 
                 continue;
             }
@@ -2122,6 +2202,50 @@ final class TokenRewriter
         return null;
     }
 
+    /**
+     * Whether the class body reads or writes `$this-><name>` (not a method call).
+     */
+    private function usesOwnProperty(string $name): bool
+    {
+        for ($i = 0; $i < $this->count - 2; $i++) {
+            if (! $this->tokens[$i]->is(T_VARIABLE) || $this->tokens[$i]->text !== '$this') {
+                continue;
+            }
+
+            $arrow = $this->nextSignificant($i);
+            $property = $arrow === null ? null : $this->nextSignificant($arrow);
+
+            if ($arrow === null || $property === null || ! $this->tokens[$arrow]->is([T_OBJECT_OPERATOR, T_NULLSAFE_OBJECT_OPERATOR])) {
+                continue;
+            }
+
+            if ($this->tokens[$property]->is(T_STRING) && $this->tokens[$property]->text === $name) {
+                $after = $this->nextSignificant($property);
+
+                if ($after === null || $this->tokens[$after]->text !== '(') {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Whether the string at `$i` is the first argument of `app_path()`, `base_path()` or
+     * `resource_path()`.
+     */
+    private function isPathHelperArgument(int $i): bool
+    {
+        $open = $this->previousSignificant($i);
+        $function = $open === null ? null : $this->previousSignificant($open);
+
+        return $open !== null && $function !== null
+            && $this->tokens[$open]->text === '('
+            && $this->tokens[$function]->is([T_STRING, T_NAME_FULLY_QUALIFIED])
+            && in_array(ltrim($this->tokens[$function]->text, '\\'), ['app_path', 'base_path', 'resource_path'], true);
+    }
+
     private function previousSignificant(int $i): ?int
     {
         for ($j = $i - 1; $j >= 0; $j--) {
@@ -2153,6 +2277,11 @@ final class TokenRewriter
 
         for ($i = $open; $i < $this->count; $i++) {
             $token = $this->tokens[$i];
+
+            // Text inside a string ("Total (") is not code.
+            if ($token->is([T_ENCAPSED_AND_WHITESPACE, T_CONSTANT_ENCAPSED_STRING, T_INLINE_HTML, T_COMMENT, T_DOC_COMMENT])) {
+                continue;
+            }
 
             if (in_array($token->text, ['(', '[', '{'], true) || $token->is([T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES])) {
                 $depth++;

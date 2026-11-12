@@ -292,23 +292,29 @@ class Notification
      */
     public static function fromArray(array $data): static
     {
-        $static = static::make($data['id'] ?? null)
-            ->title($data['title'] ?? null)
+        // A row another package wrote (a plain Laravel database notification) may hold any
+        // type under these keys: what doesn't fit is left out instead of failing the list.
+        $text = static fn (string $key): ?string => is_scalar($data[$key] ?? null) ? (string) $data[$key] : null;
+
+        $static = static::make($text('id'))
+            ->title($text('title'))
             // Bodies AlfaKit stored (`format: alfakit`) were escaped when they were serialised.
-            // Any other row (a plain Laravel database notification, one left by another
-            // package) may hold raw user text: it is sanitised before it is shown as HTML.
+            // Any other row may hold raw user text: it is sanitised before it is shown as HTML.
             ->body(isset($data['body']) && is_string($data['body'])
                 ? new \Illuminate\Support\HtmlString(($data['format'] ?? null) === 'alfakit' ? $data['body'] : \AlfaSix\Alfakit\Support\Html::sanitize($data['body']))
                 : null)
-            ->status($data['status'] ?? null)
-            ->icon($data['icon'] ?? null)
-            ->iconColor($data['iconColor'] ?? null)
-            ->color($data['color'] ?? null)
-            ->duration($data['duration'] ?? null)
-            ->date($data['date'] ?? null)
-            ->view($data['view'] ?? null, $data['viewData'] ?? []);
+            ->status($text('status'))
+            ->icon($text('icon'))
+            ->iconColor($text('iconColor'))
+            ->color($text('color'))
+            ->duration(is_int($data['duration'] ?? null) || is_string($data['duration'] ?? null) ? $data['duration'] : null)
+            ->date(is_string($data['date'] ?? null) ? $data['date'] : null)
+            ->view($text('view'), is_array($data['viewData'] ?? null) ? $data['viewData'] : []);
 
-        $static->actions(array_map(static fn (array $action): Action => Action::fromArray($action), $data['actions'] ?? []));
+        $static->actions(array_map(
+            static fn (array $action): Action => Action::fromArray($action),
+            array_values(array_filter(is_array($data['actions'] ?? null) ? $data['actions'] : [], is_array(...))),
+        ));
 
         return $static;
     }

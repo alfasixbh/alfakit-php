@@ -225,7 +225,13 @@ class SetupCommand extends Command
                 $this->newLine();
                 $this->components->info('Admin user');
 
-                $result = AppEnvironment::artisan(['make:alfakit-user', ...collect($arguments)->map(fn (mixed $value, string $key): string => $key.'='.$value)->values()->all(), '--no-interaction'], fn (string $buffer) => $this->output->write($buffer));
+                // The password travels in the child's environment, not on its command line
+                // (which every user of the machine can read in the process list).
+                $result = AppEnvironment::artisan(
+                    ['make:alfakit-user', ...collect($arguments)->except('--password')->map(fn (mixed $value, string $key): string => $key.'='.$value)->values()->all(), '--no-interaction'],
+                    fn (string $buffer) => $this->output->write($buffer),
+                    [MakeUserCommand::PASSWORD_ENVIRONMENT_VARIABLE => (string) $password],
+                );
                 $this->record('Admin user', $result->successful() ? 'done' : 'failed');
 
                 return;
@@ -628,6 +634,11 @@ class SetupCommand extends Command
         $head = substr($contents, 0, $position);
         $body = substr($contents, $position);
 
+        // `use A, B { A::x insteadof B; }`: not edited (the caller notes it as a manual step).
+        if (preg_match('/\A(?:\s*(?:\/\*\*.*?\*\/|use [A-Z][^;{]*;))*\s*use [A-Z][^;{]*\{/s', $body) === 1) {
+            return null;
+        }
+
         // The trait statements at the top of the class body (docblocks between them allowed).
         if (preg_match('/\A(?:[ \t]*(?:\/\*\*.*?\*\/|use [A-Z][^;]*;)[ \t]*\n)+/s', $body, $traits) === 1 && preg_match('/^[ \t]*use [A-Z]/m', $traits[0]) === 1) {
             // Join the last trait statement (`use HasFactory, Notifiable, HasRoles;`), the way
@@ -713,9 +724,10 @@ class SetupCommand extends Command
         }
 
         if (filled($logo)) {
-            $logo = str_replace("'", '', (string) $logo);
+            // `var_export()`: a quote or a backslash in the value stays a valid PHP string.
+            $logo = str_replace('\\', '/', (string) $logo);
             $isUrl = preg_match('#^(https?:)?//#', $logo) === 1;
-            $value = $isUrl ? "'{$logo}'" : "asset('".ltrim(Str::after($logo, 'public/'), '/')."')";
+            $value = $isUrl ? var_export($logo, true) : 'asset('.var_export(ltrim(Str::after($logo, 'public/'), '/'), true).')';
 
             // Written anyway (the file may come later), but a missing file is a broken image.
             if (! $isUrl && ! $files->exists(public_path(ltrim(Str::after($logo, 'public/'), '/')))) {
@@ -726,7 +738,7 @@ class SetupCommand extends Command
         }
 
         if (filled($font)) {
-            $contents = PanelProviderEditor::setCall($contents, 'font', "'".str_replace("'", '', (string) $font)."'") ?? $contents;
+            $contents = PanelProviderEditor::setCall($contents, 'font', var_export((string) $font, true)) ?? $contents;
         }
 
         if ($contents === $original) {

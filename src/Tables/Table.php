@@ -36,6 +36,7 @@ use Illuminate\Pagination\CursorPaginator;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Traits\Macroable;
 use ReflectionFunction;
 use ReflectionNamedType;
@@ -2067,6 +2068,11 @@ class Table implements HasResource
 
         abort_if($records->count() !== count(array_unique(array_map('strval', $keys))), 404);
 
+        // A key that matches a record without being its key ("01" for 1) is not listed.
+        foreach ($keys as $key) {
+            abort_unless(isset($records[(string) $key]), 404);
+        }
+
         foreach ($records as $record) {
             abort_unless($this->authorizes('update', $record), 403);
         }
@@ -2075,58 +2081,61 @@ class Table implements HasResource
         $newOrder = array_values(array_unique(array_map('strval', $keys)));
         $this->callReorderingHook($this->beforeReordering, $newOrder);
 
-        $descending = $this->getReorderDirection() === 'desc';
+        // All or nothing: a failure midway must not leave half of the new order behind.
+        DB::transaction(function () use ($records, $keys, $column, $query, $newOrder): void {
+            $descending = $this->getReorderDirection() === 'desc';
 
-        // The renderer only sends the keys it shows (one page of a paginated table), so
-        // the moved records swap the positions they already hold instead of being renumbered
-        // 1..n, which would overwrite the positions of records on other pages.
-        $positions = $records->map(static fn (Model $record): mixed => $record->getAttribute($column))->values()->all();
-        $distinct = ! in_array(null, $positions, true) && count(array_unique(array_map('strval', $positions))) === count($positions);
+            // The renderer only sends the keys it shows (one page of a paginated table), so
+            // the moved records swap the positions they already hold instead of being renumbered
+            // 1..n, which would overwrite the positions of records on other pages.
+            $positions = $records->map(static fn (Model $record): mixed => $record->getAttribute($column))->values()->all();
+            $distinct = ! in_array(null, $positions, true) && count(array_unique(array_map('strval', $positions))) === count($positions);
 
-        if ($distinct) {
-            $descending ? rsort($positions) : sort($positions);
+            if ($distinct) {
+                $descending ? rsort($positions) : sort($positions);
 
-            foreach (array_values(array_unique(array_map('strval', $keys))) as $index => $key) {
-                $this->writeReorderPosition($records[$key], $column, $positions[$index]);
+                foreach (array_values(array_unique(array_map('strval', $keys))) as $index => $key) {
+                    $this->writeReorderPosition($records[$key], $column, $positions[$index]);
+                }
+
+                $this->callReorderingHook($this->afterReordering, $newOrder);
+
+                return;
+            }
+
+            // Missing or tied positions: renumber every listed record, keeping the moved
+            // records in the slots they occupied and the rest where they were.
+            $keyName = $records->first()?->getKeyName() ?? 'id';
+            $listed = (clone $query)->reorder()
+                ->orderBy($query->qualifyColumn($column), $descending ? 'desc' : 'asc')
+                ->orderBy($query->qualifyColumn($keyName))
+                ->pluck($keyName)
+                ->map(static fn (mixed $key): string => (string) $key)
+                ->all();
+            $queue = array_values(array_unique(array_map('strval', $keys)));
+            $moved = array_flip($queue);
+            $sequence = [];
+
+            foreach ($listed as $key) {
+                $sequence[] = isset($moved[$key]) ? (string) array_shift($queue) : $key;
+            }
+
+            $count = count($sequence);
+
+            foreach ($sequence as $index => $key) {
+                $position = $descending ? $count - $index : $index + 1;
+
+                if (isset($records[$key])) {
+                    $this->writeReorderPosition($records[$key], $column, $position);
+
+                    continue;
+                }
+
+                (clone $query)->reorder()->whereKey($key)->update([$column => $position]);
             }
 
             $this->callReorderingHook($this->afterReordering, $newOrder);
-
-            return;
-        }
-
-        // Missing or tied positions: renumber every listed record, keeping the moved
-        // records in the slots they occupied and the rest where they were.
-        $keyName = $records->first()?->getKeyName() ?? 'id';
-        $listed = (clone $query)->reorder()
-            ->orderBy($query->qualifyColumn($column), $descending ? 'desc' : 'asc')
-            ->orderBy($query->qualifyColumn($keyName))
-            ->pluck($keyName)
-            ->map(static fn (mixed $key): string => (string) $key)
-            ->all();
-        $queue = array_values(array_unique(array_map('strval', $keys)));
-        $moved = array_flip($queue);
-        $sequence = [];
-
-        foreach ($listed as $key) {
-            $sequence[] = isset($moved[$key]) ? (string) array_shift($queue) : $key;
-        }
-
-        $count = count($sequence);
-
-        foreach ($sequence as $index => $key) {
-            $position = $descending ? $count - $index : $index + 1;
-
-            if (isset($records[$key])) {
-                $this->writeReorderPosition($records[$key], $column, $position);
-
-                continue;
-            }
-
-            (clone $query)->reorder()->whereKey($key)->update([$column => $position]);
-        }
-
-        $this->callReorderingHook($this->afterReordering, $newOrder);
+        });
     }
 
     protected function writeReorderPosition(Model $record, string $column, mixed $position): void

@@ -11,6 +11,7 @@ use AlfaSix\Alfakit\AuthKit\Support\Fortify;
 use AlfaSix\Alfakit\Forms\Components\TextInput;
 use AlfaSix\Alfakit\Schemas\Schema;
 use AlfaSix\Alfakit\Support\Enums\Color;
+use Closure;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Facades\Hash;
@@ -48,6 +49,12 @@ class Register extends AuthKitComponent
                 ->maxLength(255)
                 ->autocomplete('email')
                 ->unique(table: (new $model)->getTable())
+                // Also on databases that compare text case-sensitively: `Ada@x.com` is `ada@x.com`.
+                ->rule(static fn (): Closure => static function (string $attribute, mixed $value, Closure $fail) use ($model): void {
+                    if (is_string($value) && $model::query()->whereRaw('lower(email) = ?', [mb_strtolower($value)])->exists()) {
+                        $fail(__('validation.unique', ['attribute' => __('alfakit::auth.register.email')]));
+                    }
+                })
                 ->default(fn (): ?string => $invited ? RegistrationInvitations::email($panel) : null)
                 ->readOnly($invited),
             TextInput::make('password')
