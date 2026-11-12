@@ -12,6 +12,7 @@ use AlfaSix\Alfakit\Support\Enums\Alignment;
 use AlfaSix\Alfakit\Support\Enums\VerticalAlignment;
 use AlfaSix\Alfakit\Support\Labels;
 use AlfaSix\Alfakit\Support\RecordState;
+use AlfaSix\Alfakit\Support\SearchQuery;
 use AlfaSix\Alfakit\Support\Serializable;
 use AlfaSix\Alfakit\Tables\Enums\PaginationMode;
 use AlfaSix\Alfakit\Tables\Table;
@@ -612,21 +613,7 @@ abstract class Column
 
     protected function applyLike(Builder $query, string $column, string $search, bool $or): void
     {
-        $driver = $query->getConnection()->getDriverName();
-        $operator = $driver === 'pgsql' || $this->isSearchForcedCaseInsensitive ? 'ilike' : 'like';
-
-        if ($operator === 'ilike' && $driver !== 'pgsql') {
-            $column = "lower({$column})";
-            $search = mb_strtolower($search);
-            $operator = 'like';
-            $method = $or ? 'orWhereRaw' : 'whereRaw';
-            $query->{$method}("{$column} {$operator} ?", ["%{$search}%"]);
-
-            return;
-        }
-
-        $method = $or ? 'orWhere' : 'where';
-        $query->{$method}($column, $operator, "%{$search}%");
+        SearchQuery::contains($query, $column, $search, $or, $this->isSearchForcedCaseInsensitive);
     }
 
     // ---------------------------------------------------------------- Layout

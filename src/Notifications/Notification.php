@@ -294,8 +294,12 @@ class Notification
     {
         $static = static::make($data['id'] ?? null)
             ->title($data['title'] ?? null)
-            // Stored bodies were escaped when they were serialised.
-            ->body(isset($data['body']) && is_string($data['body']) ? new \Illuminate\Support\HtmlString($data['body']) : null)
+            // Bodies AlfaKit stored (`format: alfakit`) were escaped when they were serialised.
+            // Any other row (a plain Laravel database notification, one left by another
+            // package) may hold raw user text: it is sanitised before it is shown as HTML.
+            ->body(isset($data['body']) && is_string($data['body'])
+                ? new \Illuminate\Support\HtmlString(($data['format'] ?? null) === 'alfakit' ? $data['body'] : \AlfaSix\Alfakit\Support\Html::sanitize($data['body']))
+                : null)
             ->status($data['status'] ?? null)
             ->icon($data['icon'] ?? null)
             ->iconColor($data['iconColor'] ?? null)

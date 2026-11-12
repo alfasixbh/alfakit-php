@@ -126,6 +126,24 @@ class ExportCsv implements ShouldQueue
         });
     }
 
+    /**
+     * The job itself failed (a timeout, a lost worker, a deleted tenant): its records count
+     * as processed (none exported), so the export still completes and the user gets the
+     * file with the other chunks.
+     */
+    public function failed(?Throwable $exception): void
+    {
+        $this->export->addProcessedRows(count($this->keys), 0);
+
+        if ($this->export->markAsCompletedIfFinished()) {
+            dispatch(
+                (new ExportCompletion($this->export, $this->columnMap, $this->options, $this->formats, $this->locale))
+                    ->onConnection($this->connection)
+                    ->onQueue($this->queue),
+            );
+        }
+    }
+
     public static function getChunkPath(Export $export, int $chunk): string
     {
         return $export->getFileDirectory().'/chunks/'.str_pad((string) $chunk, 6, '0', STR_PAD_LEFT).'.jsonl';

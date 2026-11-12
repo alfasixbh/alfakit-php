@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AlfaSix\Alfakit\Panel\Concerns;
 
 use AlfaSix\Alfakit\Http\Controllers\ActionController;
+use AlfaSix\Alfakit\Http\Controllers\DeferredSchemaController;
 use AlfaSix\Alfakit\Http\Controllers\LocaleController;
 use AlfaSix\Alfakit\Http\Controllers\PageMethodController;
 use AlfaSix\Alfakit\Http\Controllers\PanelHomeController;
@@ -129,7 +130,7 @@ trait HasGuestAccess
             return false;
         }
 
-        if (in_array($controller, [ActionController::class, SchemaController::class, TableController::class, LocaleController::class, PageMethodController::class], true)) {
+        if (in_array($controller, [ActionController::class, SchemaController::class, DeferredSchemaController::class, TableController::class, LocaleController::class, PageMethodController::class], true)) {
             return $this->hasTenancy() && $route->parameter('tenant') !== null
                 ? $this->findTenantForGuest($route->parameter('tenant')) !== null
                 : $this->hasGuestAccess();

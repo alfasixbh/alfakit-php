@@ -11,6 +11,7 @@ use AlfaSix\Alfakit\Actions\Exceptions\Halt;
 use AlfaSix\Alfakit\Forms\Components\TextInput;
 use AlfaSix\Alfakit\Notifications\Notification;
 use AlfaSix\Alfakit\Tests\Fixtures\Models\Post;
+use AlfaSix\Alfakit\Tests\Fixtures\Models\User;
 use Illuminate\Validation\ValidationException;
 
 it('serialises a basic action', function (): void {
@@ -199,4 +200,46 @@ it('hides an EditAction with nothing to edit: no form, no page to link to (W-V5-
         ->and(EditAction::make()->record($post)->using(fn () => null)->isVisible())->toBeTrue()
         ->and(EditAction::make()->record($post)->action(fn () => null)->isVisible())->toBeTrue()
         ->and(EditAction::make()->offeredBeforeRecord()->isVisible())->toBeTrue();
+});
+
+it('keeps a hidden attribute whose field was left blank in the edit modal', function (): void {
+    session()->start();
+    $user = User::query()->create(['name' => 'Ada', 'email' => 'ada@example.com', 'password' => 'secret', 'remember_token' => 'keep-me']);
+
+    $form = [TextInput::make('name'), TextInput::make('remember_token')];
+
+    // `remember_token` is hidden on the model, so its field loads blank.
+    EditAction::make()->record($user)->form($form)->execute(['name' => 'Grace', 'remember_token' => null]);
+
+    expect($user->fresh()->name)->toBe('Grace')
+        ->and($user->fresh()->remember_token)->toBe('keep-me');
+
+    EditAction::make()->record($user->fresh())->form($form)->execute(['name' => 'Grace', 'remember_token' => 'typed']);
+
+    expect($user->fresh()->remember_token)->toBe('typed');
+});
+
+it('counts chunked bulk records while the action goes through them', function (): void {
+    session()->start();
+
+    foreach (['a', 'b', 'c', 'd', 'e'] as $i => $slug) {
+        Post::query()->create(['title' => $slug, 'slug' => $slug, 'rating' => $i === 0 ? 0 : 5]);
+    }
+
+    $action = BulkAction::make('purge')
+        ->chunkSelectedRecords(2)
+        ->authorizeIndividualRecords(fn (Post $record): bool => $record->rating !== 0)
+        ->selectedRecordsQuery(Post::query())
+        ->action(function (Illuminate\Support\Enumerable $records): void {
+            foreach ($records as $record) {
+                $record->delete();
+            }
+        });
+
+    $action->execute();
+
+    // Counting again would re-run the query: the deleted records are gone from it.
+    expect($action->getBulkProcessingTotalCount())->toBe(4)
+        ->and($action->getBulkProcessingSuccessCount())->toBe(4)
+        ->and($action->getUnauthorizedRecordsCount())->toBe(1);
 });

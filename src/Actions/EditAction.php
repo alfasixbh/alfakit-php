@@ -60,6 +60,14 @@ class EditAction extends Action
                     // In a BelongsToMany relation manager, `withPivot()` fields go to the pivot row.
                     [$attributes, $pivot] = $action->splitPivotData($data);
 
+                    // The model's `$hidden` attributes never reach the browser, so their fields
+                    // load blank: a blank value keeps the stored one (as on the edit page).
+                    foreach ($record->getHidden() as $hidden) {
+                        if (array_key_exists($hidden, $attributes) && ($attributes[$hidden] === null || $attributes[$hidden] === '')) {
+                            unset($attributes[$hidden]);
+                        }
+                    }
+
                     $record->fill($attributes);
 
                     // `scopeToUser()` resources: the record stays the signed-in user's.

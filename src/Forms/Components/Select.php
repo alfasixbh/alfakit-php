@@ -8,6 +8,7 @@ use AlfaSix\Alfakit\Forms\Components\Concerns\CanAllowHtmlOptions;
 use AlfaSix\Alfakit\Forms\Components\Concerns\CanCreateAndEditOptions;
 use AlfaSix\Alfakit\Forms\Components\Concerns\HasAffixes;
 use AlfaSix\Alfakit\Support\Concerns\HasOptions;
+use AlfaSix\Alfakit\Support\SearchQuery;
 use AlfaSix\Alfakit\Support\TenantScope;
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
@@ -434,7 +435,7 @@ class Select extends Field
 
             $query->where(function (Builder $query) use ($columns, $search): void {
                 foreach ($columns as $column) {
-                    $query->orWhere($column, 'like', "%{$search}%");
+                    SearchQuery::contains($query, $column, $search, or: true);
                 }
             });
         }

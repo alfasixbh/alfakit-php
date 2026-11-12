@@ -163,3 +163,26 @@ it('does not run a layout component schema() closure again on every walk of the 
     expect($runs)->toBeLessThanOrEqual(3)
         ->and(array_keys($schema->getFlatFields()))->toBe(['title', 'total']);
 });
+
+it('dehydrates only the given paths, leaving the side effects of other fields alone', function (): void {
+    $dehydrated = [];
+    $track = static function (string $name) use (&$dehydrated): Closure {
+        return static function (mixed $state) use ($name, &$dehydrated): mixed {
+            $dehydrated[] = $name;
+
+            return $state;
+        };
+    };
+
+    $form = schema([
+        Section::make('Content')->schema([
+            TextInput::make('title')->dehydrateStateUsing($track('title')),
+        ]),
+        Section::make('Files')->schema([
+            TextInput::make('attachment')->dehydrateStateUsing($track('attachment')),
+        ]),
+    ])->fill(['title' => 'Hello', 'attachment' => 'tmp:abc']);
+
+    expect($form->getState(only: ['title']))->toBe(['title' => 'Hello'])
+        ->and($dehydrated)->toBe(['title']);
+});

@@ -1340,6 +1340,12 @@ final class TokenRewriter
                 continue;
             }
 
+            // `Bus::batch()->dispatch()`, `Order::query()->lazy()`, `collect()->lazy()`: not a
+            // component's chain, so its methods are not Filament's.
+            if ($inChain && (isset($renamed[$method]) || isset($removed[$method])) && $this->isForeignChain($i)) {
+                continue;
+            }
+
             if (isset($renamed[$method]) && $inChain) {
                 [$newName, $arguments] = $renamed[$method];
                 $this->out[$name] = $newName;
@@ -2207,6 +2213,37 @@ final class TokenRewriter
         }
 
         return $elements;
+    }
+
+    /**
+     * Whether the chain the `->` at `$arrow` belongs to starts outside the panel components
+     * (see `FilamentClassMap::isForeignChain()`). Chains on a variable are left to the caller.
+     */
+    private function isForeignChain(int $arrow): bool
+    {
+        $root = $this->chainRoot($arrow);
+
+        if ($root === null || $this->tokens[$root]->is(T_VARIABLE)) {
+            return false;
+        }
+
+        $next = $this->nextSignificant($root);
+
+        // A function call: `collect(...)`, `dispatch(...)`.
+        if ($next !== null && $this->tokens[$next]->text === '(') {
+            return FilamentClassMap::isForeignChain(null, null);
+        }
+
+        if ($next === null || ! $this->tokens[$next]->is(T_DOUBLE_COLON)) {
+            return false;
+        }
+
+        $method = $this->nextSignificant($next);
+
+        return FilamentClassMap::isForeignChain(
+            $this->resolveNew($this->tokens[$root]->text),
+            $method === null ? null : $this->tokens[$method]->text,
+        );
     }
 
     /**

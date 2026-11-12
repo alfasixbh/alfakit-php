@@ -203,6 +203,11 @@ it('lets guests see the public pages of the tenants guest access allows', functi
     $this->getJson('/guestteams/beta/_alfakit/actions/modal?'.http_build_query(['token' => $token, 'action' => 'nope']))->assertNotFound();
     $this->getJson('/guestteams/secret/_alfakit/actions/modal?'.http_build_query(['token' => $token, 'action' => 'nope']))->assertUnauthorized();
 
+    // Deferred components load for guests too: the endpoint gets past the sign-in check
+    // (404, the component doesn't exist) for the tenants guest access allows.
+    $this->postJson('/guestteams/alpha/_alfakit/schema/deferred', ['token' => $token, 'component' => 'form::nope'])->assertNotFound();
+    $this->postJson('/guestteams/secret/_alfakit/schema/deferred', ['token' => $token, 'component' => 'form::nope'])->assertUnauthorized();
+
     // Members still get their own tenants.
     $member = TenantUser::query()->create(['name' => 'Mia', 'email' => 'mia'.uniqid().'@example.com', 'password' => 'secret']);
     $member->teams()->attach($beta->id);
@@ -302,4 +307,11 @@ it('lets guests only view resources that have no policy', function (): void {
     $this->actingAs(guestUser());
 
     expect(PublicProjectResource::canCreate())->toBeTrue();
+});
+
+it('answers 400 for an encrypted value that is not a context token', function (): void {
+    expect(fn () => SchemaContext::fromToken(Illuminate\Support\Facades\Crypt::encryptString(json_encode(['disk' => 'public']))))
+        ->toThrow(Symfony\Component\HttpKernel\Exception\BadRequestHttpException::class)
+        ->and(fn () => SchemaContext::fromToken(Illuminate\Support\Facades\Crypt::encryptString('"text"')))
+        ->toThrow(Symfony\Component\HttpKernel\Exception\BadRequestHttpException::class);
 });

@@ -324,7 +324,9 @@ class EditRecord extends Page
 
         $form->validateOnly($paths);
 
-        $state = $form->getState();
+        // Only this component's fields: the rest of the form is not being saved, so its
+        // uploads stay temporary until the form itself is.
+        $state = $form->getState(only: $paths);
         $data = [];
 
         foreach ($paths as $path) {

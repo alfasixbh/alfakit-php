@@ -25,6 +25,11 @@ final class TableState
      *                                  `groupDirection`, `perPage`, `columns`);
      *                                  session persistence restores only absent keys.
      */
+    /**
+     * The filters came from the session (`persistFiltersInSession()`), not the request.
+     */
+    public bool $filtersRestored = false;
+
     public function __construct(
         public ?string $sortColumn = null,
         public ?string $sortDirection = null,

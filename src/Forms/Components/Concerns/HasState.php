@@ -110,7 +110,8 @@ trait HasState
      * `saved(false)`: the field is still validated and its value stays in the form state
      * (`$get()`, `afterStateUpdated`, live updates), but it is left out of `getState()` and
      * its relationship (BelongsToMany select, checkbox list) is not saved, e.g. a password
-     * confirmation. `disabled()->saved()` saves a disabled field's server value.
+     * confirmation. `disabled()->saved()` saves a disabled field: its posted value is validated
+     * and saved (use `readOnly()` for a value the browser must not change).
      */
     public function saved(bool|Closure $condition = true): static
     {

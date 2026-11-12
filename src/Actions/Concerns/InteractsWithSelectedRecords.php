@@ -48,6 +48,11 @@ trait InteractsWithSelectedRecords
 
     protected int $unauthorizedRecordsCount = 0;
 
+    /**
+     * Chunked records the action has gone through in its latest pass.
+     */
+    protected ?int $iteratedRecordsCount = null;
+
     protected string|Closure|null $unauthorizedRecordsNotificationTitle = null;
 
     protected bool|Closure $shouldFetchSelectedRecords = true;
@@ -101,7 +106,13 @@ trait InteractsWithSelectedRecords
     {
         $records = $this->resolvedRecords ?? $this->getRecords();
 
-        return $records instanceof LazyCollection ? $records->count() : count($records);
+        if ($records instanceof LazyCollection) {
+            // Counted while the action went through them: counting again would re-run the
+            // query, which no longer finds records the action deleted or changed.
+            return $this->iteratedRecordsCount ?? $records->count();
+        }
+
+        return count($records);
     }
 
     public function getBulkProcessingSuccessCount(): int
@@ -235,6 +246,21 @@ trait InteractsWithSelectedRecords
 
                 return false;
             })->values();
+        }
+
+        if ($records instanceof LazyCollection) {
+            $lazy = $records;
+            $records = new LazyCollection(function () use ($lazy) {
+                // Each pass reads (and authorises) the records again.
+                $this->unauthorizedRecordsCount = 0;
+                $this->iteratedRecordsCount = 0;
+
+                foreach ($lazy as $record) {
+                    $this->iteratedRecordsCount++;
+
+                    yield $record;
+                }
+            });
         }
 
         return $this->resolvedRecords = $records;

@@ -798,23 +798,29 @@ class Schema
      * Dehydrated state, ready for persistence. Hidden and `dehydrated(false)` fields are
      * excluded; `dehydrateStateUsing` / `mutateDehydratedStateUsing` hooks are applied.
      *
+     * With `$only` (absolute state paths) the other fields are left alone: dehydrating has
+     * side effects (a FileUpload stores its temporary files), which must not run for
+     * fields that are not being saved.
+     *
+     * @param  array<int, string>|null  $only
      * @return array<string, mixed>
      */
-    public function getState(bool $shouldCallHooksBefore = true): array
+    public function getState(bool $shouldCallHooksBefore = true, ?array $only = null): array
     {
         $root = $this->getRootSchema();
         $state = [];
+        $included = static fn (string $path): bool => $only === null || in_array($path, $only, true);
 
         if ($shouldCallHooksBefore) {
-            foreach ($root->getFlatFields() as $field) {
-                if (! $field->isNestedInRepeater($root)) {
+            foreach ($root->getFlatFields() as $path => $field) {
+                if ($included((string) $path) && ! $field->isNestedInRepeater($root)) {
                     $field->callBeforeStateDehydrated();
                 }
             }
         }
 
         foreach ($root->getFlatFields(withHidden: true) as $path => $field) {
-            if (! $field->isDehydrated()) {
+            if (! $included((string) $path) || ! $field->isDehydrated()) {
                 continue;
             }
 

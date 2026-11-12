@@ -277,3 +277,26 @@ class ImpersonationTestUserPolicy
         return $user->getAttribute('role') === 'admin';
     }
 }
+
+it('keeps the session signed in after the password is changed on the profile page', function (): void {
+    accountPanel();
+    $user = accountUser();
+    $this->actingAs($user);
+
+    $token = inertiaProps(inertiaGet($this, '/account/profile'))['page']['token'];
+
+    inertiaPost($this, '/account/_alfakit/actions', ['token' => $token, 'action' => 'save', 'data' => [
+        'name' => $user->name,
+        'email' => $user->email,
+        'password' => 'a-new-password-1',
+        'password_confirmation' => 'a-new-password-1',
+        'passwordConfirmation' => 'a-new-password-1',
+        'current_password' => 'password',
+    ]])->assertRedirect()->assertSessionHasNoErrors();
+
+    $fresh = $user->fresh();
+
+    // `AuthenticateSession` compares this with the user's hash on the next request.
+    expect(Illuminate\Support\Facades\Hash::check('a-new-password-1', $fresh->password))->toBeTrue()
+        ->and(session('password_hash_'.alfakit()->getPanel('account')->getAuthGuard()))->toBe($fresh->getAuthPassword());
+});

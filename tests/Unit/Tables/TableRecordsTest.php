@@ -96,6 +96,11 @@ it('cursor-paginates relationship and aggregate sorts through select aliases', f
     $second = $table(['sort' => 'comments_count', 'direction' => 'desc', 'cursor' => $first['pagination']['nextCursor']])->toSchema();
 
     expect([...array_column($first['records'], 'key'), ...array_column($second['records'], 'key')])->toBe([4, 3, 2, 1]);
+
+    // A cursor made for another sort (an old link) shows the first page instead of failing.
+    $stale = $table(['sort' => 'comments_count', 'direction' => 'desc', 'cursor' => (new Illuminate\Pagination\Cursor(['posts.id' => 1]))->encode()])->toSchema();
+
+    expect(array_column($stale['records'], 'key'))->toBe([4, 3]);
 });
 
 it('refuses cursor pagination over a raw sort expression with a clear message', function (): void {

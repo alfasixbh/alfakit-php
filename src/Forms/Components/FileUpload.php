@@ -1155,7 +1155,49 @@ class FileUpload extends Field
 
         $recordFiles = array_filter(Arr::wrap($original ?? []), static fn (mixed $file): bool => is_string($file) && $file !== '');
 
-        return array_values(array_unique([...$this->hydratedFiles, ...$recordFiles]));
+        return array_values(array_unique([...$this->hydratedFiles, ...$recordFiles, ...$this->getSiblingItemFiles()]));
+    }
+
+    /**
+     * Inside a Repeater or Builder the browser may reorder or remove items, so an item's
+     * stored file arrives at another index: the paths the server filled this field with in
+     * any item of the same list may be submitted too.
+     *
+     * @return array<string>
+     */
+    protected function getSiblingItemFiles(): array
+    {
+        $container = $this->hasContainer() ? $this->getContainer() : null;
+
+        while ($container !== null && ($parent = $container->getParentComponent()) !== null) {
+            if ($parent->managesChildFieldState() && $parent instanceof Field) {
+                $listPath = $parent->getStatePath();
+                $path = $this->getStatePath();
+
+                if (! str_starts_with($path, $listPath.'.')) {
+                    return [];
+                }
+
+                // `<list>.<item key>.<path inside the item>`
+                $inItem = Str::after(substr($path, strlen($listPath) + 1), '.');
+                $items = $container->getServerStateAt($listPath);
+                $files = [];
+
+                foreach (is_array($items) ? $items : [] as $item) {
+                    foreach ($this->normalizeFiles(is_array($item) ? Arr::get($item, $inItem) : null) as $file) {
+                        if (is_string($file) && ! TemporaryUpload::isKey($file)) {
+                            $files[] = $file;
+                        }
+                    }
+                }
+
+                return $files;
+            }
+
+            $container = $parent->hasContainer() ? $parent->getContainer() : null;
+        }
+
+        return [];
     }
 
     /**

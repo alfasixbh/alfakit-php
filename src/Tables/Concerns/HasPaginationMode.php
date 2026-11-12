@@ -13,6 +13,7 @@ use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Collection;
 use LogicException;
+use UnexpectedValueException;
 use ValueError;
 
 /**
@@ -114,8 +115,14 @@ trait HasPaginationMode
 
             $cursor = $this->state->cursor !== null ? Cursor::fromEncoded($this->state->cursor) : null;
 
-            /** @var CursorPaginator<int, mixed> $paginator */
-            $paginator = $query->cursorPaginate($perPage, ['*'], $this->getCursorName(), $cursor);
+            try {
+                /** @var CursorPaginator<int, mixed> $paginator */
+                $paginator = (clone $query)->cursorPaginate($perPage, ['*'], $this->getCursorName(), $cursor);
+            } catch (UnexpectedValueException) {
+                // A cursor made for another sort (an old link, a changed URL): the first page.
+                /** @var CursorPaginator<int, mixed> $paginator */
+                $paginator = $query->cursorPaginate($perPage, ['*'], $this->getCursorName(), null);
+            }
 
             return $paginator;
         }

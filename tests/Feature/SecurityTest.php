@@ -202,3 +202,25 @@ it('requires the current password to change the email address', function (): voi
 
     expect($user->fresh()->email)->toBe('new@example.com');
 });
+
+it('sanitises the body of a stored notification AlfaKit did not write', function (): void {
+    // A plain Laravel database notification (or a row left by another package) with user text.
+    $foreign = Notification::fromArray([
+        'title' => 'New comment',
+        'body' => 'Hi <img src=x onerror="alert(1)"><script>alert(2)</script> <strong>there</strong>',
+    ]);
+
+    expect($foreign->toArray()['body'])
+        ->not->toContain('onerror')
+        ->not->toContain('<script')
+        ->toContain('<strong>there</strong>');
+
+    // AlfaKit's own rows were escaped when they were stored: they are shown as stored.
+    $own = Notification::fromArray([
+        'title' => 'Saved',
+        'body' => '&lt;b&gt;kept&lt;/b&gt; <em>ok</em>',
+        'format' => 'alfakit',
+    ]);
+
+    expect($own->toArray()['body'])->toBe('&lt;b&gt;kept&lt;/b&gt; <em>ok</em>');
+});

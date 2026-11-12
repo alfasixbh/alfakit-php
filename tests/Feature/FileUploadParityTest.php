@@ -293,3 +293,30 @@ it('shows images on a private local disk through signed urls in columns and entr
         ->and($column->disk('publiclocal')->getImageUrl('posts/x.png'))->toBe('http://localhost/storage/posts/x.png')
         ->and($column->disk('privatelocal')->visibility('public')->getImageUrl('posts/x.png'))->not->toContain('signature=');
 });
+
+it('accepts stored files of repeater items that were reordered or removed, and still rejects foreign paths', function (): void {
+    fuActAs();
+
+    foreach (['a.pdf', 'b.pdf', 'private/secret.pdf'] as $path) {
+        Storage::disk('public')->put($path, 'x');
+    }
+
+    $form = fn () => schema([
+        Repeater::make('lines')->schema([FileUpload::make('file')]),
+    ])->fill(['lines' => [['file' => 'a.pdf'], ['file' => 'b.pdf']]]);
+
+    $reordered = $form();
+    $reordered->applyClientState(['lines' => [['file' => ['b.pdf']], ['file' => ['a.pdf']]]]);
+
+    expect($reordered->validate()['lines'])->toBe([['file' => 'b.pdf'], ['file' => 'a.pdf']]);
+
+    $removed = $form();
+    $removed->applyClientState(['lines' => [['file' => ['b.pdf']]]]);
+
+    expect($removed->validate()['lines'])->toBe([['file' => 'b.pdf']]);
+
+    $tampered = $form();
+    $tampered->applyClientState(['lines' => [['file' => ['private/secret.pdf']], ['file' => ['b.pdf']]]]);
+
+    expect(fn () => $tampered->validate())->toThrow(ValidationException::class);
+});

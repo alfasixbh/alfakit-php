@@ -23,6 +23,8 @@ trait HasTenantBilling
 
     protected string $tenantBillingRouteSlug = 'billing';
 
+    protected bool|Closure|null $authorizeTenantBillingUsing = null;
+
     public function tenantBillingProvider(?BillingProvider $provider): static
     {
         $this->tenantBillingProvider = $provider;
@@ -35,6 +37,33 @@ trait HasTenantBilling
         $this->isTenantSubscriptionRequired = $condition;
 
         return $this;
+    }
+
+    /**
+     * Who may manage the tenant's billing (`fn (User $user, Model $tenant): bool`): the
+     * others don't see the Billing entry of the tenant menu. Without it every member of the
+     * tenant may. Billing providers check `canManageTenantBilling()` on their routes.
+     */
+    public function authorizeTenantBilling(bool|Closure|null $callback = true): static
+    {
+        $this->authorizeTenantBillingUsing = $callback;
+
+        return $this;
+    }
+
+    public function canManageTenantBilling(): bool
+    {
+        if ($this->authorizeTenantBillingUsing === null) {
+            return true;
+        }
+
+        if (! $this->authorizeTenantBillingUsing instanceof Closure) {
+            return $this->authorizeTenantBillingUsing;
+        }
+
+        $user = $this->auth()->user();
+
+        return $user !== null && (bool) $this->evaluate($this->authorizeTenantBillingUsing, ['user' => $user, 'tenant' => $this->getTenant()]);
     }
 
     public function tenantBillingRouteSlug(string $slug): static
@@ -113,7 +142,7 @@ trait HasTenantBilling
      */
     protected function getTenantBillingMenuItems(): array
     {
-        $url = $this->getTenantBillingUrl();
+        $url = $this->canManageTenantBilling() ? $this->getTenantBillingUrl() : null;
 
         return $url === null ? [] : [MenuItem::make()->label(__('alfakit::tenancy.billing'))->icon('credit-card')->url($url)];
     }

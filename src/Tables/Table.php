@@ -639,7 +639,7 @@ class Table implements HasResource
         $this->records = null;
 
         foreach ($this->getFilters() as $filter) {
-            $filter->state($this->state->filters[$filter->getName()] ?? $filter->getDefaultState() ?? []);
+            $filter->state($this->state->filters[$filter->getName()] ?? $this->getFilterStateWhenNotGiven($filter));
         }
 
         return $this;
@@ -648,6 +648,63 @@ class Table implements HasResource
     public function getState(): TableState
     {
         return $this->state;
+    }
+
+    /**
+     * A filter's `default()` applies until the user changes the filters: once the request
+     * (or the session) carries filter state, a filter missing from it was cleared.
+     *
+     * @return array<string, mixed>
+     */
+    protected function getFilterStateWhenNotGiven(BaseFilter $filter): array
+    {
+        if ($this->state->filtersRestored || in_array('filters', $this->state->present, true)) {
+            return [];
+        }
+
+        return $filter->getDefaultState() ?? [];
+    }
+
+    /**
+     * The filter state the browser shows and sends back: the request's, with the defaults
+     * of the filters while they apply (so the form shows them and they can be cleared).
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    protected function getEffectiveFilterState(): array
+    {
+        $state = $this->state->filters;
+
+        foreach ($this->getFilters() as $name => $filter) {
+            if (! array_key_exists($name, $state) && ($default = $this->getFilterStateWhenNotGiven($filter)) !== []) {
+                $state[$name] = $default;
+            }
+        }
+
+        return $state;
+    }
+
+    /**
+     * State keys the browser sends empty when cleared (instead of leaving them out): the
+     * ones kept in the session, and the filters when one has a `default()` to hold back.
+     *
+     * @return array<string>
+     */
+    protected function getExplicitlyClearedStateKeys(): array
+    {
+        $keys = $this->getPersistedStateKeys();
+
+        if (! in_array('filters', $keys, true)) {
+            foreach ($this->getFilters() as $filter) {
+                if ($filter->getDefaultState() !== null) {
+                    $keys[] = 'filters';
+
+                    break;
+                }
+            }
+        }
+
+        return $keys;
     }
 
     public function queryStringIdentifier(?string $identifier): static
@@ -962,7 +1019,7 @@ class Table implements HasResource
             }
 
             $filter->table($this);
-            $filter->state($this->state->filters[$filter->getName()] ?? $filter->getDefaultState() ?? []);
+            $filter->state($this->state->filters[$filter->getName()] ?? $this->getFilterStateWhenNotGiven($filter));
             $filters[$filter->getName()] = $filter;
         }
 
@@ -2266,13 +2323,13 @@ class Table implements HasResource
             'filters' => array_values(array_map(static fn (BaseFilter $filter): array => $filter->toSchema(), $this->getFilters())) ?: null,
             'filtersLayout' => $this->getFiltersLayout(),
             'deferFilters' => $this->hasDeferredFilters() ?: null,
-            'persistedState' => $this->getPersistedStateKeys() ?: null,
+            'persistedState' => $this->getExplicitlyClearedStateKeys() ?: null,
             'filtersFormColumns' => $filtersFormColumns === null ? null : (is_array($filtersFormColumns) ? $filtersFormColumns : ['default' => 1, 'lg' => $filtersFormColumns]),
             'filtersFormWidth' => $this->getFiltersFormWidth(),
             'filtersFormMaxHeight' => $this->getFiltersFormMaxHeight(),
             'filtersFormSchema' => $this->serializeFiltersFormSchema(),
             'hiddenFilterIndicators' => $this->hasHiddenFilterIndicators() ?: null,
-            'filterState' => $this->state->filters ?: null,
+            'filterState' => $this->getEffectiveFilterState() ?: null,
             'filterIndicators' => $this->serializeFilterIndicators() ?: null,
             'headerActions' => $this->serializeActions($this->getHeaderActions()) ?: null,
             'bulkActions' => $this->serializeActions($this->getBulkActions()) ?: null,

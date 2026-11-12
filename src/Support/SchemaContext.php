@@ -66,6 +66,11 @@ final class SchemaContext
             throw new BadRequestHttpException('Invalid Alfakit context token.');
         }
 
+        // Another encrypted value of this app (an upload policy, say) is not a context.
+        if (! is_array($data) || ! is_string($data['panel'] ?? null) || ! is_string($data['page'] ?? null)) {
+            throw new BadRequestHttpException('Invalid Alfakit context token.');
+        }
+
         return new self(
             panel: (string) $data['panel'],
             page: (string) $data['page'],

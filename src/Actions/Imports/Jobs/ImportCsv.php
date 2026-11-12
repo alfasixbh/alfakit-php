@@ -32,7 +32,7 @@ class ImportCsv implements ShouldQueue
     use RestoresRunContext;
     use SerializesModels;
 
-    /** Rows are never imported twice: a failed job leaves its rows as failed rows. */
+    /** Rows are never imported twice: a failed job leaves its rows as failed rows (`failed()`). */
     public int $tries = 1;
 
     /**
@@ -117,6 +117,37 @@ class ImportCsv implements ShouldQueue
                 ImportNotifications::sendCompleted($this->import);
             }
         });
+    }
+
+    /**
+     * The job itself failed (a timeout, a lost worker, a deleted tenant): its rows count as
+     * failed rows, so the import still completes and the user is told. Rows the job had
+     * already imported are listed too; they are not imported again.
+     */
+    public function failed(?Throwable $exception): void
+    {
+        $sensitiveHeaders = [];
+
+        try {
+            $sensitiveHeaders = $this->getSensitiveHeaders($this->getImporter());
+        } catch (Throwable) {
+            // Without the importer the sensitive columns are unknown: keep the values out.
+            $sensitiveHeaders = null;
+        }
+
+        foreach ($this->rows as $row) {
+            $this->logFailedRow($sensitiveHeaders === null ? [] : array_diff_key($row, $sensitiveHeaders), __('alfakit::import.failures.unexpected'));
+        }
+
+        $this->import->addProcessedRows(count($this->rows), 0);
+
+        if ($this->import->markAsCompletedIfFinished()) {
+            try {
+                $this->withinRunContext($this->import, $this->locale, fn () => ImportNotifications::sendCompleted($this->import));
+            } catch (Throwable $notificationFailure) {
+                report($notificationFailure);
+            }
+        }
     }
 
     /**

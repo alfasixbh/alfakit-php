@@ -13,6 +13,7 @@ use AlfaSix\Alfakit\Schemas\Components\Component;
 use AlfaSix\Alfakit\Schemas\Components\Utilities\Get;
 use AlfaSix\Alfakit\Schemas\Schema;
 use AlfaSix\Alfakit\Support\Enums\Color;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Hash;
@@ -171,7 +172,15 @@ class EditProfile extends Page
             $record->forceFill(['email_verified_at' => null]);
         }
 
+        $passwordChanged = $record instanceof Authenticatable && $record->isDirty($record->getAuthPasswordName());
+
         $record->save();
+
+        // `AuthenticateSession` signs out every session whose stored password hash is not
+        // the user's: this one keeps up with the new password.
+        if ($passwordChanged && request()->hasSession()) {
+            request()->session()->put('password_hash_'.$this->getPanel()->getAuthGuard(), $record->getAuthPassword());
+        }
 
         if ($emailChanged && $record instanceof MustVerifyEmail) {
             $record->sendEmailVerificationNotification();

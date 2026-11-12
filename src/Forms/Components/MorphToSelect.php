@@ -8,6 +8,7 @@ use AlfaSix\Alfakit\Forms\Components\MorphToSelect\Type;
 use AlfaSix\Alfakit\Schemas\Components\Component;
 use AlfaSix\Alfakit\Schemas\Components\Utilities\Set;
 use AlfaSix\Alfakit\Schemas\Schema;
+use AlfaSix\Alfakit\Support\SearchQuery;
 use AlfaSix\Alfakit\Support\TenantScope;
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
@@ -298,7 +299,7 @@ class MorphToSelect extends Component
 
             $query->where(static function (Builder $query) use ($columns, $search): void {
                 foreach ($columns as $column) {
-                    $query->orWhere($column, 'like', "%{$search}%");
+                    SearchQuery::contains($query, $column, $search, or: true);
                 }
             });
         }

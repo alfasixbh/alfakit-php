@@ -18,6 +18,7 @@ use AlfaSix\Alfakit\Resources\RelationManagers\RelationManager;
 use AlfaSix\Alfakit\Schemas\Schema;
 use AlfaSix\Alfakit\Support\Labels;
 use AlfaSix\Alfakit\Support\ModelLabel;
+use AlfaSix\Alfakit\Support\SearchQuery;
 use AlfaSix\Alfakit\Tables\Table;
 use AlfaSix\Alfakit\Widgets\Widget;
 use Closure;
@@ -1134,9 +1135,11 @@ abstract class Resource
             $query->where(static function (Builder $query) use ($term): void {
                 foreach (static::getGloballySearchableAttributes() as $attribute) {
                     if (str_contains($attribute, '.')) {
-                        $query->orWhereHas(Str::beforeLast($attribute, '.'), static fn (Builder $q) => $q->where($q->qualifyColumn(Str::afterLast($attribute, '.')), 'like', "%{$term}%"));
+                        $query->orWhereHas(Str::beforeLast($attribute, '.'), static function (Builder $q) use ($attribute, $term): void {
+                            SearchQuery::contains($q, $q->qualifyColumn(Str::afterLast($attribute, '.')), $term);
+                        });
                     } else {
-                        $query->orWhere($query->qualifyColumn($attribute), 'like', "%{$term}%");
+                        SearchQuery::contains($query, $query->qualifyColumn($attribute), $term, or: true);
                     }
                 }
             });

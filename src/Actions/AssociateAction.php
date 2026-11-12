@@ -7,6 +7,7 @@ namespace AlfaSix\Alfakit\Actions;
 use AlfaSix\Alfakit\Forms\Components\Select;
 use AlfaSix\Alfakit\Resources\RelationManagers\RelationManager;
 use AlfaSix\Alfakit\Support\Enums\Color;
+use AlfaSix\Alfakit\Support\SearchQuery;
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -156,7 +157,7 @@ class AssociateAction extends Action
             ->getSearchResultsUsing(fn (string $search): array => $this->getOptionsQuery()
                 ->where(function (Builder $query) use ($searchColumns, $search): void {
                     foreach ($searchColumns as $column) {
-                        $query->orWhere($query->qualifyColumn($column), 'like', "%{$search}%");
+                        SearchQuery::contains($query, $query->qualifyColumn($column), $search, or: true);
                     }
                 })
                 ->limit(50)

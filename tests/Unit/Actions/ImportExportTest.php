@@ -99,3 +99,10 @@ it('only reads table-state keys from the page query string', function (): void {
         ->and($request->input('token'))->toBe('real')
         ->and($request->input('record'))->toBeNull();
 });
+
+it('reads quoted headers after a byte order mark', function (): void {
+    $reader = CsvReader::fromString("\xEF\xBB\xBF\"Full Name\",\"E-mail, work\"\n\"Ada Lovelace\",\"ada@example.com\"\n");
+
+    expect($reader->getHeaders())->toBe(['Full Name', 'E-mail, work'])
+        ->and(iterator_to_array($reader->getRecords(), false))->toBe([['Full Name' => 'Ada Lovelace', 'E-mail, work' => 'ada@example.com']]);
+});

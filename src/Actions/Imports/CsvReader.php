@@ -156,6 +156,12 @@ final class CsvReader
     {
         rewind($this->stream);
 
+        // A byte order mark sits before the first field: left in place, a quoted first header
+        // (`"Full Name"`) is no longer read as quoted and keeps its quotes.
+        if (fread($this->stream, 3) !== "\xEF\xBB\xBF") {
+            rewind($this->stream);
+        }
+
         for ($row = 0; $row < $this->headerOffset; $row++) {
             if ($this->readRow() === null) {
                 break;

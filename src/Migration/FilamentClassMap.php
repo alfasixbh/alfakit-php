@@ -1086,6 +1086,28 @@ final class FilamentClassMap
     /**
      * A Filament class, or a class of a known Filament plugin ({@see pluginNamespaces()}).
      */
+    /**
+     * Whether a fluent chain that starts with `Class::method(` (or with a plain function
+     * call, `$class === null`) belongs to the application rather than to a panel component:
+     * `Bus::batch()->dispatch()`, `Order::query()->lazy()`, `collect()->lazy()`. The fluent
+     * method renames and removals must leave such chains alone. Components start with
+     * `::make()`; `parent`, `static` and `self` continue a component's own chain.
+     */
+    public static function isForeignChain(?string $class, ?string $method): bool
+    {
+        if ($class === null) {
+            return true;
+        }
+
+        $class = ltrim($class, '\\');
+
+        if (in_array(strtolower($class), ['parent', 'static', 'self'], true) || self::isFilament($class) || str_starts_with($class, self::ALFAKIT)) {
+            return false;
+        }
+
+        return $method !== 'make';
+    }
+
     public static function isFilament(string $class): bool
     {
         $class = ltrim($class, '\\');

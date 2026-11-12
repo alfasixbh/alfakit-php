@@ -77,3 +77,21 @@ it('skips rows whose resolveRecord() returns null instead of failing them', func
         ->and(Post::query()->where('slug', 'known')->value('title'))->toBe('Updated')
         ->and(Post::query()->where('slug', 'unknown')->exists())->toBeFalse();
 });
+
+it('finishes the import when a chunk job fails as a whole', function (): void {
+    $import = taggedImport();
+    $import->forceFill(['total_rows' => 2])->save();
+
+    // A timeout or a lost worker: `handle()` never counted these rows.
+    (new ImportCsv($import, [
+        ['Slug' => 'one', 'Title' => 'One', 'Tags' => ''],
+        ['Slug' => 'two', 'Title' => 'Two', 'Tags' => ''],
+    ], ['slug' => 'Slug', 'title' => 'Title', 'tags' => 'Tags']))->failed(new RuntimeException('Worker lost'));
+
+    $import->refresh();
+
+    expect($import->processed_rows)->toBe(2)
+        ->and($import->successful_rows)->toBe(0)
+        ->and($import->completed_at)->not->toBeNull()
+        ->and(FailedImportRow::query()->where('import_id', $import->getKey())->pluck('data')->map(fn (array $row): string => $row['Slug'])->all())->toBe(['one', 'two']);
+});

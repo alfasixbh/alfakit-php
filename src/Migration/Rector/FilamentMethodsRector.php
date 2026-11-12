@@ -9,6 +9,7 @@ use AlfaSix\Alfakit\Migration\MigrationReport;
 use PhpParser\Node;
 use PhpParser\Node\Arg;
 use PhpParser\Node\Expr\ConstFetch;
+use PhpParser\Node\Expr\FuncCall;
 use PhpParser\Node\Expr\MethodCall;
 use PhpParser\Node\Expr\StaticCall;
 use PhpParser\Node\Identifier;
@@ -64,6 +65,12 @@ final class FilamentMethodsRector extends AbstractRector
             return null;
         }
 
+        // `Bus::batch()->dispatch()`, `Order::query()->lazy()`, `collect()->lazy()`: not a
+        // component's chain, so its methods are not Filament's.
+        if ((isset($renamed[$method]) || isset($removed[$method])) && $this->isForeignChain($node)) {
+            return null;
+        }
+
         if (isset($renamed[$method])) {
             [$newName, $arguments] = $renamed[$method];
             $node->name = new Identifier($newName);
@@ -85,6 +92,28 @@ final class FilamentMethodsRector extends AbstractRector
         }
 
         return null;
+    }
+
+    private function isForeignChain(MethodCall $call): bool
+    {
+        $node = $call->var;
+
+        while ($node instanceof MethodCall) {
+            $node = $node->var;
+        }
+
+        if ($node instanceof FuncCall) {
+            return FilamentClassMap::isForeignChain(null, null);
+        }
+
+        if (! $node instanceof StaticCall) {
+            return false;
+        }
+
+        return FilamentClassMap::isForeignChain(
+            $this->getName($node->class),
+            $node->name instanceof Identifier ? $node->name->toString() : null,
+        );
     }
 
     private function chainRootClass(MethodCall $call): ?string

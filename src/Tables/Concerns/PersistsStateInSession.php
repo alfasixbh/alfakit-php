@@ -183,7 +183,7 @@ trait PersistsStateInSession
             $value = $stored[$key];
 
             match ($key) {
-                'filters' => $state->filters = is_array($value) ? $value : [],
+                'filters' => [$state->filters, $state->filtersRestored] = [is_array($value) ? $value : [], true],
                 'search' => $state->search = is_string($value) && $value !== '' ? $value : null,
                 'columnSearch' => $state->columnSearches = is_array($value) ? array_filter($value, static fn (mixed $term, mixed $name): bool => is_string($name) && is_string($term), ARRAY_FILTER_USE_BOTH) : [],
                 'sort' => [$state->sortColumn, $state->sortDirection] = is_array($value) && is_string($value[0] ?? null)

@@ -326,3 +326,27 @@ it('fails assertSchemaExists without a form', function (): void {
 
     alfakit()->testPage(ParityTablePage::class, panel: 'parity')->assertSchemaExists('form');
 })->throws(AssertionFailedError::class);
+
+it('applies a filter default until the filters are changed, and lets it be cleared', function (): void {
+    $this->actingAs(parityUser());
+    parityPost(['status' => 'draft']);
+    parityPost(['status' => 'live']);
+
+    $table = fn (string $query): array => inertiaProps(inertiaGet($this, '/parity/parity-table'.$query))['page']['content'][0];
+
+    $initial = $table('');
+
+    // The browser is told to send an empty `filters` key when everything is cleared.
+    expect($initial['filterState']['status'] ?? null)->toBe(['value' => 'draft'])
+        ->and($initial['persistedState'])->toContain('filters')
+        ->and(count($initial['records']))->toBe(1);
+
+    // Cleared: the default must not come back.
+    $cleared = $table('?filters=');
+
+    expect($cleared['filterState'] ?? [])->toBe([])
+        ->and(count($cleared['records']))->toBe(2);
+
+    // Another filter changed while the status was cleared.
+    expect(count($table('?filters[published][isActive]=0&filters[other][x]=1')['records']))->toBe(2);
+});
