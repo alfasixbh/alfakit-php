@@ -167,6 +167,8 @@ class Panel
 
     protected bool $hasUnsavedChangesAlerts = false;
 
+    protected int|Closure|null $requestTimeout = null;
+
     protected bool $hasSpaMode = true;
 
     /** @var array<class-string<resource>> */
@@ -784,6 +786,25 @@ class Panel
     public function hasBreadcrumbs(): bool
     {
         return $this->hasBreadcrumbs;
+    }
+
+    /**
+     * How many seconds a background request of the panel (a live field, a table reload, a
+     * modal, a search) may take before the browser gives it up and tells the user it took
+     * too long. No limit by default. Page visits, actions and file uploads are not limited.
+     */
+    public function requestTimeout(int|Closure|null $seconds): static
+    {
+        $this->requestTimeout = $seconds;
+
+        return $this;
+    }
+
+    public function getRequestTimeout(): ?int
+    {
+        $seconds = $this->evaluate($this->requestTimeout);
+
+        return is_numeric($seconds) && (int) $seconds > 0 ? (int) $seconds : null;
     }
 
     public function unsavedChangesAlerts(bool $condition = true): static
@@ -2274,6 +2295,7 @@ class Panel
             'maxContentWidth' => $this->getMaxContentWidth(),
             'breadcrumbs' => $this->hasBreadcrumbs,
             'unsavedChangesAlerts' => $this->hasUnsavedChangesAlerts ?: null,
+            'requestTimeout' => $this->getRequestTimeout(),
             // Navigation items link to tenant routes, so tenant-less pages of a tenancy panel
             // (profile, tenant registration, email verification) render without them.
             // `starterKit()`: the host sidebar renders the navigation from the shared

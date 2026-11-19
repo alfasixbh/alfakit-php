@@ -111,3 +111,57 @@ it('keeps validation errors pending when an asset request that started before th
 
     expect($page->get('errors'))->toBe(['title' => ['The title field is required.']]);
 });
+
+it('keeps a toast flashed while an Inertia partial reload was still running', function (): void {
+    $handler = new ArraySessionHandler(120);
+    $reload = new Store('test', $handler, str_repeat('b', 40));
+    $reload->start();
+
+    // Deferred props (navigation badges, a lazy widget) are being loaded…
+    $request = Request::create('/admin/posts', server: ['HTTP_X_INERTIA' => 'true', 'HTTP_X_INERTIA_PARTIAL_DATA' => 'alfakitNavigationBadges']);
+    $request->setLaravelSession($reload);
+
+    (new PreserveFlashData)->handle($request, function () use ($handler) {
+        // …while the user confirms an action, which flashes its notification and redirects.
+        $action = new Store('test', $handler, str_repeat('b', 40));
+        $action->start();
+        $action->flash(SessionKey::FLASH_DATA, [Notification::FLASH_KEY => [['title' => 'Deleted']]]);
+        $action->save();
+
+        return response('partial');
+    });
+
+    $reload->save();
+
+    // The reload's save does not drop the notification for the page the action redirects to.
+    $page = new Store('test', $handler, str_repeat('b', 40));
+    $page->start();
+
+    expect($page->get(SessionKey::FLASH_DATA))->toBe([Notification::FLASH_KEY => [['title' => 'Deleted']]]);
+});
+
+it('shows the flash data a partial reload had itself only once', function (): void {
+    $handler = new ArraySessionHandler(120);
+    $first = new Store('test', $handler, str_repeat('c', 40));
+    $first->start();
+    $first->flash('status', 'saved');
+    $first->save();
+
+    $reload = new Store('test', $handler, str_repeat('c', 40));
+    $reload->start();
+    $request = Request::create('/admin/posts', server: ['HTTP_X_INERTIA' => 'true', 'HTTP_X_INERTIA_PARTIAL_DATA' => 'page']);
+    $request->setLaravelSession($reload);
+
+    (new PreserveFlashData)->handle($request, function () use ($reload) {
+        expect($reload->get('status'))->toBe('saved');
+
+        return response('partial');
+    });
+
+    $reload->save();
+
+    $next = new Store('test', $handler, str_repeat('c', 40));
+    $next->start();
+
+    expect($next->get('status'))->toBeNull();
+});

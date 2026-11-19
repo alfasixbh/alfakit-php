@@ -33,8 +33,12 @@ class PreserveFlashData
 {
     public function handle(Request $request, Closure $next): Response
     {
-        if (! $this->isBackgroundRequest($request) || ! $request->hasSession()) {
+        if (! $request->hasSession()) {
             return $next($request);
+        }
+
+        if (! $this->isBackgroundRequest($request)) {
+            return $this->isPartialReload($request) ? $this->keepFlashDataOfOtherRequests($request, $next) : $next($request);
         }
 
         $session = $request->session();
@@ -61,6 +65,41 @@ class PreserveFlashData
         $this->restorePendingFlashData($session, $snapshot);
 
         return $response;
+    }
+
+    /**
+     * Inertia partial reloads (deferred props, lazy widgets, navigation badges, a table
+     * reload) run beside what the user does. One that started before an action's POST and
+     * ends after it would save its older copy of the session over the POST's, without the
+     * notification the POST flashed for the page it redirects to. What it had itself is shown
+     * as usual; flash data another request stored meanwhile is kept for the next request.
+     */
+    protected function keepFlashDataOfOtherRequests(Request $request, Closure $next): Response
+    {
+        $session = $request->session();
+
+        if (! $session instanceof Store || ! $session->isStarted()) {
+            return $next($request);
+        }
+
+        $known = [...$this->stringKeys($session->get('_flash.old', [])), ...$this->stringKeys($session->get('_flash.new', []))];
+
+        $response = $next($request);
+
+        $stored = $this->readStoredAttributes($session);
+
+        foreach (array_diff($this->stringKeys($stored['_flash']['old'] ?? []), $known) as $key) {
+            if (Arr::has($stored, $key) && ! $session->has($key)) {
+                $session->flash($key, Arr::get($stored, $key));
+            }
+        }
+
+        return $response;
+    }
+
+    protected function isPartialReload(Request $request): bool
+    {
+        return (bool) $request->header('X-Inertia') && $request->headers->has('X-Inertia-Partial-Data');
     }
 
     /**

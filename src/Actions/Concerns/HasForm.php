@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace AlfaSix\Alfakit\Actions\Concerns;
 
+use AlfaSix\Alfakit\Pages\Page;
 use AlfaSix\Alfakit\Schemas\Schema;
 use Closure;
+use Illuminate\Support\Arr;
 
 trait HasForm
 {
@@ -216,7 +218,7 @@ trait HasForm
             $schema->fill();
             $schema->loadStateFromRelationships();
         } else {
-            $schema->fill();
+            $schema->fill($this->getPageFormFill($schema, $context));
         }
 
         $this->form = $schema;
@@ -266,7 +268,7 @@ trait HasForm
             array_map('strval', array_keys($schema->getFlatFields(withHidden: true))),
         )));
 
-        $schema->rawState(\Illuminate\Support\Arr::only((array) $data, $keys));
+        $schema->rawState(Arr::only((array) $data, $keys));
 
         // Layout components bound to a relationship read their related record, as
         // `Schema::fill()` does when it fills from the record itself.
@@ -288,5 +290,38 @@ trait HasForm
         }
 
         return $this->evaluate($this->mutateFormDataUsing, ['data' => $data]) ?? $data;
+    }
+
+    /**
+     * A page's button whose form is the page's own fields
+     * (`->form(fn () => $this->getForm()->getComponents())`) starts from what the page
+     * filled them with. The browser's values are then applied on top, as on the page's form,
+     * so what compares the two (file paths a field may keep, the add / delete locks of a
+     * Repeater or KeyValue) sees the page's rows and files instead of an empty form.
+     *
+     * @return array<string, mixed>|null
+     */
+    protected function getPageFormFill(Schema $schema, mixed $context): ?array
+    {
+        if (! $context instanceof Page) {
+            return null;
+        }
+
+        $topLevel = static fn (Schema $form): array => array_values(array_unique(array_map(
+            static fn (string $path): string => explode('.', $path)[0],
+            array_keys($form->getFlatFields(withHidden: true)),
+        )));
+
+        $names = $topLevel($schema);
+        $pageForm = $names === [] ? null : $context->getForm();
+
+        // Only when every field of this form is one of the page's.
+        if ($pageForm === null || $pageForm === $schema || array_diff($names, $topLevel($pageForm)) !== []) {
+            return null;
+        }
+
+        $state = $pageForm->getServerStateAt('');
+
+        return Arr::only(is_array($state) ? $state : $pageForm->getRawState(), $names);
     }
 }

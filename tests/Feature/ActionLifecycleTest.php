@@ -269,6 +269,13 @@ it('keeps the modal for password confirmation even when modalHidden()', function
     expect($action->hasModal())->toBeTrue();
 });
 
+it('sends the request time limit of the panel, and none by default', function (): void {
+    expect(Panel::make()->id('plain')->getRequestTimeout())->toBeNull()
+        ->and(Panel::make()->id('limited')->requestTimeout(60)->getRequestTimeout())->toBe(60)
+        ->and(Panel::make()->id('closure')->requestTimeout(fn (): int => 30)->getRequestTimeout())->toBe(30)
+        ->and(Panel::make()->id('zero')->requestTimeout(0)->getRequestTimeout())->toBeNull();
+});
+
 it('disables every field with disabledForm() and turns off the unsaved-changes alert', function (): void {
     lifecyclePanel(fn (Panel $panel): Panel => $panel->unsavedChangesAlerts());
 
