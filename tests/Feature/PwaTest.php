@@ -171,6 +171,22 @@ it('serves the service worker with its scope header and configuration', function
         ->and($script)->toContain('SKIP_WAITING');
 });
 
+it('serves the same service worker in every language', function (): void {
+    pwaPanel(fn (Panel $panel): Panel => $panel->pwa()->locales(['en', 'ar']));
+
+    $english = (string) $this->get('/field/sw.js')->getContent();
+
+    app()->setLocale('ar');
+
+    // A script that differs by a byte is a new worker to the browser: a language switch
+    // must not install one and offer "Reload" as if the app had been updated.
+    expect((string) $this->get('/field/sw.js')->getContent())->toBe($english)
+        ->and($english)->not->toContain('"lang"')
+        // Cached scripts are not evicted in the middle of a page load.
+        ->and($english)->toContain('scheduleTrim')
+        ->and($english)->toContain('lang: data.lang || undefined');
+});
+
 it('precaches the panel entries from the Vite manifest', function (): void {
     $panel = pwaPanel(fn (Panel $panel): Panel => $panel->pwa()->viteTheme(['resources/css/app.css', 'resources/js/app.ts']));
 
@@ -317,7 +333,10 @@ it('sends database notifications as Web Push and forgets gone subscriptions', fu
             && str_starts_with($request->header('Authorization')[0] ?? '', 'vapid t=')
             && $payload['title'] === 'Job assigned'
             && $payload['body'] === 'Fix the pump'
-            && $payload['url'] === '/field';
+            && $payload['url'] === '/field'
+            // The language travels with the message, not with the worker.
+            && $payload['lang'] === 'en'
+            && $payload['dir'] === 'ltr';
     });
 
     expect(PushSubscription::query()->pluck('endpoint')->all())->toBe(['https://push.example.com/live']);

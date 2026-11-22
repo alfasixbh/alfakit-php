@@ -17,7 +17,7 @@ use Throwable;
 final class ServiceWorker
 {
     /** Bump when the worker script changes in a way the hash does not see. */
-    public const VERSION = '1';
+    public const VERSION = '2';
 
     public static function script(Panel $panel): string
     {
@@ -33,7 +33,6 @@ final class ServiceWorker
     public static function config(Panel $panel): array
     {
         $precache = self::appShell($panel);
-        $locale = $panel->getCurrentLocale();
         $offline = $panel->getPwaOfflineUrl();
         $icon = $panel->getPwaAppleTouchIcon();
 
@@ -54,10 +53,10 @@ final class ServiceWorker
             'build' => [self::buildPath()],
             'name' => $panel->getPwaName(),
             'icon' => $icon,
-            'lang' => $locale->getTag(),
-            'dir' => $locale->getDirection()->value,
         ];
 
+        // Nothing here depends on the language: the browser installs a new worker whenever
+        // the script differs by a byte, and a language switch is not a new version of the app.
         // A new build, panel configuration or worker version gives a new cache.
         $config['version'] = substr(md5(self::VERSION.'|'.json_encode($config).'|'.(app(Vite::class)->manifestHash(self::buildDirectory()) ?? '')), 0, 12);
 

@@ -1,10 +1,13 @@
 /* global CONFIG */
 /* AlfaKit service worker (Panel::pwa()). `CONFIG` is prepended by the server:
- * { version, scope, offline, precache[], internal, build[] } */
+ * { panel, version, scope, offline, precache[], internal, build[], name, icon } */
 const PREFIX = 'alfakit-' + CONFIG.panel + '-'
 const SHELL = PREFIX + 'shell-' + CONFIG.version
 const STATIC = PREFIX + 'static-' + CONFIG.version
-const STATIC_LIMIT = 150
+// Above what one build loads lazily: the limit only stops fonts and scripts under /vendor/
+// from piling up. Old builds go with their cache when a new worker takes over.
+const STATIC_LIMIT = 1000
+const TRIM_DELAY = 30000
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -58,9 +61,23 @@ function isStatic(request, url) {
   )
 }
 
-async function trim(cache) {
-  const keys = await cache.keys()
-  for (let i = 0; i < keys.length - STATIC_LIMIT; i++) await cache.delete(keys[i])
+let trimming = null
+
+// Never while a page loads: a page asks for a hundred chunks at once, and deleting cached
+// ones in the middle of that left the page waiting for scripts that never arrived. One
+// pass at a time, after things have been quiet for a while.
+function scheduleTrim() {
+  if (trimming) return
+  trimming = new Promise((resolve) => setTimeout(resolve, TRIM_DELAY))
+    .then(() => caches.open(STATIC))
+    .then(async (cache) => {
+      const keys = await cache.keys()
+      for (let i = 0; i < keys.length - STATIC_LIMIT; i++) await cache.delete(keys[i])
+    })
+    .catch(() => undefined)
+    .finally(() => {
+      trimming = null
+    })
 }
 
 async function cacheFirst(request) {
@@ -68,8 +85,12 @@ async function cacheFirst(request) {
   if (cached) return cached
   const response = await fetch(request)
   if (response.ok && response.type === 'basic') {
-    const cache = await caches.open(STATIC)
-    cache.put(request, response.clone()).then(() => trim(cache))
+    const copy = response.clone()
+    caches
+      .open(STATIC)
+      .then((cache) => cache.put(request, copy))
+      .then(scheduleTrim)
+      .catch(() => undefined)
   }
   return response
 }
@@ -134,8 +155,8 @@ self.addEventListener('push', (event) => {
       icon: data.icon || CONFIG.icon || undefined,
       badge: CONFIG.icon || undefined,
       tag: data.tag || undefined,
-      lang: CONFIG.lang,
-      dir: CONFIG.dir,
+      lang: data.lang || undefined,
+      dir: data.dir || 'auto',
       data: { url: data.url || CONFIG.scope },
     }),
   )

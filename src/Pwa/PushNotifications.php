@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AlfaSix\Alfakit\Pwa;
 
 use AlfaSix\Alfakit\AlfakitManager;
+use AlfaSix\Alfakit\Localization\Locale;
 use AlfaSix\Alfakit\Notifications\DatabaseNotification;
 use AlfaSix\Alfakit\Panel;
 use Illuminate\Contracts\Auth\Authenticatable;
@@ -70,7 +71,10 @@ final class PushNotifications
      * PushNotifications::send($user, ['title' => 'Order shipped', 'body' => '#1042', 'url' => '/admin/orders/1042']);
      * ```
      *
-     * @param  array{title?: string, body?: string|null, url?: string|null, icon?: string|null, tag?: string|null}  $message
+     * The message is shown in the language it is sent in (`lang`, the current locale by
+     * default), so the worker itself is the same file in every language.
+     *
+     * @param  array{title?: string, body?: string|null, url?: string|null, icon?: string|null, tag?: string|null, lang?: string|null}  $message
      * @return int how many devices accepted it
      */
     public static function send(Authenticatable $user, array $message, ?string $panel = null): int
@@ -82,6 +86,7 @@ final class PushNotifications
         $manager = app(AlfakitManager::class);
         $sender = app(WebPush::class);
         $sent = 0;
+        $locale = Locale::make($message['lang'] ?? app()->getLocale());
 
         $subscriptions = PushSubscription::query()->ownedBy($user)
             ->when($panel !== null, static fn ($query) => $query->where('panel', $panel))
@@ -100,6 +105,8 @@ final class PushNotifications
                 'url' => $message['url'] ?? $target->getPwaScope(),
                 'icon' => $message['icon'] ?? $target->getPwaAppleTouchIcon(),
                 'tag' => $message['tag'] ?? null,
+                'lang' => $locale->getTag(),
+                'dir' => $locale->getDirection()->value,
             ], static fn (mixed $value): bool => $value !== null && $value !== ''), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
             $result = $sender->send($subscription, $payload);
