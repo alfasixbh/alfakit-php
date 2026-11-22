@@ -328,6 +328,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Tables
+    |--------------------------------------------------------------------------
+    |
+    | The table that holds the views users save on a table (`Table::savedViews()`).
+    | (`php artisan vendor:publish --tag=alfakit-table-views-migrations`).
+    |
+    */
+
+    'tables' => [
+        'views_table' => 'alfakit_table_views',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | "Powered by AlfaKit · Alfa Six" credit
     |--------------------------------------------------------------------------
     |

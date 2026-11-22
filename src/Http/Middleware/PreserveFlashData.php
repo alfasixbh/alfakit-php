@@ -7,6 +7,7 @@ namespace AlfaSix\Alfakit\Http\Middleware;
 use AlfaSix\Alfakit\Notifications\Notification;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Session\NullSessionHandler;
 use Illuminate\Session\Store;
 use Illuminate\Support\Arr;
 use Inertia\Support\SessionKey;
@@ -47,6 +48,18 @@ class PreserveFlashData
             return $next($request);
         }
 
+        // An asset the browser fetches on its own (the `pwa()` icons, manifest, service worker
+        // and offline page) never changes the session, so it does not save it either: several
+        // of them load right after every page, and each save could land after what the user
+        // does next (a theme or language choice, an action) and overwrite it with an older copy.
+        if ($this->isAssetRequest($request)) {
+            $response = $next($request);
+
+            $session->setHandler(new NullSessionHandler);
+
+            return $response;
+        }
+
         // Hide the flash data that is waiting for the next page from the endpoint.
         $pendingKeys = $this->stringKeys($session->get('_flash.old', []));
         $snapshot = ['_flash' => ['old' => $pendingKeys]];
@@ -60,11 +73,72 @@ class PreserveFlashData
         $session->forget($pendingKeys);
         $session->put('_flash.old', []);
 
+        $before = $this->durableAttributes($session);
+
         $response = $next($request);
 
+        $this->keepSessionDataOfOtherRequests($session, $before);
         $this->restorePendingFlashData($session, $snapshot);
 
         return $response;
+    }
+
+    /**
+     * The session's own values: not the flash data, which has its own rules above.
+     *
+     * @return array<string, mixed>
+     */
+    protected function durableAttributes(Store $session): array
+    {
+        $flash = [...$this->stringKeys($session->get('_flash.old', [])), ...$this->stringKeys($session->get('_flash.new', []))];
+
+        return Arr::except($session->all(), ['_flash', ...$flash]);
+    }
+
+    /**
+     * A request that runs beside what the user does and changed nothing in the session must
+     * not save its older copy over what another request stored meanwhile (a theme or language
+     * choice, the intended URL): without session locking the last save wins. When this
+     * request's own values are as they were, the stored ones are taken over before the save.
+     *
+     * @param  array<string, mixed>  $before
+     */
+    protected function keepSessionDataOfOtherRequests(Store $session, array $before): void
+    {
+        $now = $this->durableAttributes($session);
+
+        if (serialize($now) !== serialize($before)) {
+            return;
+        }
+
+        $stored = $this->readStoredAttributes($session);
+
+        // Only the CSRF token `start()` generates: nothing is stored under this session id.
+        if (array_diff(array_keys($stored), ['_token']) === []) {
+            return;
+        }
+
+        $flash = [...$this->stringKeys($stored['_flash']['old'] ?? []), ...$this->stringKeys($stored['_flash']['new'] ?? [])];
+        $fresh = Arr::except($stored, ['_flash', ...$flash]);
+
+        // Flash keys are dot paths (`inertia.flash_data`): what holds flash data, this
+        // request's or another's, is left to the flash rules.
+        $holdsFlash = array_map(
+            static fn (string $key): string => explode('.', $key)[0],
+            [...$flash, ...$this->stringKeys($session->get('_flash.old', [])), ...$this->stringKeys($session->get('_flash.new', []))],
+        );
+
+        foreach ($fresh as $key => $value) {
+            if (! in_array((string) $key, $holdsFlash, true)) {
+                $session->put((string) $key, $value);
+            }
+        }
+
+        foreach (array_diff(array_keys($now), array_keys($fresh)) as $key) {
+            if (! in_array((string) $key, $holdsFlash, true)) {
+                $session->forget((string) $key);
+            }
+        }
     }
 
     /**
@@ -83,8 +157,11 @@ class PreserveFlashData
         }
 
         $known = [...$this->stringKeys($session->get('_flash.old', [])), ...$this->stringKeys($session->get('_flash.new', []))];
+        $before = $this->durableAttributes($session);
 
         $response = $next($request);
+
+        $this->keepSessionDataOfOtherRequests($session, $before);
 
         $stored = $this->readStoredAttributes($session);
 
@@ -95,6 +172,21 @@ class PreserveFlashData
         }
 
         return $response;
+    }
+
+    /**
+     * `pwa()` assets (manifest, service worker, offline page, icons), fetched by the browser
+     * right after a page loads, and any other subresource it loads on its own (images,
+     * scripts, the manifest, workers).
+     */
+    protected function isAssetRequest(Request $request): bool
+    {
+        if ($request->header('X-Inertia')) {
+            return false;
+        }
+
+        return $request->routeIs('*pwa.manifest', '*pwa.service-worker', '*pwa.offline', '*pwa.icon')
+            || in_array($request->header('Sec-Fetch-Dest'), ['image', 'script', 'style', 'font', 'manifest', 'serviceworker', 'sharedworker', 'worker'], true);
     }
 
     protected function isPartialReload(Request $request): bool
@@ -112,14 +204,7 @@ class PreserveFlashData
             return false;
         }
 
-        // `pwa()` assets (manifest, service worker, offline page, icons) are fetched by the
-        // browser right after a page loads, so they often overlap the next action's POST.
-        if ($request->routeIs('*pwa.manifest', '*pwa.service-worker', '*pwa.offline', '*pwa.icon')) {
-            return true;
-        }
-
-        // Subresources the browser loads on its own (images, scripts, the manifest, workers).
-        if (in_array($request->header('Sec-Fetch-Dest'), ['image', 'script', 'style', 'font', 'manifest', 'serviceworker', 'sharedworker', 'worker'], true)) {
+        if ($this->isAssetRequest($request)) {
             return true;
         }
 

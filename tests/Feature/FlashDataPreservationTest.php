@@ -165,3 +165,94 @@ it('shows the flash data a partial reload had itself only once', function (): vo
 
     expect($next->get('status'))->toBeNull();
 });
+
+it('does not save an older copy of the session over what another request stored meanwhile', function (string $kind): void {
+    $handler = new ArraySessionHandler(120);
+    $first = new Store('test', $handler, str_repeat('d', 40));
+    $first->start();
+    $first->put('theme', 'alfakit');
+    $first->put('stale', 'remove me');
+    $first->save();
+
+    $background = new Store('test', $handler, str_repeat('d', 40));
+    $background->start();
+
+    // A background request (navigation badges, a lazy widget, the notifications bell) starts…
+    $request = $kind === 'partial'
+        ? Request::create('/admin/posts', server: ['HTTP_X_INERTIA' => 'true', 'HTTP_X_INERTIA_PARTIAL_DATA' => 'alfakitNavigationBadges'])
+        : Request::create('/admin/_alfakit/notifications', server: ['HTTP_ACCEPT' => 'application/json']);
+    $request->setLaravelSession($background);
+
+    (new PreserveFlashData)->handle($request, function () use ($handler) {
+        // …while the user picks another theme, which a full page request stores.
+        $choice = new Store('test', $handler, str_repeat('d', 40));
+        $choice->start();
+        $choice->put('theme', 'minimal');
+        $choice->forget('stale');
+        $choice->save();
+
+        return response('ok');
+    });
+
+    $background->save();
+
+    $page = new Store('test', $handler, str_repeat('d', 40));
+    $page->start();
+
+    expect($page->get('theme'))->toBe('minimal')->and($page->has('stale'))->toBeFalse();
+})->with(['partial', 'internal']);
+
+it('still saves what a background request stores itself', function (): void {
+    $handler = new ArraySessionHandler(120);
+    $background = new Store('test', $handler, str_repeat('e', 40));
+    $background->start();
+    $background->put('theme', 'alfakit');
+    $background->save();
+    $background->start();
+
+    $request = Request::create('/admin/_alfakit/table/columns', 'POST', server: ['HTTP_ACCEPT' => 'application/json']);
+    $request->setLaravelSession($background);
+
+    (new PreserveFlashData)->handle($request, function () use ($background) {
+        $background->put('columns', ['title']);
+
+        return response('ok');
+    });
+
+    $background->save();
+
+    $page = new Store('test', $handler, str_repeat('e', 40));
+    $page->start();
+
+    expect($page->get('columns'))->toBe(['title'])->and($page->get('theme'))->toBe('alfakit');
+});
+
+it('does not save the session for an asset the browser fetches on its own', function (): void {
+    $handler = new ArraySessionHandler(120);
+    $first = new Store('test', $handler, str_repeat('f', 40));
+    $first->start();
+    $first->put('theme', 'alfakit');
+    $first->save();
+
+    // A PWA icon is requested right after the page…
+    $asset = new Store('test', $handler, str_repeat('f', 40));
+    $asset->start();
+    $request = Request::create('/admin/pwa/icon-192.png', server: ['HTTP_SEC_FETCH_DEST' => 'image']);
+    $request->setLaravelSession($asset);
+
+    (new PreserveFlashData)->handle($request, fn () => response('icon'));
+
+    // …the user picks a theme before the icon's request has saved its session…
+    $choice = new Store('test', $handler, str_repeat('f', 40));
+    $choice->start();
+    $choice->put('theme', 'minimal');
+    $choice->save();
+
+    // …and that late save writes nothing.
+    $asset->save();
+
+    $page = new Store('test', $handler, str_repeat('f', 40));
+    $page->start();
+
+    expect($page->get('theme'))->toBe('minimal');
+});
