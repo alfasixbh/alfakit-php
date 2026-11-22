@@ -17,6 +17,11 @@ class UrlFilteredDashboard extends FilteredDashboard
     protected static bool $persistsFiltersInSession = false;
 }
 
+class UrlFilterActionDashboard extends AlfaSix\Alfakit\Tests\Fixtures\ActionsParity\ParityDashboard
+{
+    protected static bool $persistsFiltersInSession = false;
+}
+
 function urlFiltersStats(array $props): array
 {
     $widgets = collect($props['page']['content'])->firstWhere('type', 'Widgets');
@@ -91,4 +96,23 @@ it('lets an own dashboard subclass replace the registered dashboard on the same 
     expect($panel->getPages())->toBe([FilteredDashboard::class]);
 
     inertiaGet($this, '/ownboard')->assertOk();
+});
+
+it('closes the filter slide-over when its Reset redirects to the unfiltered dashboard', function (): void {
+    Panels::register('urlactions', fn (Panel $panel): Panel => $panel->pages([UrlFilterActionDashboard::class]));
+
+    $props = inertiaProps(inertiaGet($this, '/urlactions/parity-dashboard?filters[region]=north'));
+
+    $response = $this->post('/urlactions/_alfakit/actions', ['token' => $props['page']['token'], 'action' => 'filter>resetFilters', 'mountedData' => ['filter' => ['region' => 'north']]], [
+        'X-Inertia' => 'true', 'X-Inertia-Version' => '', 'Accept' => 'application/json', 'Referer' => 'http://localhost/urlactions/parity-dashboard?filters[region]=north',
+    ])->assertRedirect();
+
+    expect($response->headers->get('Location'))->toBe('http://localhost/urlactions/parity-dashboard');
+
+    // The redirect is the action's own, and still carries its result: the nested Reset
+    // asked for the modal it was opened from to close (`cancelParentActions()`).
+    $landed = inertiaGet($this, '/urlactions/parity-dashboard')->json();
+    $flash = $landed['flash']['alfakitAction'] ?? $landed['props']['flash']['alfakitAction'] ?? null;
+
+    expect($flash)->toMatchArray(['name' => 'resetFilters', 'status' => 'success', 'cancelParentActions' => true]);
 });

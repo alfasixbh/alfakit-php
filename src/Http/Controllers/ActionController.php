@@ -19,6 +19,7 @@ use AlfaSix\Alfakit\Support\ActionDownload;
 use AlfaSix\Alfakit\Tables\Table;
 use Illuminate\Contracts\Support\Responsable;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Symfony\Component\HttpFoundation\Response;
@@ -117,7 +118,12 @@ class ActionController
             ? ActionDownload::store($result, $request)
             : null;
 
-        if ($download === null && $result instanceof Response) {
+        // A redirect of the action's own (filters kept in the URL, a wizard's next page) is
+        // still a finished action: the page it lands on gets the result, so the modals the
+        // action was opened from close (`cancelParentActions()`) and selections are cleared.
+        $redirectsItself = $download === null && $result instanceof RedirectResponse && $request->header('X-Inertia');
+
+        if ($download === null && $result instanceof Response && ! $redirectsItself) {
             return $result;
         }
 
@@ -125,7 +131,7 @@ class ActionController
             return response()->json(['result' => $result]);
         }
 
-        $replacement = $this->resolveReplacementAction($page, $component, $action, $request);
+        $replacement = $redirectsItself ? null : $this->resolveReplacementAction($page, $component, $action, $request);
 
         Inertia::flash('alfakitAction', array_filter([
             'name' => $action->getName(),
@@ -137,6 +143,10 @@ class ActionController
             'replaceMountedAction' => $replacement,
             'download' => $download,
         ], static fn (mixed $value): bool => $value !== null));
+
+        if ($redirectsItself) {
+            return $result;
+        }
 
         $redirect = \AlfaSix\Alfakit\Support\Url::sanitize($action->getSuccessRedirectUrl());
 
